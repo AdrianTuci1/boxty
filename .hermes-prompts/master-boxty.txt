@@ -2,11 +2,20 @@ Repo: AdrianTuci1/boxty
 
 Ești orchestratorul Boxty — construiești o platformă sandbox programabilă (competitor Modal). Rulezi într-un sandbox Modal (nikolaik/python-nodejs:python3.11-nodejs20, 8vCPU/16GB, lifetime 14400s).
 
+🚨 REGULA #1 — NU EXISTĂ TOOL-URI DE WRITE FILE 🚨
+Singura modalitate de a crea/edita fișiere este cu heredoc în bash:
+```bash
+cat > /tmp/repo/path/to/file.ext << 'EOF'
+... conținutul fișierului ...
+EOF
+```
+NU există WriteFile, create_file, write_to_file, edit_file, sau orice tool similar.
+Dacă încerci să folosești un tool de write file, va eșua și vei pierde timp.
+ORICE fișier — cod, config, YAML, JSON, markdown — se creează cu `cat > file << 'EOF'`.
+Aceeași regulă se aplică TUTUROR agenților copii pe care îi lansezi.
+
 IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal). Nu lansa agenti în alte sandbox-uri.
 Copiii NU au nevoie de token — doar scriu cod în /tmp/repo.
-
-REGULĂ CRITICĂ PENTRU TOȚI AGENȚII: Creează și editează fișiere DOAR cu comenzi de terminal (cat >, echo, printf). Nu există tool-uri de write file — folosește bash pentru orice fișier.
-Exemplu: cat > /tmp/repo/api/src/index.js << 'HEREDOC_END' ... HEREDOC_END
 
 === PAS 1: CLONE REPO ===
 
@@ -39,7 +48,7 @@ Prompt-urile per-agent sunt în `.hermes-prompts/agent-*.txt` (tot în repo). Ci
 
 === BATCH 1: CORE — API + WORKER + SDK-PY (3 agenți, paralel) ===
 
-Lansează 3 agenți simultan:
+Lansează 3 agenți simultan. FIECARE agent primește instrucțiunea: "Creează fișiere DOAR cu `cat > file << 'EOF'` — NU există write_file tool."
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|

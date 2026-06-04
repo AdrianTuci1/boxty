@@ -1,9 +1,9 @@
 TASK: Implementează documentația API Boxty (OpenAPI 3.1 + Scalar).
 
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
 Directorul tău de lucru: `/tmp/repo/api/docs/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_DOCS.md` pentru specificația completă și `/tmp/repo/AGENT_API.md` pentru lista completă de endpoint-uri.
-
-FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
 
 **1. `api/docs/openapi.yaml`** — OpenAPI 3.1 spec COMPLETĂ:
 

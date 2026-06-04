@@ -1,9 +1,9 @@
 TASK: Implementează infrastructura Boxty (Docker Compose + Terraform multi-cloud + Packer).
 
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
 Directorul tău de lucru: `/tmp/repo/infra/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_INFRA.md` pentru specificația completă.
-
-FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
 
 **infra/docker/docker-compose.yml:**
 ```yaml

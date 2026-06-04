@@ -1,9 +1,9 @@
 TASK: Implementează Python SDK-ul Boxty.
 
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
 Directorul tău de lucru: `/tmp/repo/sdk-py/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_SDK_PY.md` pentru specificația completă.
-
-FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
 
 **pyproject.toml** — PEP 621, entry point `boxty` pentru CLI (typer/click), dependencies: httpx, websockets, typer, rich
 

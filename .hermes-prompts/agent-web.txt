@@ -1,9 +1,9 @@
 TASK: Implementează Web UI-ul Boxty (React + Vite + TypeScript + Tailwind).
 
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
 Directorul tău de lucru: `/tmp/repo/web/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_WEB.md` pentru specificația completă.
-
-FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
 
 **Setup:** Vite + React + TypeScript + Tailwind CSS + shadcn/ui (sau headless UI) + Recharts + @tanstack/react-query + React Router v6
 
