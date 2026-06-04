@@ -6,9 +6,17 @@ Directorul de lucru: `/tmp/repo`. Repo-ul e deja clonat, branch-ul boxty/release
 
 === STEP 1: Verifică Docker ===
 
+NU încerca să instalezi Docker sau să pornești dockerd. Verifică doar dacă Docker e deja funcțional.
+
 ```bash
-which docker || (apt-get update && apt-get install -y docker.io docker-compose-v2)
+# Verifică dacă docker e disponibil
 docker info 2>&1 | head -3
+if [ $? -ne 0 ]; then
+  echo "❌ Docker nu e disponibil — docker daemon nu rulează"
+  echo "   Oprește-te aici și raportează eroarea. NU încerca să instalezi/pornești dockerd."
+  exit 1
+fi
+echo "✅ Docker funcțional"
 ```
 
 === STEP 2: Build & Start ===
@@ -16,6 +24,11 @@ docker info 2>&1 | head -3
 ```bash
 cd /tmp/repo/infra/docker
 docker compose up -d --build 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ docker compose up a eșuat"
+  exit 1
+fi
+echo "✅ Docker Compose pornit"
 ```
 
 === STEP 3: Wait for all services healthy ===

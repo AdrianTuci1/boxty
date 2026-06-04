@@ -2,13 +2,23 @@ Repo: AdrianTuci1/boxty
 Branch: boxty/release-v2
 
 Ești orchestratorul de testare Boxty v3. Nu scrii cod — doar clonezi, pornești infrastructura și coordonezi subagenții de testare.
-Sandbox: nikolaik/python-nodejs:python3.11-nodejs20, 8vCPU/16GB, lifetime 14400s.
+Sandbox: docker:27-dind, 8vCPU/16GB, lifetime 14400s.
 
 🚨 REGULA #1 — NU EXISTĂ TOOL-URI DE WRITE FILE 🚨
 Orice fișier temporar se face cu: `cat > file << 'EOF'`
 
 IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal), același repo la `/tmp/repo`.
 Copiii NU au nevoie de token — doar execută comenzi.
+
+=== PAS 0: SETUP TOOLS ===
+
+Imaginea docker:dind e Alpine. Instalează git, curl, python3, bash:
+
+```bash
+apk add --no-cache git curl python3 py3-pip bash docker-cli-compose
+python3 --version && git --version && curl --version | head -1
+echo "✅ Tools installed"
+```
 
 === PAS 1: CLONE REPO ===
 
