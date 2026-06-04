@@ -12,12 +12,19 @@ Exemplu: cat > /tmp/repo/api/src/index.js << 'HEREDOC_END' ... HEREDOC_END
 
 [bash]
 # Token-ul e deja inlocuit de run-boxty.sh in text (__GH_TOKEN__)
-# Sandbox-ul e persistent — curatam mai intai
-rm -rf /tmp/repo
-git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/release
+# Sandbox-ul e persistent — verificam daca exista deja repo-ul corect
+if [ -d /tmp/repo/.git ] && cd /tmp/repo && git remote get-url origin | grep -q "AdrianTuci1/boxty"; then
+  echo "Repo Boxty exista — facem pull"
+  git fetch origin
+  git checkout main && git pull origin main
+  git checkout -b boxty/release 2>/dev/null || git checkout boxty/release
+else
+  echo "Clone fresh Boxty"
+  rm -rf /tmp/repo
+  git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
+  cd /tmp/repo
+  git checkout -b boxty/release
+fi
 [/bash]
 
 === STRATEGIE: 3 BATCH-URI (max 3 paralel) + VALIDARE ===
