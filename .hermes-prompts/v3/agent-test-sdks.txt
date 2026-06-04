@@ -44,23 +44,18 @@ fi
 echo "✅ SDK JS compiles"
 
 echo ""
-echo "--- SDK JS unit tests ---"
-# Verifică ce test runner e configurat
-if [ -f node_modules/.bin/vitest ]; then
-  npx vitest run 2>&1
-elif [ -f node_modules/.bin/jest ]; then
-  npx jest 2>&1
-else
-  # Fallback: import check via Node
-  node -e "import('./dist/index.js').then(m => { console.log('✅ SDK JS imports OK'); console.log('Exports:', Object.keys(m)); })" 2>&1
-  echo "⚠️ No test runner found — import check only"
-fi
+echo "--- SDK JS unit tests (Node native) ---"
+# Node 20+ native test runner, tests compile via tsc into dist/
+node --test dist/test/*.test.js 2>&1
 JS_EXIT=$?
 if [ $JS_EXIT -eq 0 ]; then
   echo "✅ JS SDK tests PASSED"
 else
   echo "❌ JS SDK tests FAILED"
 fi
+
+# Verify exports
+node -e "import('./dist/index.js').then(m => { console.log('✅ Exports:', Object.keys(m)); })" 2>&1
 
 echo ""
 echo "--- SDK JS lint ---"

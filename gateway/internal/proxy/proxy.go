@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -153,27 +154,34 @@ func extractHost(data string) string {
 	return ""
 }
 
-// parseSubdomain extracts sandboxID and port from "sandboxId-port.boxty.dev"
-// Examples: "abc123-8080.boxty.dev" → ("abc123", "8080")
-//           "abc123.boxty.dev"     → ("abc123", "8080")  (default port)
+// parseSubdomain extracts sandboxID and port from "sandboxId-port.boxty.dev".
+// The port is only detected when the last dash-separated segment is a valid 1-65535 number.
+// This avoids misinterpreting UUID numeric segments as ports.
+//
+// Examples:
+//
+//	"abc123-8080.boxty.dev"                                            → ("abc123", "8080")
+//	"abc123.boxty.dev"                                                 → ("abc123", "8080")
+//	"550e8400-e29b-41d4-a716-446655440000.boxty.dev"                  → ("550e8400-...-446655440000", "8080")
+//	"550e8400-e29b-41d4-a716-446655440000-3000.boxty.dev"             → ("550e8400-...-446655440000", "3000")
 func parseSubdomain(host string) (sandboxID, port string) {
 	// Strip domain suffix
 	host = strings.TrimSuffix(host, ".boxty.dev")
 	host = strings.TrimSpace(host)
 
-	// Split by last dash for port
+	// Try last dash — only treat it as port separator if the part after it
+	// is a valid port number (1-65535). UUID segments are hex (12 chars) and
+	// would be > 65535 or non-numeric.
 	lastDash := strings.LastIndex(host, "-")
 	if lastDash > 0 {
-		sandboxID = host[:lastDash]
-		port = host[lastDash+1:]
-	} else {
-		sandboxID = host
-		port = "8080" // default HTTP port
+		candidate := host[lastDash+1:]
+		if n, err := strconv.Atoi(candidate); err == nil && n >= 1 && n <= 65535 {
+			sandboxID = host[:lastDash]
+			port = candidate
+			return sandboxID, port
+		}
 	}
 
-	// Handle edge case: sandbox IDs contain dashes (UUID). The last dash separates port.
-	// e.g. "550e8400-e29b-41d4-a716-446655440000-3000" → ID="550e8400-e29b-41d4-a716-446655440000", port="3000"
-	// The above already handles this correctly since we use LastIndex.
-
-	return sandboxID, port
+	// No valid port found — the whole thing is the sandbox ID
+	return host, "8080"
 }

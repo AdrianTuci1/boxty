@@ -35,8 +35,9 @@ func TestParseSubdomain(t *testing.T) {
 		{"no port", "abc123.boxty.dev", "abc123", "8080"},
 		{"uuid with port", "550e8400-e29b-41d4-a716-446655440000-3000.boxty.dev", "550e8400-e29b-41d4-a716-446655440000", "3000"},
 		{"uuid no port", "550e8400-e29b-41d4-a716-446655440000.boxty.dev", "550e8400-e29b-41d4-a716-446655440000", "8080"},
-		{"long port", "my-sandbox-99999.boxty.dev", "my-sandbox", "99999"},
-		{"no domain", "just-id-5000", "just-id", "5000"},
+		{"long number > 65535 is not a port", "my-sandbox-99999.boxty.dev", "my-sandbox-99999", "8080"},
+		{"no domain with valid port", "just-id-5000", "just-id", "5000"},
+		{"no domain with number > 65535", "just-id-99999", "just-id-99999", "8080"},
 		{"only id", "simple", "simple", "8080"},
 	}
 	for _, tt := range tests {
