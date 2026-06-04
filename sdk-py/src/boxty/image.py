@@ -9,23 +9,25 @@ class Image:
         self._copies: List[tuple] = []
 
     def pip_install(self, *packages: str) -> Image:
-        self._commands.append(f"pip install {' '.join(packages)}")
+        self._commands.append(f"RUN pip install {' '.join(packages)}")
         return self
 
     def apt_install(self, *packages: str) -> Image:
-        self._commands.append(f"apt-get install -y {' '.join(packages)}")
+        self._commands.append(f"RUN apt-get update && apt-get install -y {' '.join(packages)}")
         return self
 
     def env(self, **vars) -> Image:
-        self._env.update(vars)
+        for k, v in vars.items():
+            self._commands.append(f"ENV {k}={v}")
         return self
 
     def copy(self, source: str, dest: str) -> Image:
         self._copies.append((source, dest))
+        self._commands.append(f"COPY {source} {dest}")
         return self
 
     def run(self, cmd: str) -> Image:
-        self._commands.append(cmd)
+        self._commands.append(f"RUN {cmd}")
         return self
 
     @classmethod

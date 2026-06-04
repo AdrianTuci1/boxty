@@ -1,10 +1,12 @@
 import { EventEmitter } from 'events';
 import { Client } from './client.js';
 import { ExecResult, SandboxMetrics } from './types.js';
+import WebSocket from 'ws';
 
 export class Sandbox extends EventEmitter {
   private client: Client;
   private data: any;
+  private ws?: WebSocket;
 
   constructor(client: Client, data: any) {
     super();
@@ -42,6 +44,29 @@ export class Sandbox extends EventEmitter {
 
   async attachSecrets(secretNames: string[]): Promise<void> {
     await this.client.attachSecrets(this.id, secretNames);
+  }
+
+  on(event: string | symbol, listener: (...args: any[]) => void): this {
+    super.on(event, listener);
+    this._ensureWebSocket();
+    return this;
+  }
+
+  private _ensureWebSocket() {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+    const wsUrl = this.data.ws_url || `ws://localhost:9002/${this.id}`;
+    this.ws = new WebSocket(wsUrl);
+    this.ws.on('message', (data: Buffer) => {
+      const msg = data.toString();
+      try {
+        const parsed = JSON.parse(msg);
+        this.emit(parsed.event || 'stdout', parsed.data || parsed);
+      } catch {
+        this.emit('stdout', msg);
+      }
+    });
+    this.ws.on('error', (err) => this.emit('error', err));
+    this.ws.on('close', () => this.emit('exit', 0));
   }
 
   static async restore(snapshotKey: string): Promise<Sandbox> {

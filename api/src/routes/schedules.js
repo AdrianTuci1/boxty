@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
 
 export default async function scheduleRoutes(app) {
-  app.post('/', async (req, reply) => {
+  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
     const id = uuidv4();
     const now = Date.now();
     let next;
@@ -16,7 +16,7 @@ export default async function scheduleRoutes(app) {
       pk: `SCHEDULE#${id}`,
       sk: 'META',
       id,
-      user_id: req.user?.id || 'anon',
+      user_id: req.user.id,
       ...req.body,
       next_run: next,
       status: 'active',
@@ -24,12 +24,12 @@ export default async function scheduleRoutes(app) {
     };
     await putItem(item);
     await putItem({ pk: 'SCHEDULE_NEXT_RUN', sk: String(next), schedule_id: id });
-    await putItem({ pk: `USER_SCHEDULES#${req.user?.id || 'anon'}`, sk: item.created_at, schedule_id: id });
+    await putItem({ pk: `USER_SCHEDULES#${req.user.id}`, sk: item.created_at, schedule_id: id });
     reply.status(201).send(item);
   });
 
-  app.get('/', async (req, reply) => {
-    const userId = req.user?.id || 'anon';
+  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId = req.user.id;
     const items = await queryByPK(`USER_SCHEDULES#${userId}`);
     const schedules = [];
     for (const it of items) {
@@ -39,23 +39,23 @@ export default async function scheduleRoutes(app) {
     reply.send(schedules);
   });
 
-  app.get('/:id', async (req, reply) => {
+  app.get('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
     const s = await getItem(`SCHEDULE#${req.params.id}`, 'META');
     if (!s) return reply.status(404).send({ error: 'Not found' });
     reply.send(s);
   });
 
-  app.patch('/:id', async (req, reply) => {
+  app.patch('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
     await updateItem(`SCHEDULE#${req.params.id}`, 'META', req.body);
     reply.send({ status: 'updated' });
   });
 
-  app.delete('/:id', async (req, reply) => {
+  app.delete('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
     await deleteItem(`SCHEDULE#${req.params.id}`, 'META');
     reply.send({ status: 'deleted' });
   });
 
-  app.post('/:id/trigger', async (req, reply) => {
+  app.post('/:id/trigger', { preHandler: [app.authenticate] }, async (req, reply) => {
     const s = await getItem(`SCHEDULE#${req.params.id}`, 'META');
     if (!s) return reply.status(404).send({ error: 'Not found' });
     await app.cronEngine.runSchedule(req.params.id);

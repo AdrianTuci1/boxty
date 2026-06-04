@@ -2,8 +2,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, updateItem } from '../db/schema.js';
 
 export default async function workerRoutes(app) {
-  app.post('/register', async (req, reply) => {
-    const id = uuidv4();
+  app.post('/register', { preHandler: [app.authenticateWorker] }, async (req, reply) => {
+    const id = req.body.workerId || uuidv4();
     const item = {
       pk: `WORKER#${id}`,
       sk: 'META',
@@ -19,11 +19,14 @@ export default async function workerRoutes(app) {
     reply.status(201).send({ worker_id: id });
   });
 
-  app.get('/', async (req, reply) => {
-    reply.send([]);
+  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const items = await queryByPK('WORKER#'); // nu merge direct
+    // Simplu: returnăm din workerPool
+    const workers = Array.from(app.workerPool.workers.values());
+    reply.send(workers);
   });
 
-  app.post('/:id/heartbeat', async (req, reply) => {
+  app.post('/:id/heartbeat', { preHandler: [app.authenticateWorker] }, async (req, reply) => {
     app.workerPool.heartbeat(req.params.id, req.body);
     await updateItem(`WORKER#${req.params.id}`, 'META', { last_heartbeat: Date.now() });
     reply.send({ ok: true });

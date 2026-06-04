@@ -13,6 +13,7 @@ import imageBuilderPlugin from './services/image-builder.js';
 import volumeManagerPlugin from './services/volume-manager.js';
 import metricsCollectorPlugin from './services/metrics-collector.js';
 import cloudProviderPlugin from './services/cloud-provider.js';
+import sandboxStreamPlugin from './ws/sandbox-stream.js';
 
 import sandboxRoutes from './routes/sandboxes.js';
 import execRoutes from './routes/exec.js';
@@ -43,6 +44,7 @@ await app.register(imageBuilderPlugin);
 await app.register(volumeManagerPlugin);
 await app.register(metricsCollectorPlugin);
 await app.register(cloudProviderPlugin);
+await app.register(sandboxStreamPlugin);
 
 await app.register(sandboxRoutes, { prefix: '/api/sandboxes' });
 await app.register(execRoutes, { prefix: '/api/sandboxes' });

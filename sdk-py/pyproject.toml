@@ -4,14 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "boxty"
-version = "0.1.0"
-description = "Boxty Python SDK — programmable sandbox platform"
+version = "1.0.0"
+description = "Boxty Python SDK"
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
   "httpx>=0.25.0",
   "websockets>=12.0",
   "typer>=0.9.0",
-  "rich>=13.0",
+  "rich>=13.0.0"
 ]
 
 [project.scripts]

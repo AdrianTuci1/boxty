@@ -2,9 +2,11 @@ package tunnel
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/boxty/worker/internal/sandbox"
 	"github.com/gorilla/websocket"
@@ -37,17 +39,14 @@ func WebSocketHandler(mgr *sandbox.Manager) http.HandlerFunc {
 		defer conn.Close()
 
 		if targetPort != "" {
-			// TCP tunnel mode: proxy raw bytes to sandbox:port
-			proxyTCP(conn, sandboxID, targetPort)
+			proxyTCPOverWS(conn, sandboxID, targetPort)
 		} else {
-			// Stream stdout/stderr via runsc exec tail -f /dev/null placeholder
 			streamSandbox(conn, mgr, sandboxID)
 		}
 	}
 }
 
 func streamSandbox(conn *websocket.Conn, mgr *sandbox.Manager, id string) {
-	// Use runsc exec to stream logs or a simple echo loop
 	cmd := exec.Command("runsc", "exec", id, "cat")
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -61,7 +60,10 @@ func streamSandbox(conn *websocket.Conn, mgr *sandbox.Manager, id string) {
 	}
 	defer cmd.Process.Kill()
 
+	var wg sync.WaitGroup
+	wg.Add(2)
 	go func() {
+		defer wg.Done()
 		buf := make([]byte, 4096)
 		for {
 			n, err := stdout.Read(buf)
@@ -72,6 +74,7 @@ func streamSandbox(conn *websocket.Conn, mgr *sandbox.Manager, id string) {
 		}
 	}()
 	go func() {
+		defer wg.Done()
 		buf := make([]byte, 4096)
 		for {
 			n, err := stderr.Read(buf)
@@ -82,23 +85,54 @@ func streamSandbox(conn *websocket.Conn, mgr *sandbox.Manager, id string) {
 		}
 	}()
 
-	// Read from websocket and forward to stdin (not implemented for simplicity)
 	for {
 		_, _, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
 	}
+	wg.Wait()
 }
 
-func proxyTCP(conn *websocket.Conn, sandboxID, port string) {
-	// In a real implementation, dial the sandbox internal IP:port.
-	// Here we simulate by echoing back.
-	for {
-		mt, msg, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-		_ = conn.WriteMessage(mt, msg)
+func proxyTCPOverWS(conn *websocket.Conn, sandboxID, port string) {
+	// Dial the actual TCP port on localhost (sandbox runs in host net for rootless)
+	targetAddr := strings.TrimPrefix(port, ":")
+	if !strings.Contains(targetAddr, ":") {
+		targetAddr = "127.0.0.1:" + targetAddr
 	}
+	backend, err := net.Dial("tcp", targetAddr)
+	if err != nil {
+		slog.Error("tcp dial failed", "addr", targetAddr, "err", err)
+		return
+	}
+	defer backend.Close()
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for {
+			mt, msg, err := conn.ReadMessage()
+			if err != nil {
+				return
+			}
+			if mt == websocket.BinaryMessage || mt == websocket.TextMessage {
+				if _, err := backend.Write(msg); err != nil {
+					return
+				}
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		buf := make([]byte, 4096)
+		for {
+			n, err := backend.Read(buf)
+			if err != nil {
+				return
+			}
+			_ = conn.WriteMessage(websocket.BinaryMessage, buf[:n])
+		}
+	}()
+	wg.Wait()
 }

@@ -1,42 +1,24 @@
 import typer
+from typing import Optional
+from ..client import Client
+
 app = typer.Typer()
 
 @app.command("run")
-def run(file: str):
-    typer.echo(f"Running {file} in cloud sandbox")
-
-@app.command("deploy")
-def deploy(file: str):
-    typer.echo(f"Deploying {file}")
-
-@app.command("shell")
-def shell():
-    typer.echo("Interactive sandbox shell")
-
-@app.command("exec")
-def exec_cmd(id: str, command: str):
-    typer.echo(f"Executing {command} in {id}")
-
-@app.command("ls")
-def ls():
-    typer.echo("Listing sandboxes")
-
-@app.command("logs")
-def logs(id: str):
-    typer.echo(f"Logs for {id}")
+def run(image: str, cpu: int = 1, memory: int = 1024):
+    client = Client()
+    sb = client.create_sandbox(image=image, cpu=cpu, memory=memory)
+    typer.echo(f"Sandbox {sb.id} started")
 
 @app.command("stop")
 def stop(id: str):
-    typer.echo(f"Stopping {id}")
+    client = Client()
+    client.delete_sandbox(id)
+    typer.echo(f"Sandbox {id} stopped")
 
-@app.command("cp")
-def cp(src: str, dest: str):
-    typer.echo(f"Copying {src} to {dest}")
-
-@app.command("forward")
-def forward(id: str, port: int):
-    typer.echo(f"Forwarding port {port} for {id}")
-
-@app.command("init")
-def init():
-    typer.echo("Initializing boxty project")
+@app.command("ls")
+def list_sandboxes():
+    client = Client()
+    sbs = client.list_sandboxes()
+    for sb in sbs:
+        typer.echo(f"{sb.id} {sb.status}")

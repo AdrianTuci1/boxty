@@ -1,14 +1,17 @@
 import typer
+from ..client import Client
+
 app = typer.Typer()
 
 @app.command("create")
 def create(name: str):
-    typer.echo(f"Creating workspace {name}")
+    client = Client()
+    ws = client.create_workspace(name)
+    typer.echo(f"Workspace {ws.id} created")
 
 @app.command("ls")
-def ls():
-    typer.echo("Listing workspaces")
-
-@app.command("rm")
-def rm(id: str):
-    typer.echo(f"Removing workspace {id}")
+def list_workspaces():
+    client = Client()
+    wss = client.list_workspaces()
+    for ws in wss:
+        typer.echo(f"{ws.id} {ws.name}")

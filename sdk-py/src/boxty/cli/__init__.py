@@ -1,7 +1,7 @@
 import typer
 from . import sandbox_cmd, billing_cmd, config_cmd, secret_cmd, workspace_cmd, app_cmd
 
-app = typer.Typer(name="boxty")
+app = typer.Typer()
 app.add_typer(sandbox_cmd.app, name="sandbox")
 app.add_typer(billing_cmd.app, name="billing")
 app.add_typer(config_cmd.app, name="config")

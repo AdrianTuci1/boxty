@@ -1,22 +1,23 @@
 import typer
+from ..client import Client
+
 app = typer.Typer()
 
 @app.command("create")
-def create(name: str):
-    typer.echo(f"Creating app {name}")
+def create(name: str, image: str, cpu: int = 1, memory: int = 1024):
+    client = Client()
+    a = client.create_app(workspace_id="default", env_id="default", name=name, image=image, cpu=cpu, memory=memory)
+    typer.echo(f"App {a.id} created")
 
 @app.command("ls")
-def ls():
-    typer.echo("Listing apps")
+def list_apps():
+    client = Client()
+    apps = client.list_apps()
+    for a in apps:
+        typer.echo(f"{a.id} {a.name}")
 
 @app.command("stop")
 def stop(id: str):
-    typer.echo(f"Stopping app {id}")
-
-@app.command("logs")
-def logs(id: str):
-    typer.echo(f"Logs for app {id}")
-
-@app.command("metrics")
-def metrics(id: str):
-    typer.echo(f"Metrics for app {id}")
+    client = Client()
+    client.stop_app(id)
+    typer.echo(f"App {id} stopped")

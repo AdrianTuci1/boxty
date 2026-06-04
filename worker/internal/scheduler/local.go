@@ -18,7 +18,6 @@ type Local struct {
 
 // NewLocal creates a new local scheduler.
 func NewLocal() *Local {
-	// simplistic defaults
 	return &Local{
 		cpuTotal: float64(runtime.NumCPU()),
 		memTotal: 16 * 1024, // MB

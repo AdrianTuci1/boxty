@@ -16,10 +16,10 @@ import (
 
 // BuildStatus tracks the status of an image build.
 type BuildStatus struct {
-	ImageID   string `json:"imageId"`
-	Status    string `json:"status"`
-	ImageURL  string `json:"imageUrl,omitempty"`
-	Error     string `json:"error,omitempty"`
+	ImageID   string    `json:"imageId"`
+	Status    string    `json:"status"`
+	ImageURL  string    `json:"imageUrl,omitempty"`
+	Error     string    `json:"error,omitempty"`
 	StartedAt time.Time `json:"startedAt"`
 }
 
@@ -32,11 +32,11 @@ var (
 func HandleBuild() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			ImageID      string            `json:"imageId"`
-			BaseImage    string            `json:"base_image"`
-			Commands     []string          `json:"commands"`
-			Layers       []Layer           `json:"layers,omitempty"`
-			RegistryAuth RegistryAuth      `json:"registry_auth"`
+			ImageID      string       `json:"imageId"`
+			BaseImage    string       `json:"base_image"`
+			Commands     []string     `json:"commands"`
+			Layers       []Layer      `json:"layers,omitempty"`
+			RegistryAuth RegistryAuth `json:"registry_auth"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -108,7 +108,6 @@ func doBuild(imageID, baseImage string, commands []string, auth RegistryAuth) {
 		return
 	}
 
-	// docker push
 	push := exec.Command("docker", "push", tag)
 	push.Dir = workDir
 	out, err = push.CombinedOutput()

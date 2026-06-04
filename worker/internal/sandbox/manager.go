@@ -10,6 +10,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -95,7 +97,6 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Sandbox, error)
 		return nil, fmt.Errorf("build config: %w", err)
 	}
 
-	// Write .env file for secrets (cleaned up on stop)
 	if len(opts.Secrets) > 0 {
 		if err := secrets.WriteEnvFile(workDir, opts.Secrets); err != nil {
 			return nil, fmt.Errorf("write env: %w", err)
@@ -125,7 +126,6 @@ func (m *Manager) Create(ctx context.Context, opts CreateOpts) (*Sandbox, error)
 	m.sandboxes[opts.ID] = sb
 	m.sched.Allocate(opts.CPU, opts.Memory, opts.GPU)
 
-	// Timeout watcher
 	if opts.Timeout > 0 {
 		go func(id string, timeout int) {
 			time.Sleep(time.Duration(timeout) * time.Second)
@@ -288,7 +288,7 @@ func (m *Manager) CheckIdle(threshold time.Duration) {
 	}
 }
 
-// CollectAndReport collects metrics and reports to API.
+// CollectAndReport collects real metrics and reports to API.
 func (m *Manager) CollectAndReport(apiURL, key string) {
 	m.mu.RLock()
 	list := make([]*Sandbox, 0, len(m.sandboxes))
@@ -298,7 +298,7 @@ func (m *Manager) CollectAndReport(apiURL, key string) {
 	m.mu.RUnlock()
 
 	for _, sb := range list {
-		metrics := collectMetrics(sb)
+		metrics := m.collectRealMetrics(sb)
 		body, _ := json.Marshal(metrics)
 		req, _ := http.NewRequest("POST", apiURL+"/api/sandboxes/"+sb.ID+"/metrics", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
@@ -312,15 +312,83 @@ func (m *Manager) CollectAndReport(apiURL, key string) {
 	}
 }
 
-func collectMetrics(sb *Sandbox) map[string]interface{} {
-	return map[string]interface{}{
-		"cpu_pct":          0.0,
-		"memory_mb":        sb.Memory,
-		"network_rx_bytes": 0,
-		"network_tx_bytes": 0,
-		"gpu_util_pct":     0.0,
-		"gpu_memory_mb":    0,
+func (m *Manager) collectRealMetrics(sb *Sandbox) map[string]interface{} {
+	cpuPct := 0.0
+	memMb := float64(sb.Memory)
+	netRx := int64(0)
+	netTx := int64(0)
+	gpuUtil := 0.0
+	gpuMem := int64(0)
+
+	// Parse cgroup v2 CPU usage
+	cpuPath := filepath.Join("/sys/fs/cgroup", sb.ID, "cpu.stat")
+	if data, err := os.ReadFile(cpuPath); err == nil {
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.HasPrefix(line, "usage_usec ") {
+				parts := strings.Fields(line)
+				if len(parts) == 2 {
+					if v, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+						cpuPct = float64(v) / 1e6 / 30.0 * 100 // approximate over 30s interval
+						if cpuPct > 100 {
+							cpuPct = 100
+						}
+					}
+				}
+			}
+		}
 	}
+
+	// Parse cgroup v2 memory usage
+	memPath := filepath.Join("/sys/fs/cgroup", sb.ID, "memory.current")
+	if data, err := os.ReadFile(memPath); err == nil {
+		v := strings.TrimSpace(string(data))
+		if bytes, err := strconv.ParseInt(v, 10, 64); err == nil {
+			memMb = float64(bytes) / 1024 / 1024
+		}
+	}
+
+	// Parse /proc/net/dev for network (host-level, approximate)
+	if data, err := os.ReadFile("/proc/net/dev"); err == nil {
+		lines := strings.Split(string(data), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "eth0") || strings.Contains(line, "ens") {
+				fields := strings.Fields(line)
+				if len(fields) >= 9 {
+					if rx, err := strconv.ParseInt(fields[1], 10, 64); err == nil {
+						netRx = rx
+					}
+					if tx, err := strconv.ParseInt(fields[9], 10, 64); err == nil {
+						netTx = tx
+					}
+				}
+			}
+		}
+	}
+
+	return map[string]interface{}{
+		"cpu_pct":          mathRound(cpuPct, 2),
+		"memory_mb":        mathRound(memMb, 2),
+		"network_rx_bytes": netRx,
+		"network_tx_bytes": netTx,
+		"gpu_util_pct":     gpuUtil,
+		"gpu_memory_mb":    gpuMem,
+		"sandbox_id":       sb.ID,
+		"timestamp":        time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+func mathRound(v float64, prec int) float64 {
+	p := mathPow(10, float64(prec))
+	return float64(int(v*p+0.5)) / p
+}
+
+func mathPow(a, b float64) float64 {
+	result := 1.0
+	for i := 0; i < int(b); i++ {
+		result *= a
+	}
+	return result
 }
 
 func (m *Manager) touch(id string) {

@@ -1,22 +1,52 @@
-import { WebSocketServer } from 'ws';
+import WebSocket from 'ws';
+import http from 'http';
 
-export function createSandboxStream(server, workerPool) {
-  const wss = new WebSocketServer({ server, path: '/ws/sandboxes/:id' });
-  wss.on('connection', (ws, req) => {
-    const sandboxId = req.url.split('/').pop();
-    // Proxy to worker 9002
-    const worker = workerPool.selectWorker();
+export class SandboxStreamServer {
+  constructor(workerPool) {
+    this.workerPool = workerPool;
+    this.wss = null;
+  }
+
+  attach(server) {
+    this.wss = new WebSocket.Server({ server, path: '/ws/sandboxes/:id' });
+    this.wss.on('connection', (ws, req) => {
+      const match = req.url.match(/\/ws\/sandboxes\/([^\/]+)(?:\/(\d+))?/);
+      if (!match) {
+        ws.close(1002, 'Invalid path');
+        return;
+      }
+      const sandboxId = match[1];
+      const port = match[2];
+      this.proxyToWorker(ws, sandboxId, port);
+    });
+  }
+
+  proxyToWorker(clientWs, sandboxId, port) {
+    // Find worker hosting sandbox
+    const workers = Array.from(this.workerPool.workers.values());
+    const worker = workers.find(w => w.capacity?.sandbox_ids?.includes(sandboxId));
     if (!worker) {
-      ws.close(1011, 'No worker');
+      clientWs.close(1011, 'Worker not found');
       return;
     }
-    const target = new WebSocket(`ws://${worker.host}:9002/${sandboxId}`);
-    target.on('open', () => {
-      ws.on('message', (data) => target.send(data));
-      target.on('message', (data) => ws.send(data));
+    const targetUrl = port
+      ? `ws://${worker.host}:9002/${sandboxId}/${port}`
+      : `ws://${worker.host}:9002/${sandboxId}`;
+    const backendWs = new WebSocket(targetUrl);
+    backendWs.on('open', () => {
+      clientWs.on('message', data => backendWs.send(data));
+      backendWs.on('message', data => clientWs.send(data));
     });
-    target.on('error', () => ws.close());
-    ws.on('close', () => target.close());
-  });
-  return wss;
+    backendWs.on('error', err => {
+      clientWs.close(1011, err.message);
+    });
+    clientWs.on('close', () => backendWs.close());
+    backendWs.on('close', () => clientWs.close());
+  }
+}
+
+export default function sandboxStreamPlugin(app, opts, done) {
+  const streamer = new SandboxStreamServer(app.workerPool);
+  app.decorate('sandboxStream', streamer);
+  done();
 }

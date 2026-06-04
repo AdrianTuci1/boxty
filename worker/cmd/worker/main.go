@@ -138,19 +138,19 @@ func main() {
 func handleStartSandbox(mgr *sandbox.Manager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			SandboxID  string          `json:"sandboxId"`
-			Image      string          `json:"image"`
-			CPU        float64         `json:"cpu"`
-			Memory     int64           `json:"memory"`
-			GPU        bool            `json:"gpu"`
-			Timeout    int             `json:"timeout"`
-			TunnelKey  string          `json:"tunnelKey"`
+			SandboxID  string           `json:"sandboxId"`
+			Image      string           `json:"image"`
+			CPU        float64          `json:"cpu"`
+			Memory     int64            `json:"memory"`
+			GPU        bool             `json:"gpu"`
+			Timeout    int              `json:"timeout"`
+			TunnelKey  string           `json:"tunnelKey"`
 			Secrets    []secrets.Secret `json:"secrets"`
-			DiskSizeGb int             `json:"diskSizeGb"`
-			Volume     *sandbox.Volume `json:"volume,omitempty"`
-			Schedule   bool            `json:"schedule"`
-			Cmd        []string        `json:"cmd,omitempty"`
-			ScheduleID string          `json:"scheduleId,omitempty"`
+			DiskSizeGb int              `json:"diskSizeGb"`
+			Volume     *sandbox.Volume  `json:"volume,omitempty"`
+			Schedule   bool             `json:"schedule"`
+			Cmd        []string         `json:"cmd,omitempty"`
+			ScheduleID string           `json:"scheduleId,omitempty"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)

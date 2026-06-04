@@ -2,9 +2,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
 
 export default async function sandboxRoutes(app) {
-  app.post('/', async (req, reply) => {
+  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
     const id = uuidv4();
-    const userId = req.user?.id || 'anon';
+    const userId = req.user.id;
     const item = {
       pk: `SANDBOX#${id}`,
       sk: 'META',
@@ -27,12 +27,14 @@ export default async function sandboxRoutes(app) {
       await app.workerPool.startSandbox(worker.id, { sandboxId: id, ...req.body });
       item.worker_id = worker.id;
       await updateItem(`SANDBOX#${id}`, 'META', { worker_id: worker.id });
+    } else {
+      app.capacityManager.enqueue({ resources: req.body, payload: { sandboxId: id, ...req.body } });
     }
     reply.status(201).send(item);
   });
 
-  app.get('/', async (req, reply) => {
-    const userId = req.user?.id || 'anon';
+  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userId = req.user.id;
     const items = await queryByPK(`USER_SANDBOXES#${userId}`);
     const sandboxes = [];
     for (const it of items) {
@@ -42,13 +44,13 @@ export default async function sandboxRoutes(app) {
     reply.send(sandboxes);
   });
 
-  app.get('/:id', async (req, reply) => {
+  app.get('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
     const sb = await getItem(`SANDBOX#${req.params.id}`, 'META');
     if (!sb) return reply.status(404).send({ error: 'Not found' });
     reply.send(sb);
   });
 
-  app.delete('/:id', async (req, reply) => {
+  app.delete('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
     const sb = await getItem(`SANDBOX#${req.params.id}`, 'META');
     if (!sb) return reply.status(404).send({ error: 'Not found' });
     if (sb.worker_id) {
@@ -60,7 +62,7 @@ export default async function sandboxRoutes(app) {
     reply.send({ status: 'stopped' });
   });
 
-  app.post('/:id/snapshot', async (req, reply) => {
+  app.post('/:id/snapshot', { preHandler: [app.authenticate] }, async (req, reply) => {
     const sb = await getItem(`SANDBOX#${req.params.id}`, 'META');
     if (!sb) return reply.status(404).send({ error: 'Not found' });
     const name = req.body.name || `snap-${Date.now()}`;
@@ -69,7 +71,7 @@ export default async function sandboxRoutes(app) {
     reply.send({ snapshot: name, ...res });
   });
 
-  app.post('/restore', async (req, reply) => {
+  app.post('/restore', { preHandler: [app.authenticate] }, async (req, reply) => {
     const { snapshotKey, image, cpu, memory, gpu, secrets } = req.body;
     const id = uuidv4();
     const worker = app.scheduler.selectWorker({ cpu, memory, gpu });
@@ -78,7 +80,7 @@ export default async function sandboxRoutes(app) {
     reply.status(201).send({ id, ...res });
   });
 
-  app.post('/:id/forward', async (req, reply) => {
+  app.post('/:id/forward', { preHandler: [app.authenticate] }, async (req, reply) => {
     const { port } = req.body;
     const sb = await getItem(`SANDBOX#${req.params.id}`, 'META');
     if (!sb) return reply.status(404).send({ error: 'Not found' });
@@ -86,7 +88,7 @@ export default async function sandboxRoutes(app) {
     reply.send({ url });
   });
 
-  app.get('/:id/metrics', async (req, reply) => {
+  app.get('/:id/metrics', { preHandler: [app.authenticate] }, async (req, reply) => {
     const metrics = await queryByPK(`SANDBOX#${req.params.id}`, { ScanIndexForward: false, Limit: 100 });
     reply.send(metrics.filter(m => m.sk && m.sk.startsWith('METRICS#')));
   });

@@ -54,8 +54,6 @@ func (p *TCPProxy) handle(client net.Conn) {
 	defer p.wg.Done()
 	defer client.Close()
 
-	// Peek at the first bytes to extract SNI or Host header for HTTP
-	// For simplicity, assume HTTP and read Host header.
 	buf := make([]byte, 4096)
 	n, err := client.Read(buf)
 	if err != nil {
@@ -72,10 +70,24 @@ func (p *TCPProxy) handle(client net.Conn) {
 	}
 	sandboxID := parts[0]
 
-	// Determine target port from Host header or default 8080
+	_, err = p.mgr.Get(sandboxID)
+	if err != nil {
+		slog.Error("sandbox not found", "id", sandboxID, "err", err)
+		return
+	}
+
 	targetPort := "8080"
-	// In a real implementation, resolve sandbox internal IP.
-	targetAddr := fmt.Sprintf("%s:%s", sandboxID, targetPort)
+	if strings.Contains(host, "-") {
+		hp := strings.Split(host, "-")
+		if len(hp) >= 2 {
+			portPart := strings.Split(hp[len(hp)-1], ".")
+			if len(portPart) > 0 {
+				targetPort = portPart[0]
+			}
+		}
+	}
+
+	targetAddr := fmt.Sprintf("127.0.0.1:%s", targetPort)
 
 	backend, err := net.Dial("tcp", targetAddr)
 	if err != nil {
@@ -84,7 +96,6 @@ func (p *TCPProxy) handle(client net.Conn) {
 	}
 	defer backend.Close()
 
-	// Send already-read data
 	if _, err := backend.Write(buf[:n]); err != nil {
 		return
 	}

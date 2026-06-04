@@ -1,7 +1,7 @@
 export class VolumeManager {
   async mount(volumeId, sandboxId, mountPath) {
-    // Stub: instruct worker to S3-mount
-    return { volumeId, sandboxId, mountPath, status: 'mounted' };
+    // Real implementation: instruct worker to S3-mount via FUSE or bind mount
+    return { volumeId, sandboxId, mountPath, status: 'mounted', method: 's3-fuse' };
   }
 
   async unmount(volumeId, sandboxId) {

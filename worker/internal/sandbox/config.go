@@ -35,7 +35,14 @@ func BuildConfig(cfg *SandboxConfig) (string, error) {
 		return "", fmt.Errorf("mkdir workdir: %w", err)
 	}
 	configPath := filepath.Join(workDir, "config.json")
-	// Minimal OCI runtime spec for runsc
+
+	// Prepare volume mount if provided
+	mounts := ""
+	if cfg.Volume != nil {
+		mounts = fmt.Sprintf(`,{"destination":"%s","type":"bind","source":"/tmp/boxty/volumes/%s","options":["rbind","rw"]}
+`, cfg.Volume.MountPath, cfg.Volume.Name)
+	}
+
 	spec := fmt.Sprintf(`{
   "ociVersion": "1.0.2-dev",
   "process": {
@@ -49,6 +56,12 @@ func BuildConfig(cfg *SandboxConfig) (string, error) {
     "path": "rootfs",
     "readonly": false
   },
+  "mounts": [
+    {"destination": "/proc", "type": "proc", "source": "proc"},
+    {"destination": "/dev", "type": "tmpfs", "source": "tmpfs"},
+    {"destination": "/sys", "type": "sysfs", "source": "sysfs", "options": ["nosuid","noexec","nodev","ro"]}
+    %s
+  ],
   "linux": {
     "resources": {
       "cpu": { "shares": %d },
@@ -62,7 +75,7 @@ func BuildConfig(cfg *SandboxConfig) (string, error) {
       {"type": "mount"}
     ]
   }
-}`, envJSON(cfg.Env), cpuShares(cfg.CPU), cfg.Memory*1024*1024)
+}`, envJSON(cfg.Env), mounts, cpuShares(cfg.CPU), cfg.Memory*1024*1024)
 
 	if err := os.WriteFile(configPath, []byte(spec), 0644); err != nil {
 		return "", fmt.Errorf("write config: %w", err)

@@ -1,6 +1,6 @@
 import pkg from 'cron-parser';
 const { parseExpression } = pkg;
-import { queryGSI, getItem, putItem, updateItem } from '../db/schema.js';
+import { queryGSI, getItem, putItem, updateItem, deleteItem } from '../db/schema.js';
 
 export class CronEngine {
   constructor(workerPool, scheduler) {
@@ -51,6 +51,7 @@ export class CronEngine {
       next = Date.now() + parseInt(schedule.schedule_value, 10) * 1000;
     }
     await updateItem(`SCHEDULE#${scheduleId}`, 'META', { next_run: next });
+    await deleteItem('SCHEDULE_NEXT_RUN', String(schedule.next_run));
     await putItem({ pk: 'SCHEDULE_NEXT_RUN', sk: String(next), schedule_id: scheduleId });
   }
 }
