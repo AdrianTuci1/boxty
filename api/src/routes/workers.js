@@ -1,4 +1,4 @@
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, authenticateWorker } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, updateItem } from '../db/schema.js';
 

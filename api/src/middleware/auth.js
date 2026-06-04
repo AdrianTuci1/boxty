@@ -45,15 +45,16 @@ export async function authenticate(request, reply) {
   }
 }
 
+export async function authenticateWorker(request, reply) {
+  const key = request.headers['x-worker-key'] || '';
+  if (key !== config.workerApiKey) {
+    reply.status(403).send({ error: 'Forbidden' });
+  }
+}
+
 export async function authPlugin(app) {
   app.decorate('authenticate', authenticate);
-
-  app.decorate('authenticateWorker', async function(request, reply) {
-    const key = request.headers['x-worker-key'] || '';
-    if (key !== config.workerApiKey) {
-      reply.status(403).send({ error: 'Forbidden' });
-    }
-  });
+  app.decorate('authenticateWorker', authenticateWorker);
 
   // Auth routes
   app.post('/api/auth/register', async (req, reply) => {
