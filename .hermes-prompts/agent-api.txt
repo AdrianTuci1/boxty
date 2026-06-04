@@ -2,7 +2,7 @@ Repo: AdrianTuci1/boxty
 Branch: boxty/agent-api
 
 [bash]
-git clone https://x-access-token:$(gh auth token)@github.com/AdrianTuci1/boxty.git /tmp/repo
+git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
 cd /tmp/repo
 git checkout main
 git checkout -b boxty/agent-api

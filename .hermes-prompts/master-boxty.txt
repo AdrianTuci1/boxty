@@ -52,7 +52,7 @@ Așteaptă ca toți 2 să termine cu ✅.
 După ce toți 8 agenții au terminat, clonează un repo fresh și fă merge-ul:
 
 [bash]
-git clone https://x-access-token:$(gh auth token)@github.com/AdrianTuci1/boxty.git /tmp/repo
+git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
 cd /tmp/repo
 git fetch origin
 git checkout main
