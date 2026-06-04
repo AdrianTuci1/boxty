@@ -1,0 +1,57 @@
+GITHUB_TOKEN auto-pasat via env_passthrough.
+
+Repo: AdrianTuci1/boxty
+Branch: boxty/agent-sdk-py
+
+[bash]
+git clone https://oauth2:${GITHUB_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
+cd /tmp/repo
+git checkout main
+git checkout -b boxty/agent-sdk-py
+[/bash]
+
+TASK: Implementează Python SDK-ul Boxty.
+
+Citește `/tmp/repo/AGENT_SDK_PY.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/sdk-py/`.
+
+**pyproject.toml** — PEP 621, entry point `boxty` pentru CLI (typer/click), dependencies: httpx, websockets, typer, rich
+
+**src/boxty/__init__.py** — exportă: Client, Sandbox, Image, App, Secret, Schedule, Volume, Workspace, Environment, web_endpoint
+
+**src/boxty/client.py** — Client class async + sync:
+- create_workspace, list_workspaces, get_workspace, delete_workspace
+- create_environment, list_environments
+- create_app, list_apps, get_app, delete_app, stop_app, deploy_app
+- get_app_sandboxes, get_app_deployments, get_app_metrics, get_app_usage, get_app_logs
+- create_sandbox, list_sandboxes, get_sandbox, delete_sandbox, get_sandbox_metrics
+- balance, usage, buy_credits
+- build_image, list_images, delete_image
+- create_secret, list_secrets, delete_secret, attach_secrets
+- create_schedule, list_schedules, delete_schedule, trigger_schedule
+- create_volume, list_volumes, delete_volume, mount_volume, unmount_volume
+
+**src/boxty/sandbox.py** — Sandbox class: exec, forward (context manager), checkpoint, stop, metrics, attach_secrets, on('stdout')/on('stderr')
+
+**src/boxty/image.py** — Image class: method chaining (pip_install, apt_install, env, copy, run), build(), build_async(), static from_dockerfile()
+
+**src/boxty/app.py** — App class (stop, deploy, sandboxes, deployments, metrics, usage, logs), web_endpoint decorator, Function class (remote, map, spawn)
+
+**src/boxty/secret.py**, **schedule.py**, **volume.py** — clasele respective
+
+**src/boxty/exceptions.py** — BoxtyError, etc.
+
+**src/boxty/cli/** — CLI complet cu comanda `boxty`:
+- sandbox_cmd: run, deploy, shell, exec, ls, logs, stop, cp, forward, init
+- billing_cmd: billing
+- config_cmd: login, logout, whoami
+- secret_cmd: create, ls, rm
+- workspace_cmd: create, ls, rm
+- app_cmd: create, ls, stop, logs, metrics
+
+Type hints peste tot. Suport async + sync (.result() pentru sync). examples/, tests/
+
+[bash]
+git add -A
+git commit -m "boxty: Python SDK — Client, Sandbox, Image, App, CLI complet"
+git push origin boxty/agent-sdk-py
+[/bash]

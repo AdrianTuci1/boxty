@@ -1,0 +1,58 @@
+GITHUB_TOKEN auto-pasat via env_passthrough.
+
+Repo: AdrianTuci1/boxty
+Branch: boxty/agent-infra
+
+[bash]
+git clone https://oauth2:${GITHUB_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
+cd /tmp/repo
+git checkout main
+git checkout -b boxty/agent-infra
+[/bash]
+
+TASK: Implementează infrastructura Boxty (Docker Compose + Terraform multi-cloud + Packer).
+
+Citește `/tmp/repo/AGENT_INFRA.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/infra/`.
+
+**infra/docker/docker-compose.yml:**
+```yaml
+services:
+  api: build ../api, ports [3000], env vars DynamoDB endpoint, JWT_SECRET, WORKER_API_KEY
+  dynamodb: amazon/dynamodb-local (in-memory)
+  s3-local: minio/minio (ports 9000, 9001)
+  worker-mock: build ../worker, ports [9001, 9002], env vars API_URL, WORKER_API_KEY
+```
+
+**infra/terraform/aws/main.tf:**
+- DynamoDB table (PAY_PER_REQUEST, PK=S, SK=S, GSI1/GSI2)
+- S3 buckets: snapshots, images, volumes
+- ECR repository + lifecycle policy (14 days untagged)
+- EC2 spot instance launch template + IAM (AmazonEC2ContainerRegistryPowerUser)
+- Variables: region, environment, api_url, worker_api_key (sensitive)
+- Outputs: dynamodb_arn, ecr_repo_url, s3_bucket_names
+
+**infra/terraform/gcp/main.tf:**
+- Google Compute Engine (preemptible)
+- Cloud Storage buckets
+- Variables + outputs
+
+**infra/terraform/azure/main.tf:**
+- Azure VM (spot)
+- Azure Storage Account
+- Variables + outputs
+
+**infra/packer/worker.pkr.hcl:**
+- Ubuntu 22.04 LTS
+- Provision: gVisor (runsc), Docker Engine, containerd
+- Copy worker binary
+- Systemd service for boxty-worker
+
+**infra/packer/cloud-init.yml:**
+- Bootstrap: install runsc, containerd, docker
+- Pull worker image, run with API_URL, WORKER_API_KEY env vars
+
+[bash]
+git add -A
+git commit -m "boxty: infra — Docker Compose, Terraform multi-cloud, Packer golden AMI"
+git push origin boxty/agent-infra
+[/bash]

@@ -1,0 +1,57 @@
+GITHUB_TOKEN auto-pasat via env_passthrough.
+
+Repo: AdrianTuci1/boxty
+Branch: boxty/agent-sdk-js
+
+[bash]
+git clone https://oauth2:${GITHUB_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
+cd /tmp/repo
+git checkout main
+git checkout -b boxty/agent-sdk-js
+[/bash]
+
+TASK: Implementează Node.js SDK-ul Boxty (TypeScript).
+
+Citește `/tmp/repo/AGENT_SDK_JS.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/sdk-js/`.
+
+**package.json** — ES modules, TypeScript, bin entry `boxty` (compiled JS), dependențe: ws, commander, node-fetch (sau use native fetch)
+
+**tsconfig.json** — strict mode, ES2022, moduleResolution node
+
+**src/index.ts** — exportă: Client, Sandbox, Image, App, Workspace, Environment, Deployment, Schedule, Secret + types
+
+**src/types.ts** — toate interfețele:
+- ClientOptions, SandboxOptions, ExecResult
+- SandboxMetrics, AppMetrics, AppOptions
+- ScheduleOptions, Schedule interface
+- Workspace, Environment, Secret, Deployment interfețe
+- Volume, ImageBuild interfețe
+
+**src/client.ts** — Client class:
+- createSandbox, listSandboxes, getSandbox, deleteSandbox, getSandboxMetrics
+- buildImage, listImages, deleteImage
+- balance, usage, buyCredits
+- createSecret, listSecrets, deleteSecret, attachSecrets
+- createSchedule, listSchedules, deleteSchedule, triggerSchedule
+- createVolume, listVolumes, deleteVolume, mountVolume, unmountVolume
+- createWorkspace, listWorkspaces, getWorkspace, deleteWorkspace
+- createEnvironment, listEnvironments
+- createApp, listApps, getApp, deleteApp, stopApp, deployApp, getAppSandboxes, getAppDeployments, getAppMetrics, getAppUsage, getAppLogs
+
+**src/sandbox.ts** — Sandbox class (extends EventEmitter): exec, forward, checkpoint, stop, metrics, attachSecrets, on('stdout')/on('stderr')/on('exit'), static restore()
+
+**src/errors.ts** — BoxtyError, AuthenticationError, NotFoundError, etc.
+
+**src/cli/index.ts** — CLI cu commander:
+- run, deploy, shell, exec, ls, logs, stop, cp, forward
+- login, whoami, billing
+- secret create/ls/rm, schedule create/ls/rm/trigger
+- image build/ls/rm, workspace create/ls/rm, app create/ls/stop/logs/metrics
+
+JSDoc pe toate exporturile. examples/, test/
+
+[bash]
+git add -A
+git commit -m "boxty: Node.js SDK — Client, Sandbox, CLI TypeScript"
+git push origin boxty/agent-sdk-js
+[/bash]
