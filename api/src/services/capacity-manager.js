@@ -43,11 +43,12 @@ export class CapacityManager {
     const first = this.queue[0];
     const cpu = first?.resources?.cpu || 2;
     const memory = first?.resources?.memory || 4096;
+    const gpu = first?.resources?.gpu || null;
     const provider = process.env.DEFAULT_CLOUD_PROVIDER || 'aws';
     const region = process.env.DEFAULT_REGION || 'us-east-1';
-    // selectInstanceType alege VM-ul optim pe baza cpu/memory
-    console.log(`CapacityManager: provisioning worker — ${cpu}vCPU / ${memory}MB → ${provider}/${region}`);
-    const info = await this.cloudProvider.launchWorker(provider, region, { cpu, memory });
+    const gpuLabel = gpu ? ` GPU=${gpu}` : '';
+    console.log(`CapacityManager: provisioning worker — ${cpu}vCPU / ${memory}MB${gpuLabel} → ${provider}/${region}`);
+    const info = await this.cloudProvider.launchWorker(provider, region, { cpu, memory, gpu });
     // Așteaptă înregistrarea worker-ului (poll 120s)
     for (let i = 0; i < 120; i++) {
       const worker = this.workerPool.workers.get(info.id);
