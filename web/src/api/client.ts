@@ -9,7 +9,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const headers = new Headers(init?.headers)
   headers.set('Content-Type', 'application/json')
   const token = getToken()
-  if (token) {
+  if (token && token.length > 0) {
     headers.set('Authorization', `Bearer ${token}`)
   }
   const res = await fetch(url, { ...init, headers })

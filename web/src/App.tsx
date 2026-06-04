@@ -16,13 +16,14 @@ import VolumesPage from './pages/VolumesPage'
 import SettingsPage from './pages/SettingsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth()
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />
+  const { isAuthenticated, devMode } = useAuth()
+  return (isAuthenticated || devMode) ? <>{children}</> : <Navigate to="/login" replace />
 }
 
 function AppRoutes() {
   return (
     <Routes>
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
