@@ -1,0 +1,53 @@
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+TASK: Real metrics, TCP tunnel proxy, volume mount/unmount, WebSocket events.
+
+Director: `/tmp/repo/`. Repo-ul are deja branch-ul `boxty/release`.
+
+1. **worker/internal/sandbox/manager.go** — rescrie `collectMetrics()`:
+   - Parsează `/proc/<pid>/stat` pentru CPU time (utime + stime)
+   - Parsează `/sys/fs/cgroup/memory/memory.usage_in_bytes` pentru memorie
+   - Parsează `/proc/<pid>/net/dev` pentru network RX/TX bytes
+   - Pentru GPU: parsează `nvidia-smi` output dacă disponibil
+   - Returnează valori reale, nu 0
+   - Track valori anterioare pentru delta CPU (CPU time dif / elapsed time)
+
+2. **worker/internal/tunnel/tcp_proxy.go** — rescrie complet:
+   - `ListenAndServe(addr)`: TCP listener pe port 9003
+   - La fiecare conexiune inbound: extrage subdomain din TLS SNI sau Host header
+   - Rezolvă sandbox_id din subdomain: `https://sandbox-abc-8080.boxty.dev` → sandbox=abc, port=8080
+   - Dial sandbox-ul intern (runsc IP din pod network sau localhost mapping)
+   - Proxy bidirectional (io.Copy) între client și sandbox
+   - Timeout idle: 300s
+   - Logging conexiuni
+
+3. **worker/internal/sandbox/manager.go** — adaugă Volume mount/unmount:
+   - Adaugă `Volume` struct: { ID, Name, SizeGb, MountPath, Provider('s3'|'local') }
+   - `MountVolume(ctx, sandboxID, volume)`: montează volum (rclone mount sau S3FS) în sandbox workDir
+   - `UnmountVolume(ctx, sandboxID, volumeID)`: demontează
+   - Volumul e montat în `<workDir>/mnt/<volumeName>` înainte de runsc run
+   - Adaugă suport pentru Volume în `CreateOpts` și `manager.Create()`
+
+4. **api/src/routes/volumes.js** — actualizează POST mount/unmount:
+   - Mount: validează sandbox și volume, trimite comanda la worker
+   - Unmount: trimite la worker
+   - Status tracking: PK=`VOLUME#<id>`, SK=`MOUNT#<sandboxId>` cu mounted_at
+
+5. **sdk-py/src/boxty/sandbox.py** — implementează `on()`:
+   - Folosește `websockets` library
+   - `on('stdout', callback)`: se conectează WebSocket la `ws://api.boxty.dev/ws/sandboxes/<id>`
+   - Parsează mesajele — când `type: 'stdout'`, apelează callback(data)
+   - `on('stderr', callback)`: idem pentru stderr
+   - Auto-reconnect dacă conexiunea pică
+   - Thread separat pentru citirea mesajelor
+
+6. **sdk-js/src/sandbox.ts** — implementează `on()`:
+   - Folosește `ws` library
+   - Aceeași logică ca Python: WebSocket la `/ws/sandboxes/<id>`
+   - EventEmitter: `sandbox.on('stdout', (data) => {...})`
+   - Auto-reconnect
+
+7. **worker/internal/tunnel/websocket.go** — adaugă format JSON la stream:
+   - În loc de raw bytes, trimite mesaje JSON: `{ "type": "stdout", "data": "...", "sandboxId": "..." }`
+   - Idem pentru stderr
+   - Clientul (API) forwardează mesajele JSON către clientul SDK

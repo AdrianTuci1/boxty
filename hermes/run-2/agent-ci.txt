@@ -1,0 +1,49 @@
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+TASK: 7 GitHub Actions workflows complete pentru CI/CD.
+
+Director: `/tmp/repo/.github/workflows/`. Repo-ul are deja branch-ul `boxty/release`.
+
+Șterge `.gitkeep` și creează:
+
+1. **ci.yml** — Pull Request + push main:
+   - Trigger: pull_request → main, push → main
+   - Jobs paralele: api, worker, sdk-py, sdk-js, web, infra-config
+   - api: checkout, setup-node 20, cd api && npm ci && npm run lint && node -e "require('./src/index.js')" 2>&1 | grep -v "listening" || true
+   - worker: checkout, setup-go 1.22, cd worker && go mod tidy && go build ./... && go vet ./...
+   - sdk-py: checkout, setup-python 3.12, cd sdk-py && pip install -e . && python -c "import boxty" && pip install ruff && ruff check src/
+   - sdk-js: checkout, setup-node 20, cd sdk-js && npm ci && npx tsc --noEmit
+   - web: checkout, setup-node 20, cd web && npm ci && npx tsc --noEmit
+   - infra-config: checkout, docker compose -f infra/docker/docker-compose.yml config
+
+2. **deploy-api.yml**:
+   - Trigger: push main, paths: api/**
+   - Login la GHCR (ghcr.io), build Docker image din api/Dockerfile
+   - Push tag-uri: latest + commit sha
+   - Environment: production
+
+3. **deploy-worker.yml**:
+   - Trigger: push main, paths: worker/**
+   - Setup Go 1.22, build GOOS=linux GOARCH=amd64
+   - Build Docker image, push la GHCR
+   - Tags: latest + sha
+
+4. **publish-sdk-py.yml**:
+   - Trigger: tags sdk-py-v*
+   - Setup Python 3.12, build cu build, publish cu pypa/gh-action-pypi-publish (trusted publishing)
+
+5. **publish-sdk-js.yml**:
+   - Trigger: tags sdk-js-v*
+   - Setup Node 20, cd sdk-js && npm ci && npm run build
+   - npm publish cu NODE_AUTH_TOKEN=NPM_TOKEN secret
+
+6. **provision-workers.yml**:
+   - workflow_dispatch inputs: provider (choice: aws|gcp|azure), count (number, default 1), region (string)
+   - Setup Terraform, cd infra/terraform/$provider, terraform init, apply -auto-approve
+   - Secrets: WORKER_API_KEY, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
+
+7. **destroy-workers.yml**:
+   - workflow_dispatch inputs: provider (choice: aws|gcp|azure)
+   - Setup Terraform, cd infra/terraform/$provider, terraform init, destroy -auto-approve
+
+Fiecare workflow: name, on, concurrency (cancel-in-progress), jobs cu runs-on, steps, env vars din secrets

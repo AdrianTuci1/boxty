@@ -1,0 +1,58 @@
+Repo: AdrianTuci1/boxty
+
+Ești orchestratorul Boxty Run-2. Codul de pe `boxty/release` are schelet complet (API, Worker, SDK-uri, Web, Infra, Docs) dar multe componente sunt stub-uri. Task-ul tău: umple toate stub-urile cu implementări reale.
+
+Rulezi într-un sandbox Modal (nikolaik/python-nodejs:python3.11-nodejs20, 8vCPU/16GB, lifetime 14400s).
+
+🚨 REGULA #1 — DOAR `cat > file << 'EOF'` PENTRU FIȘIERE 🚨
+NU există WriteFile, create_file, write_to_file, edit_file.
+
+=== PAS 1: CLONE ȘI CHECKOUT RELEASE ===
+
+[bash]
+rm -rf /tmp/repo
+git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
+cd /tmp/repo
+git fetch origin boxty/release
+git checkout boxty/release
+git checkout -b boxty/release-v2
+[/bash]
+
+=== STRATEGIE: 2 BATCH-URI (max 3 paralel) ===
+
+Toți agenții editează fișiere existente SAU creează altele noi în `/tmp/repo/`.
+
+BATCH 1 (3 agenți — cele mai grele):
+- A1: hermes/run-2/agent-cloud-real.txt — AWS/GCP/Azure SDK real în cloud-provider.js + capacity-manager.js + scheduler.js + worker-pool.js (verifică replici, EC2/GCE/Azure VM)
+- A2: hermes/run-2/agent-billing-stripe.txt — Stripe Checkout real + webhook verificare semnătură + billing-engine.js per-second meter + DynamoDB price list
+- A3: hermes/run-2/agent-auth-fix.txt — Auth complet: register/login/hash/API key management + fix middleware auth.js (are 2 blocuri Bearer identice — bug)
+
+BATCH 2 (2 agenți):
+- A4: hermes/run-2/agent-runtime-real.txt — Real metrics (cgroup/proc parsing în Go), TCP tunnel proxy, volume mount/unmount în worker, Python SDK on() events, Stripe webhook endpoint
+- A5: hermes/run-2/agent-ci.txt — 7 GitHub Actions workflows (ci.yml, deploy-api.yml, deploy-worker.yml, publish-sdk-py.yml, publish-sdk-js.yml, provision-workers.yml, destroy-workers.yml)
+
+După ce toți 5 termină cu ✅:
+
+=== VALIDARE ===
+
+[bash]
+cd /tmp/repo
+cd api && npm install 2>&1 | tail -1 && node -e "require('./src/index.js')" 2>&1 | grep -v "listening" || echo "API OK"
+cd /tmp/repo/worker && go build ./... 2>&1 && echo "Worker go build OK"
+cd /tmp/repo/sdk-py && pip install -e . 2>&1 | tail -1 && python -c "import boxty; print('SDK-PY OK')"
+cd /tmp/repo/sdk-js && npm install 2>&1 | tail -1 && npx tsc --noEmit 2>&1
+cd /tmp/repo/web && npm install 2>&1 | tail -1 && npx tsc --noEmit 2>&1
+[/bash]
+
+Dacă erori: citește fișierele, editează, re-validează (max 10 iterații).
+
+=== PUSH ===
+
+[bash]
+cd /tmp/repo
+git add -A
+git diff --cached --quiet || git commit -m "boxty: run-2 — real cloud, stripe, auth, metrics, CI"
+git push origin boxty/release-v2
+[/bash]
+
+Raportează "✅ BOXTY RUN-2 COMPLETE — toate stub-urile implementate real!"
