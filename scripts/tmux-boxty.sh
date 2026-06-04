@@ -1,18 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-if [ $# -ge 1 ]; then
-  export GITHUB_TOKEN="$1"
-  echo "Using provided token"
-else
-  export GITHUB_TOKEN=$(gh auth token 2>/dev/null)
-  if [ -z "$GITHUB_TOKEN" ]; then
-    echo "Nu am putut obtine token-ul. Ruleaza 'gh auth login' mai intai."
-    echo "   Sau: $0 <GITHUB_TOKEN>"
-    exit 1
-  fi
-  echo "Using gh auth token"
-fi
+# GITHUB_TOKEN nu mai e necesar — agentii folosesc 'gh repo clone'
+# care se autentifica automat via gh auth
 
 SESSION="boxty"
 PROMPTS_DIR="$(cd "$(dirname "$0")/.." && pwd)/.hermes-prompts"

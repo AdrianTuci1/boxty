@@ -1,10 +1,8 @@
-GITHUB_TOKEN auto-pasat via env_passthrough.
-
 Repo: AdrianTuci1/boxty
 Branch: boxty/agent-infra
 
 [bash]
-git clone https://oauth2:${GITHUB_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
+git clone https://x-access-token:$(gh auth token)@github.com/AdrianTuci1/boxty.git /tmp/repo
 cd /tmp/repo
 git checkout main
 git checkout -b boxty/agent-infra
