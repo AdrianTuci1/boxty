@@ -1,8 +1,9 @@
+import { authenticate } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem } from '../db/schema.js';
 
 export default async function environmentRoutes(app) {
-  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const workspaceId = req.body.workspace_id;
     if (!workspaceId) return reply.status(400).send({ error: 'workspace_id is required' });
@@ -24,7 +25,7 @@ export default async function environmentRoutes(app) {
     reply.status(201).send(item);
   });
 
-  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/', { preHandler: [authenticate] }, async (req, reply) => {
     const workspaceId = req.query.workspace_id;
     if (!workspaceId) return reply.status(400).send({ error: 'workspace_id query param required' });
 
@@ -41,13 +42,13 @@ export default async function environmentRoutes(app) {
     reply.send(envs);
   });
 
-  app.get('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     const env = await getItem(`ENV#${req.params.id}`, 'META');
     if (!env || env.user_id !== req.user.id) return reply.status(404).send({ error: 'Not found' });
     reply.send(env);
   });
 
-  app.delete('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     const env = await getItem(`ENV#${req.params.id}`, 'META');
     if (!env || env.user_id !== req.user.id) return reply.status(404).send({ error: 'Not found' });
     if (env.is_default) return reply.status(400).send({ error: 'Cannot delete default environment' });

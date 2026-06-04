@@ -4,50 +4,49 @@ import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config.js';
 import { putItem, getItem, queryByPK, deleteItem } from '../db/schema.js';
 
-export async function authPlugin(app) {
-  app.decorate('authenticate', async function(request, reply) {
-    try {
-      const auth = request.headers.authorization || '';
-      if (auth.startsWith('Bearer ')) {
-        const token = auth.slice(7);
-        try {
-          request.user = jwt.verify(token, config.jwtSecret);
-          return;
-        } catch (jwtErr) {
-          // Not a valid JWT, try as API key
-          const keyItem = await getItem(`API_KEY#${token}`, 'META');
-          if (keyItem) {
-            request.user = {
-              id: keyItem.user_id, apiKey: true,
-              workspace_id: keyItem.workspace_id || '*',
-              environment_ids: keyItem.environment_ids || ['*'],
-              permissions: keyItem.permissions || ['read', 'write', 'deploy'],
-            };
-            return;
-          }
-          throw new Error('Invalid token');
-        }
-      }
-      if (auth.startsWith('ApiKey ') || auth.startsWith('Token ')) {
-        const key = auth.slice(auth.indexOf(' ') + 1);
-        const keyItem = await getItem(`API_KEY#${key}`, 'META');
-        if (!keyItem) {
-          throw new Error('Invalid API key');
-        }
-        request.user = {
-          id: keyItem.user_id,
-          apiKey: true,
-          workspace_id: keyItem.workspace_id || '*',
-          environment_ids: keyItem.environment_ids || ['*'],
-          permissions: keyItem.permissions || ['read', 'write', 'deploy'],
-        };
+export async function authenticate(request, reply) {
+  try {
+    const auth = request.headers.authorization || '';
+    if (auth.startsWith('Bearer ')) {
+      const token = auth.slice(7);
+      try {
+        request.user = jwt.verify(token, config.jwtSecret);
         return;
+      } catch (jwtErr) {
+        const keyItem = await getItem(`API_KEY#${token}`, 'META');
+        if (keyItem) {
+          request.user = {
+            id: keyItem.user_id, apiKey: true,
+            workspace_id: keyItem.workspace_id || '*',
+            environment_ids: keyItem.environment_ids || ['*'],
+            permissions: keyItem.permissions || ['read', 'write', 'deploy'],
+          };
+          return;
+        }
+        throw new Error('Invalid token');
       }
-      throw new Error('Missing auth');
-    } catch (err) {
-      reply.status(401).send({ error: 'Unauthorized', message: err.message });
     }
-  });
+    if (auth.startsWith('ApiKey ') || auth.startsWith('Token ')) {
+      const key = auth.slice(auth.indexOf(' ') + 1);
+      const keyItem = await getItem(`API_KEY#${key}`, 'META');
+      if (!keyItem) throw new Error('Invalid API key');
+      request.user = {
+        id: keyItem.user_id,
+        apiKey: true,
+        workspace_id: keyItem.workspace_id || '*',
+        environment_ids: keyItem.environment_ids || ['*'],
+        permissions: keyItem.permissions || ['read', 'write', 'deploy'],
+      };
+      return;
+    }
+    throw new Error('Missing auth');
+  } catch (err) {
+    reply.status(401).send({ error: 'Unauthorized', message: err.message });
+  }
+}
+
+export async function authPlugin(app) {
+  app.decorate('authenticate', authenticate);
 
   app.decorate('authenticateWorker', async function(request, reply) {
     const key = request.headers['x-worker-key'] || '';
@@ -101,7 +100,7 @@ export async function authPlugin(app) {
     reply.send({ token, user_id: userItem.id, workspace_id: defaultWs });
   });
 
-  app.post('/api/auth/api-keys', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/api/auth/api-keys', { preHandler: [authenticate] }, async (req, reply) => {
     const id = uuidv4();
     const key = `boxty_${uuidv4().replace(/-/g, '')}`;
     const name = req.body.name || 'default';
@@ -118,7 +117,7 @@ export async function authPlugin(app) {
     reply.status(201).send({ id, name, key, key_preview: `${key.slice(0, 8)}...`, workspace_id: req.body.workspace_id || '*', permissions: req.body.permissions || ['read', 'write', 'deploy'], created_at: now });
   });
 
-  app.get('/api/auth/api-keys', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/api/auth/api-keys', { preHandler: [authenticate] }, async (req, reply) => {
     // Query direct pe API_KEY#* cu begins_with nu merge in DynamoDB simplu.
     // Folosim indexul: API_KEY_LIST#userId conține key-ul ca sk.
     const items = await queryByPK(`API_KEY_LIST#${req.user.id}`);
@@ -130,7 +129,7 @@ export async function authPlugin(app) {
     reply.send(keys);
   });
 
-  app.delete('/api/auth/api-keys/:key', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/api/auth/api-keys/:key', { preHandler: [authenticate] }, async (req, reply) => {
     const keyItem = await getItem(`API_KEY#${req.params.key}`, 'META');
     if (!keyItem) return reply.status(404).send({ error: 'Not found' });
     await deleteItem(`API_KEY#${req.params.key}`, 'META');
@@ -138,7 +137,7 @@ export async function authPlugin(app) {
     reply.send({ status: 'deleted' });
   });
 
-  app.get('/api/auth/whoami', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/api/auth/whoami', { preHandler: [authenticate] }, async (req, reply) => {
     const billingItem = await getItem(`BILLING#${req.user.id}`, 'BALANCE');
     const wsItems = await queryByPK(`USER_WS#${req.user.id}`, { Limit: 10 });
     reply.send({

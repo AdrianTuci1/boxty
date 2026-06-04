@@ -1,3 +1,4 @@
+import { authenticate } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
 import { notifyGateway } from '../services/gateway-notify.js';
@@ -5,7 +6,7 @@ import { notifyGateway } from '../services/gateway-notify.js';
 export default async function appRoutes(app) {
   // ─── Apps (namespace, no CPU/RAM/GPU) ───
 
-  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/', { preHandler: [authenticate] }, async (req, reply) => {
     const id = uuidv4();
     const userId = req.user.id;
     const item = {
@@ -26,7 +27,7 @@ export default async function appRoutes(app) {
     reply.status(201).send(item);
   });
 
-  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const apps = await queryByPK(`USER_APPS#${userId}`);
     const out = [];
@@ -37,7 +38,7 @@ export default async function appRoutes(app) {
     reply.send(out);
   });
 
-  app.get('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     const a = await getItem(`APP#${req.params.id}`, 'META');
     if (!a) return reply.status(404).send({ error: 'Not found' });
     // Include instance configs
@@ -51,7 +52,7 @@ export default async function appRoutes(app) {
     reply.send(a);
   });
 
-  app.delete('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     // Delete instance configs first
     const instances = await queryByPK(`APP_INSTANCES#${req.params.id}`);
     for (const idx of instances) {
@@ -61,7 +62,7 @@ export default async function appRoutes(app) {
     reply.send({ status: 'deleted' });
   });
 
-  app.post('/:id/stop', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/stop', { preHandler: [authenticate] }, async (req, reply) => {
     const a = await getItem(`APP#${req.params.id}`, 'META');
     if (!a) return reply.status(404).send({ error: 'Not found' });
     await updateItem(`APP#${req.params.id}`, 'META', { status: 'stopped' });
@@ -84,7 +85,7 @@ export default async function appRoutes(app) {
 
   // ─── Instance Configs (resource pools) ───
 
-  app.post('/:id/instances', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/instances', { preHandler: [authenticate] }, async (req, reply) => {
     const a = await getItem(`APP#${req.params.id}`, 'META');
     if (!a) return reply.status(404).send({ error: 'App not found' });
     const iid = uuidv4();
@@ -108,7 +109,7 @@ export default async function appRoutes(app) {
     reply.status(201).send(inst);
   });
 
-  app.get('/:id/instances', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/instances', { preHandler: [authenticate] }, async (req, reply) => {
     const list = await queryByPK(`APP_INSTANCES#${req.params.id}`);
     const out = [];
     for (const idx of list) {
@@ -124,7 +125,7 @@ export default async function appRoutes(app) {
     reply.send(out);
   });
 
-  app.get('/:id/instances/:iid', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/instances/:iid', { preHandler: [authenticate] }, async (req, reply) => {
     const inst = await getItem(`APP_INSTANCE#${req.params.iid}`, 'META');
     if (!inst || inst.app_id !== req.params.id) return reply.status(404).send({ error: 'Not found' });
     const sbs = await queryByPK(`INSTANCE_SANDBOXES#${req.params.iid}`);
@@ -133,7 +134,7 @@ export default async function appRoutes(app) {
     reply.send(inst);
   });
 
-  app.delete('/:id/instances/:iid', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/:id/instances/:iid', { preHandler: [authenticate] }, async (req, reply) => {
     const inst = await getItem(`APP_INSTANCE#${req.params.iid}`, 'META');
     if (!inst || inst.app_id !== req.params.id) return reply.status(404).send({ error: 'Not found' });
     // Stop all sandboxes in this instance
@@ -153,7 +154,7 @@ export default async function appRoutes(app) {
 
   // ─── Deploy (targets an instance config) ───
 
-  app.post('/:id/deploy', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/deploy', { preHandler: [authenticate] }, async (req, reply) => {
     const a = await getItem(`APP#${req.params.id}`, 'META');
     if (!a) return reply.status(404).send({ error: 'App not found' });
     const instanceId = req.body.instance_id;
@@ -202,7 +203,7 @@ export default async function appRoutes(app) {
 
   // ─── Sandbox listing per instance ───
 
-  app.get('/:id/instances/:iid/sandboxes', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/instances/:iid/sandboxes', { preHandler: [authenticate] }, async (req, reply) => {
     const items = await queryByPK(`INSTANCE_SANDBOXES#${req.params.iid}`);
     const out = [];
     for (const it of items) {
@@ -216,7 +217,7 @@ export default async function appRoutes(app) {
 
   // ─── Deployments ───
 
-  app.get('/:id/deployments', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/deployments', { preHandler: [authenticate] }, async (req, reply) => {
     const deps = await queryByPK(`APP_DEPLOYMENTS#${req.params.id}`);
     const out = [];
     for (const d of deps) {
@@ -228,12 +229,12 @@ export default async function appRoutes(app) {
 
   // ─── Metrics / Usage / Logs ───
 
-  app.get('/:id/metrics', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/metrics', { preHandler: [authenticate] }, async (req, reply) => {
     const metrics = await queryByPK(`APP#${req.params.id}`, { ScanIndexForward: false, Limit: 100 });
     reply.send(metrics.filter(m => m.sk && m.sk.startsWith('METRICS#')));
   });
 
-  app.get('/:id/usage', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/usage', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const items = await queryByPK(`USAGE#${userId}`, { ScanIndexForward: false, Limit: 100 });
     const appItems = items.filter(i => i.app_id === req.params.id);
@@ -241,7 +242,7 @@ export default async function appRoutes(app) {
     reply.send({ total_cost: Math.round(total * 100000) / 100000, items: appItems });
   });
 
-  app.get('/:id/logs', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id/logs', { preHandler: [authenticate] }, async (req, reply) => {
     const items = await queryByPK(`APP_LOGS#${req.params.id}`, { ScanIndexForward: false, Limit: 100 });
     reply.send(items.map(i => ({ timestamp: i.sk, message: i.message })));
   });

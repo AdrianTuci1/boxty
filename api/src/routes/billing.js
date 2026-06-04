@@ -1,3 +1,4 @@
+import { authenticate } from '../middleware/auth.js';
 import Stripe from 'stripe';
 import { config } from '../config.js';
 import { getItem, queryByPK, putItem, updateItem } from '../db/schema.js';
@@ -5,19 +6,19 @@ import { getItem, queryByPK, putItem, updateItem } from '../db/schema.js';
 const stripe = config.stripeSecretKey ? new Stripe(config.stripeSecretKey, { apiVersion: '2023-10-16' }) : null;
 
 export default async function billingRoutes(app) {
-  app.get('/balance', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/balance', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user?.id || 'anon';
     const bal = await getItem(`BILLING#${userId}`, 'BALANCE');
     reply.send({ balance: bal?.credits || 0, user_id: userId });
   });
 
-  app.get('/usage', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/usage', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user?.id || 'anon';
     const items = await queryByPK(`USAGE#${userId}`, { ScanIndexForward: false, Limit: 100 });
     reply.send(items);
   });
 
-  app.post('/credits', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/credits', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user?.id || 'anon';
     const { amount = 1000 } = req.body;
     if (!stripe) {

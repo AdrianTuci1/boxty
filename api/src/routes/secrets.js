@@ -1,7 +1,8 @@
+import { authenticate } from '../middleware/auth.js';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
 
 export default async function secretRoutes(app) {
-  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const { name, value, workspace_id } = req.body;
     // Dacă nu e specificat workspace, folosim primul workspace al userului
@@ -23,7 +24,7 @@ export default async function secretRoutes(app) {
     reply.status(201).send({ name, workspace_id: wsId, created_at: new Date().toISOString() });
   });
 
-  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const workspaceId = req.query.workspace_id;
     let wsId = workspaceId;
@@ -36,7 +37,7 @@ export default async function secretRoutes(app) {
     reply.send(items.map(i => ({ name: i.name, workspace_id: wsId, created_at: i.created_at })));
   });
 
-  app.delete('/:name', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/:name', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const wsItems = await queryByPK(`USER_WS#${userId}`, { Limit: 1 });
     const wsId = wsItems.length > 0 ? wsItems[0].workspace_id : null;
@@ -45,7 +46,7 @@ export default async function secretRoutes(app) {
     reply.send({ status: 'deleted' });
   });
 
-  app.post('/attach/:sandboxId', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/attach/:sandboxId', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const { secret_names, workspace_id } = req.body;
     let wsId = workspace_id;

@@ -1,5 +1,6 @@
+import { authenticate } from '../middleware/auth.js';
 export default async function execRoutes(app) {
-  app.post('/:id/exec', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/exec', { preHandler: [authenticate] }, async (req, reply) => {
     const sb = await app.db?.getItem(`SANDBOX#${req.params.id}`, 'META');
     if (!sb) return reply.status(404).send({ error: 'Not found' });
     const { command, timeout } = req.body;

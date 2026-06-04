@@ -1,8 +1,9 @@
+import { authenticate } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
 
 export default async function scheduleRoutes(app) {
-  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/', { preHandler: [authenticate] }, async (req, reply) => {
     const id = uuidv4();
     const now = Date.now();
     let next;
@@ -28,7 +29,7 @@ export default async function scheduleRoutes(app) {
     reply.status(201).send(item);
   });
 
-  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const items = await queryByPK(`USER_SCHEDULES#${userId}`);
     const schedules = [];
@@ -39,23 +40,23 @@ export default async function scheduleRoutes(app) {
     reply.send(schedules);
   });
 
-  app.get('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     const s = await getItem(`SCHEDULE#${req.params.id}`, 'META');
     if (!s) return reply.status(404).send({ error: 'Not found' });
     reply.send(s);
   });
 
-  app.patch('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.patch('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     await updateItem(`SCHEDULE#${req.params.id}`, 'META', req.body);
     reply.send({ status: 'updated' });
   });
 
-  app.delete('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     await deleteItem(`SCHEDULE#${req.params.id}`, 'META');
     reply.send({ status: 'deleted' });
   });
 
-  app.post('/:id/trigger', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/trigger', { preHandler: [authenticate] }, async (req, reply) => {
     const s = await getItem(`SCHEDULE#${req.params.id}`, 'META');
     if (!s) return reply.status(404).send({ error: 'Not found' });
     await app.cronEngine.runSchedule(req.params.id);

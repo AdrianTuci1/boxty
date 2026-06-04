@@ -1,8 +1,9 @@
+import { authenticate } from '../middleware/auth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
 
 export default async function volumeRoutes(app) {
-  app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/', { preHandler: [authenticate] }, async (req, reply) => {
     const id = uuidv4();
     const userId = req.user.id;
     const item = {
@@ -21,7 +22,7 @@ export default async function volumeRoutes(app) {
     reply.status(201).send(item);
   });
 
-  app.get('/', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/', { preHandler: [authenticate] }, async (req, reply) => {
     const userId = req.user.id;
     const items = await queryByPK(`USER_VOLUMES#${userId}`);
     const out = [];
@@ -32,25 +33,25 @@ export default async function volumeRoutes(app) {
     reply.send(out);
   });
 
-  app.get('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.get('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     const vol = await getItem(`VOLUME#${req.params.id}`, 'META');
     if (!vol) return reply.status(404).send({ error: 'Not found' });
     reply.send(vol);
   });
 
-  app.delete('/:id', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.delete('/:id', { preHandler: [authenticate] }, async (req, reply) => {
     await deleteItem(`VOLUME#${req.params.id}`, 'META');
     reply.send({ status: 'deleted' });
   });
 
-  app.post('/:id/mount', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/mount', { preHandler: [authenticate] }, async (req, reply) => {
     const { sandbox_id, mount_path } = req.body;
     const res = await app.volumeManager.mount(req.params.id, sandbox_id, mount_path);
     await updateItem(`VOLUME#${req.params.id}`, 'META', { mounted_on: sandbox_id, mount_path, status: 'mounted' });
     reply.send(res);
   });
 
-  app.post('/:id/unmount', { preHandler: [app.authenticate] }, async (req, reply) => {
+  app.post('/:id/unmount', { preHandler: [authenticate] }, async (req, reply) => {
     const { sandbox_id } = req.body;
     const res = await app.volumeManager.unmount(req.params.id, sandbox_id);
     await updateItem(`VOLUME#${req.params.id}`, 'META', { mounted_on: null, mount_path: null, status: 'created' });

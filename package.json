@@ -1,0 +1,10 @@
+{
+  "name": "boxty",
+  "private": true,
+  "scripts": {
+    "install:all": "cd api && npm install && cd ../web && npm install",
+    "dev:api": "cd api && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "dev": "cd api && npm run dev & cd web && npm run dev & wait"
+  }
+}
