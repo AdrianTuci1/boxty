@@ -1,8 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# GITHUB_TOKEN nu mai e necesar — agentii folosesc 'gh repo clone'
-# care se autentifica automat via gh auth
+# Scriem GH_TOKEN intr-un fisier ca Hermes/agentii sa-l poata citi
+# (env vars nu se propaga fiabil in subprocese)
+export GH_TOKEN=$(gh auth token 2>/dev/null)
+echo "$GH_TOKEN" > /tmp/.gh-token
+chmod 600 /tmp/.gh-token
+echo "Token scris in /tmp/.gh-token ($(echo $GH_TOKEN | head -c 10)...)"
 
 SESSION="boxty"
 PROMPTS_DIR="$(cd "$(dirname "$0")/.." && pwd)/.hermes-prompts"

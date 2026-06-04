@@ -1,5 +1,5 @@
 Repo: AdrianTuci1/boxty
-GH_TOKEN e injectat via env_passthrough (config).
+GH_TOKEN e disponibil în fișierul /tmp/.gh-token (scris de utilizator înainte de lansare).
 
 Ești orchestratorul Boxty — construiești o platformă sandbox programabilă (competitor Modal). Rulezi într-un sandbox Modal (nikolaik/python-nodejs:python3.11-nodejs20, 16vCPU/32GB, lifetime 14400s).
 
@@ -8,6 +8,7 @@ IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal
 === PAS 1: CLONE REPO ===
 
 [bash]
+GH_TOKEN=$(cat /tmp/.gh-token)
 cd /tmp
 git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
 cd /tmp/repo
