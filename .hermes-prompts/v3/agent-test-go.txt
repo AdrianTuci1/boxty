@@ -1,0 +1,65 @@
+TASK: Compilează + rulează unit tests pentru Go (gateway + worker).
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul de lucru: `/tmp/repo`. Repo-ul e deja clonat, branch-ul boxty/release-v2.
+
+=== STEP 1: Verifică Go ===
+
+```bash
+go version
+echo "✅"
+```
+
+=== STEP 2: Gateway — test ===
+
+```bash
+cd /tmp/repo/gateway
+echo "--- Gateway go build ---"
+go build ./... 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ Gateway build eșuat"
+  exit 1
+fi
+echo "✅ Gateway compiles"
+
+echo ""
+echo "--- Gateway go vet ---"
+go vet ./... 2>&1 && echo "✅ Gateway go vet OK" || echo "⚠️ go vet warnings"
+
+echo ""
+echo "--- Gateway go test ---"
+go test -v -count=1 ./... 2>&1
+if [ $? -eq 0 ]; then
+  echo "✅ Gateway tests PASSED"
+else
+  echo "❌ Gateway tests FAILED"
+fi
+```
+
+=== STEP 3: Worker — build ===
+
+Worker-ul are dependențe de system calls (Docker), deci doar `go build` + `go vet`.
+
+```bash
+cd /tmp/repo/worker
+echo "--- Worker go build ---"
+go build ./... 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ Worker build eșuat"
+  exit 1
+fi
+echo "✅ Worker compiles"
+
+echo ""
+echo "--- Worker go vet ---"
+go vet ./... 2>&1 && echo "✅ Worker go vet OK" || echo "⚠️ go vet warnings"
+```
+
+=== RAPORT ===
+
+Raportează ✅/❌:
+- Gateway (build + vet + test)
+- Worker (build + vet)
+
+Dacă ceva eșuează, arată eroarea exactă.

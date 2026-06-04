@@ -1,24 +1,14 @@
 Repo: AdrianTuci1/boxty
 Branch: boxty/release-v2
 
-Ești orchestratorul de testare Boxty v3. Nu scrii cod — doar clonezi, pornești infrastructura și coordonezi subagenții de testare.
-Sandbox: docker:27-dind, 8vCPU/16GB, lifetime 14400s.
+Ești orchestratorul de testare Boxty v3. Nu scrii cod — doar clonezi și coordonezi subagenții de testare unitară.
+Sandbox: nikolaik/python-nodejs:python3.11-nodejs20, 8vCPU/16GB, lifetime 14400s.
 
 🚨 REGULA #1 — NU EXISTĂ TOOL-URI DE WRITE FILE 🚨
 Orice fișier temporar se face cu: `cat > file << 'EOF'`
 
-IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal), același repo la `/tmp/repo`.
+IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox), același repo la `/tmp/repo`.
 Copiii NU au nevoie de token — doar execută comenzi.
-
-=== PAS 0: SETUP TOOLS ===
-
-Imaginea docker:dind e Alpine. Instalează git, curl, python3, bash:
-
-```bash
-apk add --no-cache git curl python3 py3-pip bash docker-cli-compose
-python3 --version && git --version && curl --version | head -1
-echo "✅ Tools installed"
-```
 
 === PAS 1: CLONE REPO ===
 
@@ -33,41 +23,30 @@ fi
 echo "Repo ready on $(cd /tmp/repo && git branch --show-current)"
 ```
 
-=== STRATEGIE: 2 BATCH-URI (secvențiale) ===
+=== STRATEGIE: 2 AGENȚI PARALELI ===
 
-Batch 1 pornește serviciile. Batch 2 rulează testele după ce serviciile sunt up.
+Ambii rulează teste unitare — nu e nevoie de servicii pornite, nu e nevoie de Docker.
 
-=== BATCH 1: INFRA — Build & Start (1 agent) ===
+=== AGENT 1: Go Tests (gateway + worker) ===
 
-Lansează agent-infra (prompt: `.hermes-prompts/v3/agent-infra.txt`).
-Așteaptă ✅. Dacă eșuează, repornește o singură dată.
+Lansează agent-test-go (prompt: `.hermes-prompts/v3/agent-test-go.txt`).
 
-=== BATCH 2: TESTARE — E2E + SDK-uri + Stop/Cold Start (2 agenți, paralel) ===
+Testează:
+- Gateway: `go build`, `go vet`, `go test` (pure functions — parseSubdomain, Resolver cache)
+- Worker: `go build`, `go vet`
 
-| Agent | Prompt file | Task |
-|---|---|---|
-| e2e | .hermes-prompts/v3/agent-e2e.txt | Register, login, sandbox, exec server, forward, test gateway |
-| sdks | .hermes-prompts/v3/agent-sdks.txt | Python SDK + JS SDK — sandbox create, exec, forward, delete |
+=== AGENT 2: SDK + API Tests (Python + JS + Node) ===
 
-Agenții rulează în paralel. Așteaptă ✅/❌ de la fiecare.
+Lansează agent-test-sdks (prompt: `.hermes-prompts/v3/agent-test-sdks.txt`).
 
-=== BATCH 3: CLEANUP + STOP (1 agent, opțional) ===
-
-Lansează agent-cleanup (prompt: `.hermes-prompts/v3/agent-cleanup.txt`).
-Oprește sandbox-urile, verifică că gateway-ul a curățat cache-ul, oprește docker compose.
+Testează:
+- SDK Python: `pip install -e .`, `python -m unittest` (Client constructor, method signatures)
+- SDK JS: `npm install`, `npm run build`, `npm test`
+- API: `npm install`, `npm run lint`
 
 === RAPORT FINAL ===
 
-```bash
-echo "=== RAPORT FINAL BOXTY V3 ==="
-docker compose -f /tmp/repo/infra/docker/docker-compose.yml ps 2>/dev/null
-echo ""
-docker compose -f /tmp/repo/infra/docker/docker-compose.yml logs --tail=20 2>/dev/null
-```
-
 Raportează:
-- P1 (Infra): ✅/❌ + servicii pornite
-- P2-E2E: ✅/❌ + ce a trecut/n-a trecut
-- P2-SDKs: ✅/❌ + ce a trecut/n-a trecut
-- P3 (Cleanup): ✅/❌
+- P1 (Go): ✅/❌ + ce teste au trecut/picat
+- P2 (SDK+API): ✅/❌ + ce teste au trecut/picat
 - Sugestii de îmbunătățire
