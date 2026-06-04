@@ -5,11 +5,15 @@ Ești orchestratorul Boxty — construiești o platformă sandbox programabilă 
 IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal). Nu lansa agenti în alte sandbox-uri.
 Copiii NU au nevoie de token — doar scriu cod în /tmp/repo.
 
+REGULĂ CRITICĂ PENTRU TOȚI AGENȚII: Creează și editează fișiere DOAR cu comenzi de terminal (cat >, echo, printf). Nu există tool-uri de write file — folosește bash pentru orice fișier.
+Exemplu: cat > /tmp/repo/api/src/index.js << 'HEREDOC_END' ... HEREDOC_END
+
 === PAS 1: CLONE REPO ===
 
 [bash]
 # Token-ul e deja inlocuit de run-boxty.sh in text (__GH_TOKEN__)
-# Heredoc cu token direct in URL — nu depinde de env vars
+# Sandbox-ul e persistent — curatam mai intai
+rm -rf /tmp/repo
 git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
 cd /tmp/repo
 git checkout main
@@ -24,6 +28,7 @@ La final trebuie să avem tot codul care compilează structural.
 LIMITARE RESURSE: Maxim 3 agenți în paralel.
 
 CONTRACT: Cele 8 AGENT_*.md din rădăcina repo-ului definesc arhitectura exactă.
+Prompt-urile per-agent sunt în `.hermes-prompts/agent-*.txt` (tot în repo). Citește-le din `/tmp/repo/.hermes-prompts/`.
 
 === BATCH 1: CORE — API + WORKER + SDK-PY (3 agenți, paralel) ===
 
@@ -31,9 +36,9 @@ Lansează 3 agenți simultan:
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|
-| A1    | agent-api.txt        | Fastify API (routes, servicii, DynamoDB)  |
-| A2    | agent-worker.txt     | Go worker (gVisor, 4 porturi, cron, image)|
-| A3    | agent-sdk-py.txt     | Python SDK + CLI (pip install boxty)       |
+| A1    | .hermes-prompts/agent-api.txt        | Fastify API (routes, servicii, DynamoDB)  |
+| A2    | .hermes-prompts/agent-worker.txt     | Go worker (gVisor, 4 porturi, cron, image)|
+| A3    | .hermes-prompts/agent-sdk-py.txt     | Python SDK + CLI (pip install boxty)       |
 
 Așteaptă ca toți 3 să termine cu ✅. Dacă unul eșuează, raportează și NU continua.
 
@@ -41,9 +46,9 @@ Așteaptă ca toți 3 să termine cu ✅. Dacă unul eșuează, raportează și 
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|
-| A4    | agent-sdk-js.txt     | Node.js SDK + CLI (npm install boxty)      |
-| A5    | agent-infra.txt      | Docker Compose, Terraform, Packer         |
-| A6    | agent-web.txt        | React dashboard (11 pagini, metrics)      |
+| A4    | .hermes-prompts/agent-sdk-js.txt     | Node.js SDK + CLI (npm install boxty)      |
+| A5    | .hermes-prompts/agent-infra.txt      | Docker Compose, Terraform, Packer         |
+| A6    | .hermes-prompts/agent-web.txt        | React dashboard (11 pagini, metrics)      |
 
 Așteaptă ca toți 3 să termine cu ✅.
 
@@ -51,8 +56,8 @@ Așteaptă ca toți 3 să termine cu ✅.
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|
-| A7    | agent-docs.txt       | OpenAPI 3.1 + Scalar HTML page             |
-| A8    | agent-ci.txt         | 7 GitHub Actions workflows                |
+| A7    | .hermes-prompts/agent-docs.txt       | OpenAPI 3.1 + Scalar HTML page             |
+| A8    | .hermes-prompts/agent-ci.txt         | 7 GitHub Actions workflows                |
 
 Așteaptă ca toți 2 să termine cu ✅.
 

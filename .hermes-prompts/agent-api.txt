@@ -3,6 +3,8 @@ TASK: Implementează API Server-ul Boxty (Node.js/Fastify + DynamoDB).
 Directorul tău de lucru: `/tmp/repo/api/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_API.md` pentru specificația completă.
 
+FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
+
 Există schelet: `package.json`, `src/index.js`, `src/config.js`, `src/db/schema.js`, `src/middleware/auth.js`, `src/routes/sandboxes.js`, `src/routes/exec.js`. Completează-le și adaugă ce lipsește.
 
 Ce trebuie să implementezi COMPLET:

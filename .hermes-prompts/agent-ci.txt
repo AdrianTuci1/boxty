@@ -3,6 +3,8 @@ TASK: Implementează 7 GitHub Actions workflows pentru Boxty.
 Directorul tău de lucru: `/tmp/repo/.github/workflows/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_CI.md` pentru specificația completă.
 
+FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
+
 **1. `ci.yml`** — Pull Request check:
 - Trigger: pull_request → main, push → develop
 - Jobs paralele:

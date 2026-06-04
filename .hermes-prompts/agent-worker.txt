@@ -3,6 +3,8 @@ TASK: Implementează Worker Agent-ul Boxty (Go + gVisor) pe 4 porturi.
 Directorul tău de lucru: `/tmp/repo/worker/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_WORKER.md` pentru specificația completă.
 
+FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
+
 Ce trebuie să implementezi COMPLET:
 
 **Entry point:** `cmd/worker/main.go`

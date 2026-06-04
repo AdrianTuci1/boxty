@@ -3,6 +3,8 @@ TASK: Implementează Node.js SDK-ul Boxty (TypeScript).
 Directorul tău de lucru: `/tmp/repo/sdk-js/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_SDK_JS.md` pentru specificația completă.
 
+FOLOSEȘTE COMENZI DE TERMINAL pentru a crea/edita fișiere (cat > file << 'EOF' ... EOF, echo, printf). Nu există tool write_file.
+
 **package.json** — ES modules, TypeScript, bin entry `boxty` (compiled JS), dependențe: ws, commander, node-fetch (sau use native fetch)
 
 **tsconfig.json** — strict mode, ES2022, moduleResolution node
