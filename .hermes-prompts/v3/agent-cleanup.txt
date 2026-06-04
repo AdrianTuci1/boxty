@@ -1,0 +1,97 @@
+TASK: Curăță resursele după testare — oprește sandbox-uri, verifică gateway cache, oprește docker compose.
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul de lucru: `/tmp/repo`. Serviciile rulează încă.
+
+=== STEP 1: Clean up test sandboxes ===
+
+```bash
+# Login ca e2e user
+LOGIN=$(curl -s -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"e2e@boxty.dev","password":"test123"}')
+TOKEN=$(echo $LOGIN | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
+
+# List all sandboxes
+SBS=$(curl -s http://localhost:3000/api/sandboxes \
+  -H "Authorization: Bearer $TOKEN")
+echo "Sandbox-uri active: $(echo $SBS | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")"
+
+# Delete all sandboxes
+echo $SBS | python3 -c "
+import sys, json, subprocess
+sbs = json.load(sys.stdin)
+for sb in sbs:
+    subprocess.run(['curl','-s','-X','DELETE',
+        f'http://localhost:3000/api/sandboxes/{sb[\"id\"]}',
+        '-H','Authorization: Bearer $TOKEN'])
+    print(f'Deleted: {sb[\"id\"]}')
+"
+echo "✅ All sandboxes cleaned up"
+```
+
+=== STEP 2: Verify Gateway Cache Cleared ===
+
+```bash
+sleep 2
+echo ""
+echo "=== GATEWAY CACHE VERIFICATION ==="
+GW_HEALTH=$(curl -s http://localhost:8000/health)
+echo "Gateway health: $GW_HEALTH"
+
+CACHED=$(echo $GW_HEALTH | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('stats',{}).get('cached_routes',0))")
+echo "Routes in cache: $CACHED"
+
+# Cache should be 0 or near 0 after cleanup
+if [ "$CACHED" -le 2 ]; then
+  echo "✅ Gateway cache cleaned up (routes: $CACHED)"
+else
+  echo "⚠️ Gateway still has $CACHED cached routes"
+fi
+```
+
+=== STEP 3: Verify API Health After Cleanup ===
+
+```bash
+echo ""
+echo "=== API STATUS AFTER CLEANUP ==="
+curl -s http://localhost:3000/health 2>&1
+
+# Verificare workspaces rămase
+SBS=$(curl -s http://localhost:3000/api/sandboxes \
+  -H "Authorization: Bearer $TOKEN")
+SBS_COUNT=$(echo $SBS | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+echo ""
+echo "Sandbox count after cleanup: $SBS_COUNT"
+
+if [ "$SBS_COUNT" -eq 0 ]; then
+  echo "✅ Zero sandboxes remaining"
+else
+  echo "⚠️ $SBS_COUNT sandboxes still exist"
+fi
+```
+
+=== STEP 4: Docker Compose Logs (for debugging) ===
+
+```bash
+echo ""
+echo "=== DOCKER LOGS (last 15 lines per service) ==="
+cd /tmp/repo/infra/docker
+docker compose logs --tail=15 2>&1
+```
+
+=== STEP 5: Stop Docker Compose ===
+
+```bash
+echo ""
+echo "=== STOPPING SERVICES ==="
+cd /tmp/repo/infra/docker
+docker compose down 2>&1
+echo "✅ Docker compose stopped"
+```
+
+Raportează:
+- Sandbox-uri șterse: câte
+- Gateway cache: câte rute rămase
+- Docker: oprit ✅/❌

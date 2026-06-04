@@ -25,7 +25,7 @@ mkdir -p .hermes-logs
 rm -f /tmp/boxty-master-*.txt
 
 # Generam master prompt cu token-ul deja inlocuit direct in bash commands
-sed "s|__GH_TOKEN__|$GITHUB_TOKEN|g" .hermes-prompts/master-boxty.txt > "$INJECTED"
+sed "s|__GH_TOKEN__|$GITHUB_TOKEN|g" .hermes-prompts/v3/master-boxty.txt > "$INJECTED"
 
 # Verificam ca token-ul a fost injectat corect
 if ! grep -q "$GITHUB_TOKEN" "$INJECTED"; then

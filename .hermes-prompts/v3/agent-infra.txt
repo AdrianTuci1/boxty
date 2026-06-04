@@ -1,0 +1,85 @@
+TASK: Pornește infrastructura Boxty — Docker Compose cu toate serviciile.
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul de lucru: `/tmp/repo`. Repo-ul e deja clonat, branch-ul boxty/release-v2.
+
+=== STEP 1: Verifică Docker ===
+
+```bash
+which docker || (apt-get update && apt-get install -y docker.io docker-compose-v2)
+docker info 2>&1 | head -3
+```
+
+=== STEP 2: Build & Start ===
+
+```bash
+cd /tmp/repo/infra/docker
+docker compose up -d --build 2>&1
+```
+
+=== STEP 3: Wait for all services healthy ===
+
+```bash
+echo "Așteptăm serviciile să fie healthy..."
+
+# API
+for i in $(seq 1 30); do
+  if curl -s http://localhost:3000/health 2>/dev/null | grep -q '"ok"'; then
+    echo "✅ API ready (port 3000)"
+    break
+  fi
+  echo "  waiting API... ($i/30)"
+  sleep 2
+done
+
+# Gateway
+for i in $(seq 1 15); do
+  if curl -s http://localhost:8000/health 2>/dev/null | grep -q '"ok"'; then
+    echo "✅ Gateway ready (port 8000)"
+    break
+  fi
+  echo "  waiting Gateway... ($i/15)"
+  sleep 2
+done
+
+# Worker (așteaptă să se înregistreze la API)
+for i in $(seq 1 20); do
+  WORKERS=$(curl -s http://localhost:3000/api/workers 2>/dev/null)
+  if echo "$WORKERS" | grep -q '"active"'; then
+    echo "✅ Worker registered"
+    break
+  fi
+  echo "  waiting Worker registration... ($i/20)"
+  sleep 3
+done
+```
+
+=== STEP 4: Verify all services ===
+
+```bash
+echo ""
+echo "=== SERVICE STATUS ==="
+
+echo "--- API Health ---"
+curl -s http://localhost:3000/health 2>&1
+
+echo ""
+echo "--- Gateway Health ---"
+curl -s http://localhost:8000/health 2>&1
+
+echo ""
+echo "--- Workers ---"
+curl -s http://localhost:3000/api/workers 2>&1
+
+echo ""
+echo "--- Docker Compose Status ---"
+cd /tmp/repo/infra/docker && docker compose ps 2>&1
+```
+
+Raportează ✅ dacă toate 3 serviciile (API, Gateway, Worker) sunt up și healthy.
+Raportează ❌ cu log-urile relevante dacă ceva eșuează:
+
+```bash
+docker compose -f /tmp/repo/infra/docker/docker-compose.yml logs --tail=30
+```

@@ -1,0 +1,63 @@
+Repo: AdrianTuci1/boxty
+Branch: boxty/release-v2
+
+Ești orchestratorul de testare Boxty v3. Nu scrii cod — doar clonezi, pornești infrastructura și coordonezi subagenții de testare.
+Sandbox: nikolaik/python-nodejs:python3.11-nodejs20, 8vCPU/16GB, lifetime 14400s.
+
+🚨 REGULA #1 — NU EXISTĂ TOOL-URI DE WRITE FILE 🚨
+Orice fișier temporar se face cu: `cat > file << 'EOF'`
+
+IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal), același repo la `/tmp/repo`.
+Copiii NU au nevoie de token — doar execută comenzi.
+
+=== PAS 1: CLONE REPO ===
+
+```bash
+if [ -d /tmp/repo/.git ] && cd /tmp/repo && git remote get-url origin | grep -q "AdrianTuci1/boxty"; then
+  cd /tmp/repo && git fetch origin && git checkout boxty/release-v2 && git pull origin boxty/release-v2
+else
+  rm -rf /tmp/repo
+  git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
+  cd /tmp/repo && git checkout boxty/release-v2
+fi
+echo "Repo ready on $(cd /tmp/repo && git branch --show-current)"
+```
+
+=== STRATEGIE: 2 BATCH-URI (secvențiale) ===
+
+Batch 1 pornește serviciile. Batch 2 rulează testele după ce serviciile sunt up.
+
+=== BATCH 1: INFRA — Build & Start (1 agent) ===
+
+Lansează agent-infra (prompt: `.hermes-prompts/v3/agent-infra.txt`).
+Așteaptă ✅. Dacă eșuează, repornește o singură dată.
+
+=== BATCH 2: TESTARE — E2E + SDK-uri + Stop/Cold Start (2 agenți, paralel) ===
+
+| Agent | Prompt file | Task |
+|---|---|---|
+| e2e | .hermes-prompts/v3/agent-e2e.txt | Register, login, sandbox, exec server, forward, test gateway |
+| sdks | .hermes-prompts/v3/agent-sdks.txt | Python SDK + JS SDK — sandbox create, exec, forward, delete |
+
+Agenții rulează în paralel. Așteaptă ✅/❌ de la fiecare.
+
+=== BATCH 3: CLEANUP + STOP (1 agent, opțional) ===
+
+Lansează agent-cleanup (prompt: `.hermes-prompts/v3/agent-cleanup.txt`).
+Oprește sandbox-urile, verifică că gateway-ul a curățat cache-ul, oprește docker compose.
+
+=== RAPORT FINAL ===
+
+```bash
+echo "=== RAPORT FINAL BOXTY V3 ==="
+docker compose -f /tmp/repo/infra/docker/docker-compose.yml ps 2>/dev/null
+echo ""
+docker compose -f /tmp/repo/infra/docker/docker-compose.yml logs --tail=20 2>/dev/null
+```
+
+Raportează:
+- P1 (Infra): ✅/❌ + servicii pornite
+- P2-E2E: ✅/❌ + ce a trecut/n-a trecut
+- P2-SDKs: ✅/❌ + ce a trecut/n-a trecut
+- P3 (Cleanup): ✅/❌
+- Sugestii de îmbunătățire

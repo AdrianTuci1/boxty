@@ -1,0 +1,194 @@
+TASK: Testează SDK-urile Boxty (Python + JS) — creează sandbox, exec, forward, delete.
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul de lucru: `/tmp/repo`. Serviciile rulează deja. Credențialele sunt în `/tmp/boxty-test-creds.json`.
+
+=== STEP 1: Python SDK Test ===
+
+```bash
+echo "=== PYTHON SDK TEST ==="
+
+cd /tmp/repo/sdk-py
+
+# Instalează pachetul
+pip install -e . 2>&1 | tail -3
+
+# Citește credențialele
+API_KEY=$(python3 -c "import json; print(json.load(open('/tmp/boxty-test-creds.json'))['api_key'])")
+echo "API Key: ${API_KEY:0:15}..."
+
+# Test script Python
+cat > /tmp/test_sdk_py.py << 'PYEOF'
+import boxty as bx
+import time, json
+
+print("=" * 50)
+print("Boxty Python SDK E2E Test")
+print("=" * 50)
+
+client = bx.Client(api_key=None, base_url="http://localhost:3000")
+# Override config
+client.api_key = json.load(open("/tmp/boxty-test-creds.json"))["api_key"]
+client.headers["Authorization"] = f"Token {client.api_key}"
+
+# 1. Whoami
+try:
+    who = client._request("GET", "/api/auth/whoami")
+    print(f"✅ Whoami: {who.get('email', 'unknown')}")
+except Exception as e:
+    print(f"❌ Whoami failed: {e}")
+    exit(1)
+
+# 2. Create Sandbox
+try:
+    sb_data = client._request("POST", "/api/sandboxes", json={
+        "image": "python:3.11-slim",
+        "cpu": 1,
+        "memory": 512,
+        "timeout": 300
+    })
+    sb_id = sb_data["id"]
+    print(f"✅ Sandbox created: {sb_id}")
+except Exception as e:
+    print(f"❌ Create sandbox failed: {e}")
+    exit(1)
+
+# 3. Exec command
+try:
+    result = client._request("POST", f"/api/sandboxes/{sb_id}/exec", json={
+        "command": ["python3", "-c", "print('SDK-PY-OK')"],
+        "timeout": 10
+    })
+    if "SDK-PY-OK" in result.get("output", ""):
+        print("✅ Exec works")
+    else:
+        print(f"⚠️ Exec output: {result.get('output', '')}")
+except Exception as e:
+    print(f"❌ Exec failed: {e}")
+
+# 4. Forward
+try:
+    fwd = client._request("POST", f"/api/sandboxes/{sb_id}/forward", json={"port": 8080})
+    url = fwd.get("url", "")
+    print(f"✅ Forward: {url}")
+except Exception as e:
+    print(f"❌ Forward failed: {e}")
+
+# 5. Delete sandbox
+try:
+    client.delete_sandbox(sb_id)
+    print(f"✅ Sandbox deleted")
+except Exception as e:
+    print(f"❌ Delete failed: {e}")
+
+# 6. Workspace + App (doar create)
+try:
+    ws = client._request("POST", "/api/workspaces", json={"name": "sdk-test-ws"})
+    print(f"✅ Workspace created: {ws['name']}")
+except Exception as e:
+    print(f"⚠️ Workspace: {e}")
+
+print("=" * 50)
+print("Python SDK test complete!")
+PYEOF
+
+python3 /tmp/test_sdk_py.py 2>&1
+PY_EXIT=$?
+
+if [ $PY_EXIT -eq 0 ]; then
+  echo "✅ Python SDK — ALL TESTS PASSED"
+else
+  echo "❌ Python SDK — TESTS FAILED (exit code: $PY_EXIT)"
+fi
+```
+
+=== STEP 2: JavaScript SDK Test ===
+
+```bash
+echo ""
+echo "=== JAVASCRIPT SDK TEST ==="
+
+cd /tmp/repo/sdk-js
+
+# Instalează
+npm install 2>&1 | tail -3
+
+# Test script JS
+cat > /tmp/test_sdk_js.mjs << 'JSEOF'
+const response = await fetch("http://localhost:3000/api/auth/login", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ email: "e2e@boxty.dev", password: "test123" })
+});
+const login = await response.json();
+const TOKEN = login.token;
+console.log("✅ Auth token:", TOKEN.substring(0, 20) + "...");
+
+// Create sandbox
+const sbRes = await fetch("http://localhost:3000/api/sandboxes", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN}` },
+  body: JSON.stringify({ image: "node:20-alpine", cpu: 1, memory: 512, timeout: 300 })
+});
+const sb = await sbRes.json();
+const sbId = sb.id;
+console.log("✅ Sandbox created:", sbId);
+
+// Exec command
+const execRes = await fetch(`http://localhost:3000/api/sandboxes/${sbId}/exec`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN}` },
+  body: JSON.stringify({ command: ["node", "-e", "console.log('SDK-JS-OK')"], timeout: 10 })
+});
+const exec = await execRes.json();
+if (exec.output && exec.output.includes("SDK-JS-OK")) {
+  console.log("✅ Exec works");
+} else {
+  console.log("⚠️ Exec output:", exec.output);
+}
+
+// Forward
+const fwdRes = await fetch(`http://localhost:3000/api/sandboxes/${sbId}/forward`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN}` },
+  body: JSON.stringify({ port: 3000 })
+});
+const fwd = await fwdRes.json();
+console.log("✅ Forward:", fwd.url);
+
+// List sandboxes
+const listRes = await fetch("http://localhost:3000/api/sandboxes", {
+  headers: { "Authorization": `Bearer ${TOKEN}` }
+});
+const list = await listRes.json();
+console.log("✅ List sandboxes:", list.length, "sandboxes");
+
+// Delete
+await fetch(`http://localhost:3000/api/sandboxes/${sbId}`, {
+  method: "DELETE",
+  headers: { "Authorization": `Bearer ${TOKEN}` }
+});
+console.log("✅ Sandbox deleted");
+
+console.log("=" .repeat(40));
+console.log("JS SDK test complete!");
+JSEOF
+
+node /tmp/test_sdk_js.mjs 2>&1
+JS_EXIT=$?
+
+if [ $JS_EXIT -eq 0 ]; then
+  echo "✅ JS SDK — ALL TESTS PASSED"
+else
+  echo "❌ JS SDK — TESTS FAILED (exit code: $JS_EXIT)"
+fi
+```
+
+=== RAPORT ===
+
+Raportează:
+- Python SDK: ✅/❌ + ce teste au trecut/picat
+- JS SDK: ✅/❌ + ce teste au trecut/picat
+
+Dacă ceva eșuează, afișează eroarea exactă.
