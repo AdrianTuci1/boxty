@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <title>Boxty API Reference</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Boxty — programmable sandbox platform API" />
+  <style>
+    body { margin: 0; background: #0f172a; }
+  </style>
+</head>
+<body>
+  <script id="api-reference"></script>
+  <script>
+    const specUrl = new URL('/docs/openapi.yaml', window.location.origin);
+    fetch(specUrl)
+      .then((response) => {
+        if (!response.ok) throw new Error('Failed to load OpenAPI spec');
+        return response.text();
+      })
+      .then((spec) => {
+        document.getElementById('api-reference').dataset.spec = spec;
+      })
+      .catch((error) => {
+        document.body.innerHTML = '<pre style="padding:16px;font-family:monospace;white-space:pre-wrap;color:#fff;">Failed to load docs: ' + error.message + '</pre>';
+      });
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+</body>
+</html>

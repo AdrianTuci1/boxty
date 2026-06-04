@@ -1,0 +1,22 @@
+#cloud-config
+package_update: true
+packages:
+  - runsc
+  - containerd
+  - docker.io
+
+runcmd:
+  - systemctl enable --now containerd
+  - runsc install
+  - systemctl enable --now docker
+  - docker pull boxty/worker:latest
+  - |
+    docker run -d --name boxty-worker \
+      -e API_URL="${api_url}" \
+      -e WORKER_API_KEY="${worker_key}" \
+      -e PROVIDER="${provider}" \
+      -e REGION="${region}" \
+      -v /var/run/containerd:/var/run/containerd \
+      -v /var/run/runsc:/var/run/runsc \
+      --privileged \
+      boxty/worker:latest

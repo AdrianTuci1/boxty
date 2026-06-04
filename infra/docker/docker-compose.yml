@@ -1,0 +1,44 @@
+services:
+  api:
+    build: ../api
+    ports:
+      - "3000:3000"
+    environment:
+      - DYNAMODB_ENDPOINT=http://dynamodb:8000
+      - JWT_SECRET=dev-secret
+      - WORKER_API_KEY=dev-key
+      - S3_BUCKET_SNAPSHOTS=boxty-snapshots
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+    depends_on:
+      - dynamodb
+      - s3-local
+
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    ports:
+      - "8000:8000"
+    command: -jar DynamoDBLocal.jar -sharedDb -inMemory
+
+  s3-local:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: test
+      MINIO_ROOT_PASSWORD: testtest
+
+  worker-mock:
+    build: ../worker
+    ports:
+      - "9001:9001"
+      - "9002:9002"
+    environment:
+      - API_URL=http://api:3000
+      - WORKER_API_KEY=dev-key
+      - PROVIDER=local
+      - REGION=local
+    depends_on:
+      - api
