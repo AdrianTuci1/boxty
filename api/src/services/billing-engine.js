@@ -107,5 +107,6 @@ export default function billingEnginePlugin(app, opts, done) {
   const engine = new BillingEngine(app.workerPool);
   app.decorate('billingEngine', engine);
   engine.start();
+  app.log.info('BillingEngine started');
   done();
 }
