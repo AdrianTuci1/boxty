@@ -1,0 +1,30 @@
+name: Destroy Workers
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: "Cloud provider"
+        required: true
+        type: choice
+        default: "aws"
+        options:
+          - aws
+          - gcp
+          - azure
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - name: Terraform Init
+        run: terraform init
+        working-directory: infra/terraform/${{ github.event.inputs.provider }}
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
+        working-directory: infra/terraform/${{ github.event.inputs.provider }}
+        env:
+          TF_VAR_api_url: ${{ vars.API_URL }}
+          TF_VAR_worker_api_key: ${{ secrets.WORKER_API_KEY }}
