@@ -26,6 +26,7 @@ import volumeRoutes from './routes/volumes.js';
 import workspaceRoutes from './routes/workspaces.js';
 import environmentRoutes from './routes/environments.js';
 import appRoutes from './routes/apps.js';
+import routeRoutes from './routes/route.js';
 import scheduleRoutes from './routes/schedules.js';
 import adminRoutes from './routes/admin.js';
 
@@ -57,6 +58,7 @@ await app.register(volumeRoutes, { prefix: '/api/volumes' });
 await app.register(workspaceRoutes, { prefix: '/api/workspaces' });
 await app.register(environmentRoutes, { prefix: '/api/environments' });
 await app.register(appRoutes, { prefix: '/api/apps' });
+await app.register(routeRoutes);
 await app.register(scheduleRoutes, { prefix: '/api/schedules' });
 await app.register(adminRoutes, { prefix: '/api/admin' });
 

@@ -171,8 +171,9 @@ export class Client {
     return this.request('GET', '/api/environments');
   }
 
-  async createApp(workspaceId: string, envId: string, name: string, image: string, cpu: number, memory: number, gpu?: string, timeout?: number): Promise<any> {
-    return this.request('POST', '/api/apps', { workspaceId, envId, name, image, cpu, memory, gpu, timeout });
+  // App is a namespace — CPU/RAM/GPU are on Instance Configs
+  async createApp(workspaceId: string, envId: string, name: string, image: string, timeout?: number): Promise<any> {
+    return this.request('POST', '/api/apps', { workspaceId, envId, name, image, timeout });
   }
 
   async listApps(): Promise<any[]> {
@@ -191,13 +192,31 @@ export class Client {
     await this.request('POST', `/api/apps/${id}/stop`);
   }
 
-  async deployApp(id: string, options?: Partial<SandboxOptions>): Promise<Deployment> {
-    return this.request('POST', `/api/apps/${id}/deploy`, options || {});
+  // Instance Configs (resource pools)
+  async createInstance(appId: string, name: string, cpu: number, memory: number, gpu?: string | null, minContainers?: number, maxContainers?: number, scaledownWindow?: number): Promise<any> {
+    return this.request('POST', `/api/apps/${appId}/instances`, { name, cpu, memory, gpu, min_containers: minContainers, max_containers: maxContainers, scaledown_window: scaledownWindow });
   }
 
-  async getAppSandboxes(id: string): Promise<Sandbox[]> {
-    const data = await this.request('GET', `/api/apps/${id}/sandboxes`);
+  async listInstances(appId: string): Promise<any[]> {
+    return this.request('GET', `/api/apps/${appId}/instances`);
+  }
+
+  async getInstance(appId: string, instanceId: string): Promise<any> {
+    return this.request('GET', `/api/apps/${appId}/instances/${instanceId}`);
+  }
+
+  async deleteInstance(appId: string, instanceId: string): Promise<void> {
+    await this.request('DELETE', `/api/apps/${appId}/instances/${instanceId}`);
+  }
+
+  async getInstanceSandboxes(appId: string, instanceId: string): Promise<Sandbox[]> {
+    const data = await this.request('GET', `/api/apps/${appId}/instances/${instanceId}/sandboxes`);
     return data.map((d: any) => new Sandbox(this, d));
+  }
+
+  // Deploy targets an instance config
+  async deployApp(id: string, instanceId: string, image?: string): Promise<Deployment> {
+    return this.request('POST', `/api/apps/${id}/deploy`, { instance_id: instanceId, image });
   }
 
   async getAppDeployments(id: string): Promise<Deployment[]> {

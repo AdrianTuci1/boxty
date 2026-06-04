@@ -20,7 +20,9 @@ export const config = {
   },
   ephemeralDiskDefaultGb: parseInt(process.env.EPHEMERAL_DISK_DEFAULT_GB || '10', 10),
   idleTimeoutSeconds: parseInt(process.env.IDLE_TIMEOUT_SECONDS || '300', 10),
-  imageRegistry: process.env.IMAGE_REGISTRY || 'registry.boxty.dev',
+	imageRegistry: process.env.IMAGE_REGISTRY || 'registry.boxty.dev',
+	gatewayURL: process.env.GATEWAY_URL || 'http://localhost:8000',
+	gatewayApiKey: process.env.GATEWAY_API_KEY || 'boxty-gateway-secret',
   freeTrialCredits: parseInt(process.env.FREE_TRIAL_CREDITS || '1000', 10),
   buildWorkerMaxBuilds: parseInt(process.env.BUILD_WORKER_MAX_BUILDS || '2', 10),
   cloud: {

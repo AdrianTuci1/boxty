@@ -48,11 +48,15 @@ type CreateOpts struct {
 	Volume     *Volume
 }
 
+// OnStopFunc is called when a sandbox is stopped (idle or manual).
+type OnStopFunc func(sandboxID string)
+
 // Manager manages sandbox lifecycle
 type Manager struct {
 	mu        sync.RWMutex
 	sandboxes map[string]*Sandbox
 	sched     *scheduler.Local
+	onStop    OnStopFunc
 }
 
 // NewManager creates a new sandbox manager.
@@ -61,6 +65,11 @@ func NewManager(sched *scheduler.Local) *Manager {
 		sandboxes: make(map[string]*Sandbox),
 		sched:     sched,
 	}
+}
+
+// SetOnStop sets a callback invoked when a sandbox is stopped.
+func (m *Manager) SetOnStop(fn OnStopFunc) {
+	m.onStop = fn
 }
 
 // Create starts a new sandbox via runsc.
@@ -147,6 +156,11 @@ func (m *Manager) Stop(ctx context.Context, id string) error {
 	}
 	delete(m.sandboxes, id)
 	m.mu.Unlock()
+
+	// Notify API server if callback is set
+	if m.onStop != nil {
+		m.onStop(id)
+	}
 
 	_ = exec.CommandContext(ctx, "runsc", "kill", id, "SIGTERM").Run()
 	time.Sleep(2 * time.Second)
@@ -284,6 +298,10 @@ func (m *Manager) CheckIdle(threshold time.Duration) {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		_, _ = m.Snapshot(ctx, id)
 		cancel()
+		// Notify API before stopping (Stop will also call onStop)
+		if m.onStop != nil {
+			m.onStop(id)
+		}
 		_ = m.Stop(context.Background(), id)
 	}
 }

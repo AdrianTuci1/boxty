@@ -52,9 +52,9 @@ class Client:
         data = self._request("GET", "/api/environments")
         return [Environment(self, d) for d in data]
 
-    # Apps
-    def create_app(self, workspace_id: str, env_id: str, name: str, image: str, cpu: int, memory: int, gpu: Optional[str] = None, timeout: int = 3600) -> App:
-        data = self._request("POST", "/api/apps", json={"workspace_id": workspace_id, "env_id": env_id, "name": name, "image": image, "cpu": cpu, "memory": memory, "gpu": gpu, "timeout": timeout})
+    # App is a namespace — CPU/RAM/GPU are on Instance Configs
+    def create_app(self, workspace_id: str, env_id: str, name: str, image: str, timeout: int = 3600) -> App:
+        data = self._request("POST", "/api/apps", json={"workspace_id": workspace_id, "env_id": env_id, "name": name, "image": image, "timeout": timeout})
         return App(self, data)
 
     def list_apps(self) -> List[App]:
@@ -71,12 +71,26 @@ class Client:
     def stop_app(self, id: str) -> None:
         self._request("POST", f"/api/apps/{id}/stop")
 
-    def deploy_app(self, id: str, image: Optional[str] = None, cpu: Optional[int] = None, memory: Optional[int] = None, gpu: Optional[str] = None) -> Any:
-        return self._request("POST", f"/api/apps/{id}/deploy", json={"image": image, "cpu": cpu, "memory": memory, "gpu": gpu})
+    # Instance Configs (resource pools)
+    def create_instance(self, app_id: str, name: str, cpu: int = 1, memory: int = 1024, gpu: Optional[str] = None, min_containers: int = 0, max_containers: int = 10, scaledown_window: int = 300) -> Any:
+        return self._request("POST", f"/api/apps/{app_id}/instances", json={"name": name, "cpu": cpu, "memory": memory, "gpu": gpu, "min_containers": min_containers, "max_containers": max_containers, "scaledown_window": scaledown_window})
 
-    def get_app_sandboxes(self, id: str) -> List[Sandbox]:
-        data = self._request("GET", f"/api/apps/{id}/sandboxes")
+    def list_instances(self, app_id: str) -> List[Any]:
+        return self._request("GET", f"/api/apps/{app_id}/instances")
+
+    def get_instance(self, app_id: str, instance_id: str) -> Any:
+        return self._request("GET", f"/api/apps/{app_id}/instances/{instance_id}")
+
+    def delete_instance(self, app_id: str, instance_id: str) -> None:
+        self._request("DELETE", f"/api/apps/{app_id}/instances/{instance_id}")
+
+    def get_instance_sandboxes(self, app_id: str, instance_id: str) -> List[Sandbox]:
+        data = self._request("GET", f"/api/apps/{app_id}/instances/{instance_id}/sandboxes")
         return [Sandbox(self, d) for d in data]
+
+    # Deploy targets an instance config
+    def deploy_app(self, id: str, instance_id: str, image: Optional[str] = None) -> Any:
+        return self._request("POST", f"/api/apps/{id}/deploy", json={"instance_id": instance_id, "image": image})
 
     def get_app_deployments(self, id: str) -> List[Any]:
         return self._request("GET", f"/api/apps/{id}/deployments")

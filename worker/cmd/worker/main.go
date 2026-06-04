@@ -46,6 +46,15 @@ func main() {
 	mgr := sandbox.NewManager(sched)
 	reg := cloud.NewRegistrar(apiURL, workerKey, region, provider)
 
+	// Wire sandbox stop notifications to API
+	mgr.SetOnStop(func(sandboxID string) {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := reg.NotifySandboxStopped(ctx, sandboxID); err != nil {
+			slog.Error("failed to notify sandbox stop", "sandbox", sandboxID, "err", err)
+		}
+	})
+
 	if err := reg.Register(context.Background()); err != nil {
 		slog.Error("failed to register worker", "err", err)
 	}

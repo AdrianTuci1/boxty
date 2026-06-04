@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { putItem, getItem, queryByPK, deleteItem, updateItem } from '../db/schema.js';
+import { notifyGateway } from '../services/gateway-notify.js';
 
 export default async function sandboxRoutes(app) {
   app.post('/', { preHandler: [app.authenticate] }, async (req, reply) => {
@@ -26,7 +27,16 @@ export default async function sandboxRoutes(app) {
     if (worker) {
       await app.workerPool.startSandbox(worker.id, { sandboxId: id, ...req.body });
       item.worker_id = worker.id;
-      await updateItem(`SANDBOX#${id}`, 'META', { worker_id: worker.id });
+      item.port = req.body.port || 8080;
+      await updateItem(`SANDBOX#${id}`, 'META', { worker_id: worker.id, port: item.port });
+      // Notify gateway of the new route
+      await notifyGateway({
+        sandbox_id: id,
+        worker_id: worker.id,
+        worker_host: worker.host,
+        ports: [item.port],
+        status: 'running',
+      });
     } else {
       app.capacityManager.enqueue({ resources: req.body, payload: { sandboxId: id, ...req.body } });
     }
@@ -59,6 +69,14 @@ export default async function sandboxRoutes(app) {
     await updateItem(`SANDBOX#${req.params.id}`, 'META', { status: 'stopped', finished_at: new Date().toISOString() });
     await deleteItem('STATUS#running', sb.created_at);
     await putItem({ pk: 'STATUS#stopped', sk: sb.created_at, sandbox_id: req.params.id });
+    // Notify gateway to remove the route
+    await notifyGateway({
+      sandbox_id: req.params.id,
+      worker_id: sb.worker_id,
+      worker_host: '',
+      ports: [],
+      status: 'stopped',
+    });
     reply.send({ status: 'stopped' });
   });
 
@@ -84,7 +102,23 @@ export default async function sandboxRoutes(app) {
     const { port } = req.body;
     const sb = await getItem(`SANDBOX#${req.params.id}`, 'META');
     if (!sb) return reply.status(404).send({ error: 'Not found' });
-    const url = `https://${req.params.id}-${port}.boxty.dev`;
+    const p = port || 8080;
+    // Save exposed port on sandbox
+    await updateItem(`SANDBOX#${req.params.id}`, 'META', { port: p });
+    // If running, notify gateway
+    if (sb.status === 'running' && sb.worker_id) {
+      const worker = app.workerPool.workers.get(sb.worker_id);
+      if (worker) {
+        await notifyGateway({
+          sandbox_id: req.params.id,
+          worker_id: sb.worker_id,
+          worker_host: worker.host,
+          ports: [p],
+          status: 'running',
+        });
+      }
+    }
+    const url = `https://${req.params.id}-${p}.boxty.dev`;
     reply.send({ url });
   });
 
