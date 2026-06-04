@@ -22,12 +22,16 @@ type Registrar struct {
 
 // NewRegistrar creates a new registrar.
 func NewRegistrar(apiURL, apiKey, region, provider string) *Registrar {
+	workerID := os.Getenv("BOXY_WORKER_ID")
+	if workerID == "" {
+		workerID = os.Getenv("HOSTNAME")
+	}
 	return &Registrar{
 		apiURL:   apiURL,
 		apiKey:   apiKey,
 		region:   region,
 		provider: provider,
-		workerID: os.Getenv("HOSTNAME"),
+		workerID: workerID,
 	}
 }
 

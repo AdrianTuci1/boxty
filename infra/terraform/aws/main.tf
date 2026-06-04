@@ -66,6 +66,7 @@ resource "aws_instance" "worker" {
     worker_key = var.worker_api_key
     provider   = "aws"
     region     = var.region
+    worker_id  = "terraform-${var.region}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
   })
 
   tags = {

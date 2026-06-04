@@ -23,4 +23,10 @@ export const config = {
   imageRegistry: process.env.IMAGE_REGISTRY || 'registry.boxty.dev',
   freeTrialCredits: parseInt(process.env.FREE_TRIAL_CREDITS || '1000', 10),
   buildWorkerMaxBuilds: parseInt(process.env.BUILD_WORKER_MAX_BUILDS || '2', 10),
+  cloud: {
+    defaultProvider: process.env.DEFAULT_CLOUD_PROVIDER || 'aws',
+    defaultRegion: process.env.DEFAULT_REGION || 'us-east-1',
+    instanceProfile: process.env.WORKER_IAM_PROFILE || 'BoxtyWorkerProfile',
+    workerImageId: process.env.WORKER_AMI_ID || 'ami-0c02fb55956c7d316',
+  },
 };

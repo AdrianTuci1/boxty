@@ -14,6 +14,49 @@ export class CloudProvider {
     return this.clients.get(key);
   }
 
+  selectInstanceType(provider, cpu, memoryMb) {
+    const memGb = memoryMb / 1024;
+    const instances = {
+      aws: [
+        { type: 't3.medium', cpu: 2, mem: 4 },
+        { type: 't3.xlarge', cpu: 4, mem: 16 },
+        { type: 'c6a.2xlarge', cpu: 8, mem: 16 },
+        { type: 'c6a.4xlarge', cpu: 16, mem: 32 },
+        { type: 'c6a.8xlarge', cpu: 32, mem: 64 },
+        { type: 'g4dn.xlarge', cpu: 4, mem: 16, gpu: 'T4' },
+        { type: 'g4dn.12xlarge', cpu: 48, mem: 192, gpu: 'T4x4' },
+        { type: 'p4d.24xlarge', cpu: 96, mem: 1152, gpu: 'A100x8' },
+      ],
+      gcp: [
+        { type: 'n2-standard-2', cpu: 2, mem: 8 },
+        { type: 'n2-standard-4', cpu: 4, mem: 16 },
+        { type: 'n2-standard-8', cpu: 8, mem: 32 },
+        { type: 'n2-standard-16', cpu: 16, mem: 64 },
+        { type: 'n2-standard-32', cpu: 32, mem: 128 },
+        { type: 'a2-highgpu-1g', cpu: 12, mem: 85, gpu: 'A100' },
+      ],
+      azure: [
+        { type: 'Standard_D2s_v5', cpu: 2, mem: 8 },
+        { type: 'Standard_D4s_v5', cpu: 4, mem: 16 },
+        { type: 'Standard_D8s_v5', cpu: 8, mem: 32 },
+        { type: 'Standard_D16s_v5', cpu: 16, mem: 64 },
+        { type: 'Standard_D32s_v5', cpu: 32, mem: 128 },
+        { type: 'Standard_NC4as_T4_v3', cpu: 4, mem: 28, gpu: 'T4' },
+      ],
+    };
+
+    const list = instances[provider] || [];
+    // Filtrăm: CPU suficient, memorie suficientă, GPU dacă e cerut
+    const candidates = list.filter(i => {
+      if (i.cpu < cpu) return false;
+      if (i.mem < memGb) return false;
+      return true;
+    });
+    // Cel mai mic care satisface (cost-optimized)
+    candidates.sort((a, b) => a.cpu - b.cpu || a.mem - b.mem);
+    return candidates[0] || list[list.length - 1]; // fallback: cel mai mare
+  }
+
   async launchWorker(provider, region, spec = {}) {
     const id = `worker-${Date.now()}-${Math.floor(Math.random()*1000)}`;
     let host = '127.0.0.1';
@@ -22,11 +65,19 @@ export class CloudProvider {
     if (provider === 'aws') {
       try {
         const ec2 = this._getEC2Client(region);
+        const inst = spec.instanceType
+          ? { type: spec.instanceType, cpu: 0, mem: 0 }
+          : this.selectInstanceType(provider, spec.cpu || 2, spec.memory || 4096);
         const cmd = new RunInstancesCommand({
           ImageId: spec.imageId || 'ami-0c02fb55956c7d316',
-          InstanceType: spec.instanceType || 't3.medium',
+          InstanceType: inst.type,
           MinCount: 1,
           MaxCount: 1,
+          UserData: Buffer.from(`#!/bin/bash
+export BOXY_WORKER_ID=${id}
+export PROVIDER=${provider}
+export REGION=${region}
+`).toString('base64'),
           InstanceMarketOptions: {
             MarketType: 'spot',
             SpotOptions: { SpotInstanceType: 'one-time', InstanceInterruptionBehavior: 'terminate' }
