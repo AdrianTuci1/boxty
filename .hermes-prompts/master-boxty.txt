@@ -8,11 +8,9 @@ Copiii NU au nevoie de token — doar scriu cod în /tmp/repo.
 === PAS 1: CLONE REPO ===
 
 [bash]
-# Utilizatorul exporta GH_TOKEN inainte sa porneasca Hermes
-# env_passthrough il injecteaza in acest sandbox
-# Autentificam gh si apoi clonam
-gh repo clone AdrianTuci1/boxty /tmp/repo 2>&1 || \
-  git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
+# Token-ul e deja inlocuit de run-boxty.sh in text (__GH_TOKEN__)
+# Heredoc cu token direct in URL — nu depinde de env vars
+git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
 cd /tmp/repo
 git checkout main
 git checkout -b boxty/release
