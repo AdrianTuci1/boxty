@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-sdk-js
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-sdk-js
-[/bash]
-
 TASK: Implementează Node.js SDK-ul Boxty (TypeScript).
 
-Citește `/tmp/repo/AGENT_SDK_JS.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/sdk-js/`.
+Directorul tău de lucru: `/tmp/repo/sdk-js/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_SDK_JS.md` pentru specificația completă.
 
 **package.json** — ES modules, TypeScript, bin entry `boxty` (compiled JS), dependențe: ws, commander, node-fetch (sau use native fetch)
 
@@ -47,9 +38,3 @@ Citește `/tmp/repo/AGENT_SDK_JS.md` pentru specificația completă. Directorul 
 - image build/ls/rm, workspace create/ls/rm, app create/ls/stop/logs/metrics
 
 JSDoc pe toate exporturile. examples/, test/
-
-[bash]
-git add -A
-git commit -m "boxty: Node.js SDK — Client, Sandbox, CLI TypeScript"
-git push origin boxty/agent-sdk-js
-[/bash]

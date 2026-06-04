@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-sdk-py
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-sdk-py
-[/bash]
-
 TASK: Implementează Python SDK-ul Boxty.
 
-Citește `/tmp/repo/AGENT_SDK_PY.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/sdk-py/`.
+Directorul tău de lucru: `/tmp/repo/sdk-py/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_SDK_PY.md` pentru specificația completă.
 
 **pyproject.toml** — PEP 621, entry point `boxty` pentru CLI (typer/click), dependencies: httpx, websockets, typer, rich
 
@@ -47,9 +38,3 @@ Citește `/tmp/repo/AGENT_SDK_PY.md` pentru specificația completă. Directorul 
 - app_cmd: create, ls, stop, logs, metrics
 
 Type hints peste tot. Suport async + sync (.result() pentru sync). examples/, tests/
-
-[bash]
-git add -A
-git commit -m "boxty: Python SDK — Client, Sandbox, Image, App, CLI complet"
-git push origin boxty/agent-sdk-py
-[/bash]

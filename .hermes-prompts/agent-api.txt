@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-api
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-api
-[/bash]
-
 TASK: Implementează API Server-ul Boxty (Node.js/Fastify + DynamoDB).
 
-Citește `/tmp/repo/AGENT_API.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/api/`.
+Directorul tău de lucru: `/tmp/repo/api/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_API.md` pentru specificația completă.
 
 Există schelet: `package.json`, `src/index.js`, `src/config.js`, `src/db/schema.js`, `src/middleware/auth.js`, `src/routes/sandboxes.js`, `src/routes/exec.js`. Completează-le și adaugă ce lipsește.
 
@@ -61,9 +52,3 @@ Reguli:
 - toate serviciile decorate pe app (`app.decorate`)
 - .env.example actualizat cu toate variabilele
 - package.json complet (fastify, @aws-sdk/client-dynamodb, jsonwebtoken, ws, stripe, pino, @fastify/static, etc.)
-
-[bash]
-git add -A
-git commit -m "boxty: API server — Fastify + DynamoDB + toate rutele și serviciile"
-git push origin boxty/agent-api
-[/bash]

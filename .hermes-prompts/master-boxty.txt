@@ -1,83 +1,69 @@
 Repo: AdrianTuci1/boxty
+GH_TOKEN e injectat via env_passthrough (config).
 
-Ești orchestratorul Boxty — construiești o platformă sandbox programabilă (competitor Modal). 1 sandbox (16vCPU/32GB, lifetime 14400s).
+Ești orchestratorul Boxty — construiești o platformă sandbox programabilă (competitor Modal). Rulezi într-un sandbox Modal (nikolaik/python-nodejs:python3.11-nodejs20, 16vCPU/32GB, lifetime 14400s).
 
-=== STRATEGIE: 3 BATCH-URI (max 3 paralel) + MERGE + VALIDARE ===
+IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox Modal). Nu lansa agenti în alte sandbox-uri.
 
-Toți agenții pornesc de pe master (sau main), în branch-uri separate prefixate cu `boxty/`.
-Merge-ul la final rezolvă conflictele prin --theirs.
+=== PAS 1: CLONE REPO ===
+
+[bash]
+cd /tmp
+git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
+cd /tmp/repo
+git checkout main
+git checkout -b boxty/release
+[/bash]
+
+=== STRATEGIE: 3 BATCH-URI (max 3 paralel) + VALIDARE ===
+
+Toți agenții lucrează direct pe `/tmp/repo` — fără branch-uri separate, fără worktree-uri.
 La final trebuie să avem tot codul care compilează structural.
 
-LIMITARE RESURSE: Maxim 3 agenți în paralel (16GB RAM local).
+LIMITARE RESURSE: Maxim 3 agenți în paralel.
 
-CONTRACT: Cele 8 AGENT_*.md din rădăcina repo-ului (AGENT_API.md, AGENT_WORKER.md, AGENT_SDK_PY.md, AGENT_SDK_JS.md, AGENT_INFRA.md, AGENT_CI.md, AGENT_DOCS.md, AGENT_WEB.md) definesc arhitectura exactă. Fiecare agent citește brief-ul său ca specificație.
+CONTRACT: Cele 8 AGENT_*.md din rădăcina repo-ului definesc arhitectura exactă.
 
 === BATCH 1: CORE — API + WORKER + SDK-PY (3 agenți, paralel) ===
 
 Lansează 3 agenți simultan:
 
-| Agent | Branch                | Prompt file          | Task                                      |
-|-------|-----------------------|----------------------|-------------------------------------------|
-| A1    | boxty/agent-api       | agent-api.txt        | Fastify API (routes, servicii, DynamoDB)  |
-| A2    | boxty/agent-worker    | agent-worker.txt     | Go worker (gVisor, 4 porturi, cron, image)|
-| A3    | boxty/agent-sdk-py    | agent-sdk-py.txt     | Python SDK + CLI (pip install boxty)       |
+| Agent | Prompt file          | Task                                      |
+|-------|----------------------|-------------------------------------------|
+| A1    | agent-api.txt        | Fastify API (routes, servicii, DynamoDB)  |
+| A2    | agent-worker.txt     | Go worker (gVisor, 4 porturi, cron, image)|
+| A3    | agent-sdk-py.txt     | Python SDK + CLI (pip install boxty)       |
 
 Așteaptă ca toți 3 să termine cu ✅. Dacă unul eșuează, raportează și NU continua.
 
 === BATCH 2: SDK-JS + INFRA + WEB (3 agenți, paralel) ===
 
-După Batch 1, lansează 3 agenți simultan:
-
-| Agent | Branch                | Prompt file          | Task                                      |
-|-------|-----------------------|----------------------|-------------------------------------------|
-| A4    | boxty/agent-sdk-js    | agent-sdk-js.txt     | Node.js SDK + CLI (npm install boxty)      |
-| A5    | boxty/agent-infra     | agent-infra.txt      | Docker Compose, Terraform, Packer         |
-| A6    | boxty/agent-web       | agent-web.txt        | React dashboard (11 pagini, metrics)      |
+| Agent | Prompt file          | Task                                      |
+|-------|----------------------|-------------------------------------------|
+| A4    | agent-sdk-js.txt     | Node.js SDK + CLI (npm install boxty)      |
+| A5    | agent-infra.txt      | Docker Compose, Terraform, Packer         |
+| A6    | agent-web.txt        | React dashboard (11 pagini, metrics)      |
 
 Așteaptă ca toți 3 să termine cu ✅.
 
 === BATCH 3: DOCS + CI (2 agenți, paralel) ===
 
-După Batch 2, lansează 2 agenți simultan:
-
-| Agent | Branch                | Prompt file          | Task                                      |
-|-------|-----------------------|----------------------|-------------------------------------------|
-| A7    | boxty/agent-docs      | agent-docs.txt       | OpenAPI 3.1 + Scalar HTML page             |
-| A8    | boxty/agent-ci        | agent-ci.txt         | 7 GitHub Actions workflows                |
+| Agent | Prompt file          | Task                                      |
+|-------|----------------------|-------------------------------------------|
+| A7    | agent-docs.txt       | OpenAPI 3.1 + Scalar HTML page             |
+| A8    | agent-ci.txt         | 7 GitHub Actions workflows                |
 
 Așteaptă ca toți 2 să termine cu ✅.
 
-=== MERGE + VALIDARE ===
+=== VALIDARE STRUCTURALĂ ===
 
-După ce toți 8 agenții au terminat, clonează un repo fresh și fă merge-ul:
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git fetch origin
-git checkout main
-git checkout -b boxty/release
-for b in agent-api agent-worker agent-sdk-py agent-sdk-js agent-infra agent-web agent-docs agent-ci; do
-  if git merge "origin/boxty/$b" --no-edit 2>&1; then
-    echo "Merged $b cleanly"
-  else
-    echo "CONFLICT in $b — resolving with --theirs..."
-    git diff --name-only --diff-filter=U | while read f; do
-      git checkout --theirs "$f" 2>/dev/null || true
-    done
-    git add .
-    git diff --cached --quiet || git commit -m "merge $b: resolve conflicts"
-  fi
-done
-[/bash]
-
-Validare structurală:
+După ce toți 8 agenții au terminat, validează:
 
 [bash]
 cd /tmp/repo
-# API
-cd api && node -e "require('./src/index.js')" 2>&1 | grep -v "listening" || echo "API OK"
-# Worker
+# API syntax
+node -e "require('./api/src/index.js')" 2>&1 | grep -v "listening" || echo "API OK"
+# Worker build
 cd /tmp/repo/worker && go build ./... 2>&1
 # SDK Python
 cd /tmp/repo/sdk-py && pip install -e . && python -c "import boxty; print('SDK-PY OK')" 2>&1
@@ -91,10 +77,12 @@ cd /tmp/repo/infra && docker compose -f docker/docker-compose.yml config 2>&1
 
 Dacă erori: citește fișierele, editează, re-validează (max 15 iterații).
 
-La final:
+=== PUSH RELEASE ===
+
 [bash]
 cd /tmp/repo
-if git diff --cached --quiet; then echo "clean"; else git add -A && git commit -m "boxty: post-merge fixes"; fi
+git add -A
+git diff --cached --quiet || git commit -m "boxty: full platform — toate componentele"
 git push origin boxty/release
 [/bash]
 

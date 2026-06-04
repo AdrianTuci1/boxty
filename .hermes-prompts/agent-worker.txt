@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-worker
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-worker
-[/bash]
-
 TASK: Implementează Worker Agent-ul Boxty (Go + gVisor) pe 4 porturi.
 
-Citește `/tmp/repo/AGENT_WORKER.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/worker/`.
+Directorul tău de lucru: `/tmp/repo/worker/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_WORKER.md` pentru specificația completă.
 
 Ce trebuie să implementezi COMPLET:
 
@@ -83,9 +74,3 @@ Ce trebuie să implementezi COMPLET:
 - 300s idle → snapshot automat + stop + notifică API
 
 Fișiere necesare: go.mod, go.sum, Dockerfile
-
-[bash]
-git add -A
-git commit -m "boxty: worker agent — Go + gVisor + 4 porturi + cron + image builder"
-git push origin boxty/agent-worker
-[/bash]

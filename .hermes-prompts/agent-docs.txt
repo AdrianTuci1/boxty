@@ -1,18 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-docs
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-docs
-[/bash]
-
 TASK: Implementează documentația API Boxty (OpenAPI 3.1 + Scalar).
 
+Directorul tău de lucru: `/tmp/repo/api/docs/`. Repo-ul e deja clonat la `/tmp/repo`.
 Citește `/tmp/repo/AGENT_DOCS.md` pentru specificația completă și `/tmp/repo/AGENT_API.md` pentru lista completă de endpoint-uri.
-
-Directorul tău de lucru: `/tmp/repo/api/docs/`.
 
 **1. `api/docs/openapi.yaml`** — OpenAPI 3.1 spec COMPLETĂ:
 
@@ -65,9 +54,3 @@ Tag-uri: Auth, Sandboxes, Workers, Images, Secrets, Volumes, Schedules, Deployme
 - Fallback la eroare de fetch
 
 **3. NOTĂ:** Nu modifica `api/src/index.js` — agentul API va adăuga rutele `/docs` și `/docs/openapi.yaml`. Tu doar creează fișierele statice.
-
-[bash]
-git add -A
-git commit -m "boxty: API docs — OpenAPI 3.1 spec completă + Scalar HTML"
-git push origin boxty/agent-docs
-[/bash]

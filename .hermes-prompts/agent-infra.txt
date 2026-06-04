@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-infra
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-infra
-[/bash]
-
 TASK: Implementează infrastructura Boxty (Docker Compose + Terraform multi-cloud + Packer).
 
-Citește `/tmp/repo/AGENT_INFRA.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/infra/`.
+Directorul tău de lucru: `/tmp/repo/infra/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_INFRA.md` pentru specificația completă.
 
 **infra/docker/docker-compose.yml:**
 ```yaml
@@ -48,9 +39,3 @@ services:
 **infra/packer/cloud-init.yml:**
 - Bootstrap: install runsc, containerd, docker
 - Pull worker image, run with API_URL, WORKER_API_KEY env vars
-
-[bash]
-git add -A
-git commit -m "boxty: infra — Docker Compose, Terraform multi-cloud, Packer golden AMI"
-git push origin boxty/agent-infra
-[/bash]

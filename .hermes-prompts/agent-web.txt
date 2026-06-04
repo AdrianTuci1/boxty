@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-web
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-web
-[/bash]
-
 TASK: Implementează Web UI-ul Boxty (React + Vite + TypeScript + Tailwind).
 
-Citește `/tmp/repo/AGENT_WEB.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/web/`.
+Directorul tău de lucru: `/tmp/repo/web/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_WEB.md` pentru specificația completă.
 
 **Setup:** Vite + React + TypeScript + Tailwind CSS + shadcn/ui (sau headless UI) + Recharts + @tanstack/react-query + React Router v6
 
@@ -54,9 +45,3 @@ Citește `/tmp/repo/AGENT_WEB.md` pentru specificația completă. Directorul tă
 **Routing:** React Router v6, protected routes (redirect la /login dacă nu e autentificat)
 
 **Styling:** Tailwind CSS, responsive, dark mode support, loading states (skeleton), error states
-
-[bash]
-git add -A
-git commit -m "boxty: Web UI — React dashboard cu 11 pagini, metrics, live logs"
-git push origin boxty/agent-web
-[/bash]

@@ -1,16 +1,7 @@
-Repo: AdrianTuci1/boxty
-Branch: boxty/agent-ci
-
-[bash]
-git clone https://x-access-token:${GH_TOKEN}@github.com/AdrianTuci1/boxty.git /tmp/repo
-cd /tmp/repo
-git checkout main
-git checkout -b boxty/agent-ci
-[/bash]
-
 TASK: Implementează 7 GitHub Actions workflows pentru Boxty.
 
-Citește `/tmp/repo/AGENT_CI.md` pentru specificația completă. Directorul tău de lucru: `/tmp/repo/.github/workflows/`.
+Directorul tău de lucru: `/tmp/repo/.github/workflows/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_CI.md` pentru specificația completă.
 
 **1. `ci.yml`** — Pull Request check:
 - Trigger: pull_request → main, push → develop
@@ -51,9 +42,3 @@ Citește `/tmp/repo/AGENT_CI.md` pentru specificația completă. Directorul tău
 - Setup Terraform, init, destroy -auto-approve
 
 Fiecare workflow: name, on, jobs cu runs-on, steps, defaults (working-directory acolo unde e cazul)
-
-[bash]
-git add -A
-git commit -m "boxty: CI/CD — 7 GitHub Actions workflows"
-git push origin boxty/agent-ci
-[/bash]
