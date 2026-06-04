@@ -62,16 +62,47 @@ program
 
 program
   .command('login')
-  .description('Authenticate')
-  .action(() => {
-    console.log('Login to Boxty');
+  .description('Authenticate with API key')
+  .argument('<api_key>', 'API key (starts with boxty_)')
+  .action(async (apiKey: string) => {
+    if (!apiKey.startsWith('boxty_')) {
+      console.error('Invalid API key format. Keys start with boxty_');
+      process.exit(1);
+    }
+    const { saveConfig, Client } = await import('../client.js');
+    saveConfig({ api_key: apiKey });
+    console.log(`✓ Logged in with API key ${apiKey.slice(0, 8)}...`);
+    try {
+      const client = new Client();
+      const info = await (client as any).request('GET', '/api/auth/whoami');
+      console.log(`  User: ${info.user_id || 'unknown'}`);
+      console.log(`  Email: ${info.email || 'unknown'}`);
+    } catch {
+      console.log('  (could not verify key — check API connectivity)');
+    }
   });
 
 program
   .command('whoami')
-  .description('User info')
-  .action(() => {
-    console.log('User info + balance');
+  .description('Show user info and balance')
+  .action(async () => {
+    const { Client } = await import('../client.js');
+    const client = new Client();
+    if (!(client as any).apiKey) {
+      console.error('Not logged in. Run: boxty login <api_key>');
+      process.exit(1);
+    }
+    try {
+      const info = await (client as any).request('GET', '/api/auth/whoami');
+      console.log(`User ID:  ${info.user_id || 'unknown'}`);
+      console.log(`Email:    ${info.email || 'unknown'}`);
+      if (info.balance !== undefined) {
+        console.log(`Credits:  ${info.balance}`);
+      }
+    } catch (e: any) {
+      console.error('Error:', e.message || e);
+      process.exit(1);
+    }
   });
 
 program

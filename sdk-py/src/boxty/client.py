@@ -13,11 +13,12 @@ from .exceptions import BoxtyAPIError
 
 class Client:
     def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.boxty.dev"):
-        self.api_key = api_key
-        self.base_url = base_url.rstrip('/')
+        cfg = _load_config()
+        self.api_key = api_key or cfg.get("api_key", "")
+        self.base_url = (base_url or cfg.get("base_url", "https://api.boxty.dev")).rstrip('/')
         self.headers = {}
-        if api_key:
-            self.headers["Authorization"] = f"Bearer {api_key}"
+        if self.api_key:
+            self.headers["Authorization"] = f"Token {self.api_key}"
         self._client = httpx.Client(base_url=self.base_url, headers=self.headers, timeout=30.0)
 
     def _request(self, method: str, path: str, **kwargs) -> Any:

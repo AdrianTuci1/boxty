@@ -23,8 +23,8 @@ export async function authPlugin(app) {
           throw new Error('Invalid token');
         }
       }
-      if (auth.startsWith('ApiKey ')) {
-        const key = auth.slice(7);
+      if (auth.startsWith('ApiKey ') || auth.startsWith('Token ')) {
+        const key = auth.slice(auth.indexOf(' ') + 1);
         const keyItem = await getItem(`API_KEY#${key}`, 'META');
         if (!keyItem) {
           throw new Error('Invalid API key');
@@ -54,7 +54,7 @@ export async function authPlugin(app) {
     }
     const hash = await bcrypt.hash(password, 10);
     const userId = uuidv4();
-    await putItem({ pk: `USER#${email}`, sk: 'META', id: userId, email, created_at: new Date().toISOString() });
+    await putItem({ pk: `USER#${email}`, sk: 'META', id: userId, email, name: req.body.name || '', created_at: new Date().toISOString() });
     await putItem({ pk: `USER#${email}`, sk: `PASSWORD#${hash}`, user_id: userId });
     await putItem({ pk: `BILLING#${userId}`, sk: 'BALANCE', credits: config.freeTrialCredits || 1000 });
     reply.status(201).send({ user_id: userId, email });
@@ -78,18 +78,30 @@ export async function authPlugin(app) {
   });
 
   app.post('/api/auth/api-keys', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const id = uuidv4();
     const key = `boxty_${uuidv4().replace(/-/g, '')}`;
-    await putItem({ pk: `API_KEY#${key}`, sk: 'META', user_id: req.user.id, key, created_at: new Date().toISOString() });
-    reply.status(201).send({ api_key: key });
+    const name = req.body.name || 'default';
+    await putItem({ pk: `API_KEY#${key}`, sk: 'META', id, user_id: req.user.id, name, key, created_at: new Date().toISOString() });
+    reply.status(201).send({ id, name, key, key_preview: `${key.slice(0, 8)}...`, created_at: new Date().toISOString() });
   });
 
   app.get('/api/auth/api-keys', { preHandler: [app.authenticate] }, async (req, reply) => {
     const items = await queryByPK(`API_KEY#${req.user.id}`);
-    reply.send(items.map(i => ({ key: i.key, created_at: i.created_at })));
+    reply.send(items.map(i => ({ id: i.id, name: i.name, key_preview: i.key ? `${i.key.slice(0, 8)}...` : '********', created_at: i.created_at })));
   });
 
   app.delete('/api/auth/api-keys/:key', { preHandler: [app.authenticate] }, async (req, reply) => {
     await deleteItem(`API_KEY#${req.params.key}`, 'META');
     reply.send({ status: 'deleted' });
+  });
+
+  app.get('/api/auth/whoami', { preHandler: [app.authenticate] }, async (req, reply) => {
+    const userItem = await getItem(`USER#${req.user.email || ''}`, 'META');
+    const billingItem = await getItem(`BILLING#${req.user.id}`, 'BALANCE');
+    reply.send({
+      user_id: req.user.id,
+      email: req.user.email || userItem?.email || '',
+      balance: billingItem?.credits || 0,
+    });
   });
 }

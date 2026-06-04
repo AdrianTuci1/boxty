@@ -1,6 +1,30 @@
 import { ClientOptions, SandboxOptions, ImageBuild, ScheduleOptions, Workspace, Environment, Secret, Deployment, Volume, UsageReport } from './types.js';
 import { Sandbox } from './sandbox.js';
 import { BoxtyError } from './errors.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
+function configPath(): string {
+  return path.join(os.homedir(), '.boxty', 'config.json');
+}
+
+function loadConfig(): Record<string, any> {
+  try {
+    const p = configPath();
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf-8'));
+  } catch {}
+  return {};
+}
+
+export function saveConfig(data: Record<string, any>): void {
+  const p = configPath();
+  const dir = path.dirname(p);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const cfg = loadConfig();
+  Object.assign(cfg, data);
+  fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
+}
 
 export class Client {
   private apiKey: string;
@@ -8,11 +32,12 @@ export class Client {
   private headers: Record<string, string>;
 
   constructor(options: ClientOptions = {}) {
-    this.apiKey = options.apiKey || '';
-    this.baseUrl = (options.baseUrl || 'https://api.boxty.dev').replace(/\/$/, '');
+    const cfg = loadConfig();
+    this.apiKey = options.apiKey || cfg.api_key || '';
+    this.baseUrl = (options.baseUrl || cfg.base_url || 'https://api.boxty.dev').replace(/\/$/, '');
     this.headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${this.apiKey}`,
+      ...(this.apiKey ? { Authorization: `Token ${this.apiKey}` } : {}),
     };
   }
 
