@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listSchedules, createSchedule, updateSchedule, deleteSchedule, triggerSchedule, type Schedule } from '../api/schedules'
 import StatusBadge from '../components/StatusBadge'
-import Modal from '../components/Modal'
+import { X, Plus } from 'lucide-react'
 
 export default function SchedulesPage() {
   const { data, isLoading } = useQuery({ queryKey: ['schedules'], queryFn: listSchedules })
@@ -51,36 +51,62 @@ export default function SchedulesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Schedules</h1>
-        <button onClick={() => { reset(); setOpen(true); }} className="rounded bg-indigo-600 px-4 py-2 text-sm text-white hover:bg-indigo-700">New Schedule</button>
+        <h1 className="text-xl font-bold text-white">Schedules</h1>
+        <button onClick={() => { reset(); setOpen(true); }} className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-gray-200 transition-colors">
+          <Plus className="h-3.5 w-3.5" />
+          New Schedule
+        </button>
       </div>
-      {isLoading && <p>Loading...</p>}
-      <div className="overflow-x-auto rounded-lg border dark:border-gray-800">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-100 dark:bg-gray-800"><tr><th className="px-4 py-2">Name</th><th className="px-4 py-2">Schedule</th><th className="px-4 py-2">Next Run</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Actions</th></tr></thead>
-          <tbody className="divide-y dark:divide-gray-800">
+      {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
+      <div className="overflow-x-auto rounded-xl border border-[#262626]">
+        <table className="min-w-full text-left text-xs">
+          <thead>
+            <tr className="bg-[#111111] border-b border-[#262626]">
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Name</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Schedule</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Next Run</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Status</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#262626]">
+            {data?.length === 0 && (
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No schedules yet.</td></tr>
+            )}
             {data?.map((s) => (
-              <tr key={s.id} className="bg-white dark:bg-gray-900">
-                <td className="px-4 py-2">{s.name}</td>
-                <td className="px-4 py-2">{s.cron || `${s.period_seconds}s`}</td>
-                <td className="px-4 py-2">{new Date(s.next_run).toLocaleString()}</td>
-                <td className="px-4 py-2"><StatusBadge status={s.status} /></td>
-                <td className="px-4 py-2">
-                  <button onClick={() => handleEdit(s)} className="mr-2 text-indigo-600 hover:underline dark:text-indigo-400">Edit</button>
-                  <button onClick={() => handleTrigger(s.id)} className="mr-2 text-indigo-600 hover:underline dark:text-indigo-400">Trigger</button>
-                  <button onClick={() => handleDelete(s.id)} className="text-red-600 hover:underline dark:text-red-400">Delete</button>
+              <tr key={s.id} className="bg-[#161616]">
+                <td className="px-4 py-3 text-white font-medium">{s.name}</td>
+                <td className="px-4 py-3 font-mono text-gray-300">{s.cron || `${s.period_seconds}s`}</td>
+                <td className="px-4 py-3 text-gray-500">{new Date(s.next_run).toLocaleString()}</td>
+                <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
+                <td className="px-4 py-3 flex gap-2">
+                  <button onClick={() => handleEdit(s)} className="text-xs text-mint hover:underline">Edit</button>
+                  <button onClick={() => handleTrigger(s.id)} className="text-xs text-mint hover:underline">Trigger</button>
+                  <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <Modal open={open} onClose={reset} title={editId ? 'Edit Schedule' : 'New Schedule'}>
-        <input className="mb-2 w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input className="mb-2 w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800" placeholder="Cron (optional)" value={form.cron} onChange={(e) => setForm({ ...form, cron: e.target.value })} />
-        <input type="number" className="mb-3 w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800" placeholder="Period seconds (optional)" value={form.period_seconds} onChange={(e) => setForm({ ...form, period_seconds: e.target.value })} />
-        <button onClick={handleSave} className="w-full rounded bg-indigo-600 py-2 text-white hover:bg-indigo-700">Save</button>
-      </Modal>
+
+      {/* Modal */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={reset}>
+          <div className="w-full max-w-md rounded-xl border border-[#262626] bg-[#161616] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white">{editId ? 'Edit Schedule' : 'New Schedule'}</h3>
+              <button onClick={reset} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Cron (optional)" value={form.cron} onChange={(e) => setForm({ ...form, cron: e.target.value })} />
+              <input type="number" className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Period seconds (optional)" value={form.period_seconds} onChange={(e) => setForm({ ...form, period_seconds: e.target.value })} />
+              <button onClick={handleSave} className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

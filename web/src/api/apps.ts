@@ -4,10 +4,15 @@ export interface App {
   id: string
   name: string
   environment_id: string
-  status: 'active' | 'stopped'
+  status: string
   image_url?: string
+  url?: string
   instances?: InstanceConfig[]
+  functions?: string[]
+  endpoints?: string[]
+  deployer_name?: string
   created_at: string
+  updated_at: string
 }
 
 export interface InstanceConfig {

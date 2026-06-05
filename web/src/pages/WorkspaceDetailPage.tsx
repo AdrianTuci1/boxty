@@ -5,7 +5,7 @@ import { getWorkspace } from '../api/workspaces'
 import { listEnvironments, createEnvironment, type Environment } from '../api/environments'
 import { listApps } from '../api/apps'
 import AppCard from '../components/AppCard'
-import Modal from '../components/Modal'
+import { X } from 'lucide-react'
 
 export default function WorkspaceDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -32,30 +32,46 @@ export default function WorkspaceDetailPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">{workspace?.name ?? 'Workspace'}</h1>
-      <div className="flex items-center gap-2">
+      <h1 className="text-xl font-bold text-white">{workspace?.name ?? 'Workspace'}</h1>
+      <div className="flex items-center gap-2 flex-wrap">
         {environments?.map((env) => (
           <button
             key={env.id}
             onClick={() => setActiveEnv(env.id)}
-            className={`rounded px-3 py-1 text-sm ${activeEnv === env.id ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-200'}`}
+            className={`rounded-md border px-3 py-1 text-xs transition-colors ${
+              activeEnv === env.id
+                ? 'bg-[#142920] text-[#34d399] border-[#1e3f31]'
+                : 'bg-[#1f1f1f] text-gray-400 border-[#333] hover:text-white'
+            }`}
           >
             {env.name}
           </button>
         ))}
-        <button onClick={() => setOpen(true)} className="rounded bg-gray-200 px-3 py-1 text-sm text-gray-800 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200">+ Environment</button>
+        <button onClick={() => setOpen(true)} className="rounded-md border border-[#333] bg-[#1f1f1f] px-3 py-1 text-xs text-gray-400 hover:text-white transition-colors">+ Environment</button>
       </div>
       {activeEnv ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {apps?.map((app) => <AppCard key={app.id} app={app} />) ?? <p className="text-sm text-gray-500">No apps in this environment.</p>}
         </div>
       ) : (
-        <p className="text-sm text-gray-500">Select an environment to view apps.</p>
+        <p className="text-sm text-gray-600">Select an environment to view apps.</p>
       )}
-      <Modal open={open} onClose={() => setOpen(false)} title="New Environment">
-        <input className="mb-3 w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800" placeholder="Name" value={envName} onChange={(e) => setEnvName(e.target.value)} />
-        <button onClick={handleCreateEnv} className="w-full rounded bg-indigo-600 py-2 text-white hover:bg-indigo-700">Create</button>
-      </Modal>
+
+      {/* Modal */}
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setOpen(false)}>
+          <div className="w-full max-w-md rounded-xl border border-[#262626] bg-[#161616] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white">New Environment</h3>
+              <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Name" value={envName} onChange={(e) => setEnvName(e.target.value)} />
+              <button onClick={handleCreateEnv} className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Create</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -12,8 +12,15 @@ import BillingPage from './pages/BillingPage'
 import SecretsPage from './pages/SecretsPage'
 import ImagesPage from './pages/ImagesPage'
 import SchedulesPage from './pages/SchedulesPage'
-import VolumesPage from './pages/VolumesPage'
-import SettingsPage from './pages/SettingsPage'
+import StoragePage from './pages/StoragePage'
+import VolumeDetailPage from './pages/VolumeDetailPage'
+import LogsPage from './pages/LogsPage'
+import SettingsLayout from './pages/SettingsPage'
+import ProfilePage from './pages/settings/ProfilePage'
+import WorkspacesListPage from './pages/settings/WorkspacesListPage'
+import EmailPage from './pages/settings/EmailPage'
+import UsagePage from './pages/settings/UsagePage'
+import APITokensPage from './pages/settings/APITokensPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, devMode } = useAuth()
@@ -23,23 +30,34 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/apps/:workspace/:environment" element={<DashboardPage />} />
+        <Route path="/apps/:workspace/:environment/:appId" element={<AppDetailPage />} />
         <Route path="/workspaces" element={<WorkspacesPage />} />
         <Route path="/workspaces/:id" element={<WorkspaceDetailPage />} />
-        <Route path="/apps/:id" element={<AppDetailPage />} />
         <Route path="/sandboxes/:id" element={<SandboxDetailPage />} />
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/secrets" element={<SecretsPage />} />
         <Route path="/images" element={<ImagesPage />} />
         <Route path="/schedules" element={<SchedulesPage />} />
-        <Route path="/volumes" element={<VolumesPage />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/storage" element={<StoragePage />} />
+        <Route path="/storage/:volumeName" element={<VolumeDetailPage />} />
+        <Route path="/logs" element={<LogsPage />} />
+        <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
       </Route>
+      <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/settings/profile" replace />} />
+        <Route path="profile" element={<ProfilePage />} />
+        <Route path="workspaces" element={<WorkspacesListPage />} />
+        <Route path="email" element={<EmailPage />} />
+        <Route path="usage" element={<UsagePage />} />
+        <Route path="api-tokens" element={<APITokensPage />} />
+        <Route path="*" element={<Navigate to="/settings/profile" replace />} />
+      </Route>
+      <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
     </Routes>
   )
 }

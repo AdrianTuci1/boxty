@@ -1,7 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
 import { getBalance, listUsage, createCheckoutSession } from '../api/billing'
-import MetricsCard from '../components/MetricsCard'
-import ChartCard from '../components/ChartCard'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function BillingPage() {
@@ -22,43 +20,59 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Billing</h1>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <MetricsCard title="Credit Balance" value={balance ? `${balance.credits} ${balance.currency}` : '...'} />
-        <MetricsCard title="Total Usage Cost" value={`$${usage?.reduce((s, u) => s + u.cost, 0) ?? 0}`} />
-        <div className="flex items-center">
-          <button onClick={handleBuy} className="w-full rounded bg-indigo-600 py-2 text-white hover:bg-indigo-700">Buy Credits</button>
+      <h1 className="text-xl font-bold text-white">Billing</h1>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <MetricBlock title="Credit Balance" value={balance ? `${balance.credits} ${balance.currency}` : '...'} />
+        <MetricBlock title="Total Usage Cost" value={`$${usage?.reduce((s, u) => s + u.cost, 0) ?? 0}`} />
+        <button onClick={handleBuy} className="rounded-md bg-white py-2.5 text-xs font-medium text-black hover:bg-gray-200 transition-colors self-end">Buy Credits</button>
+      </div>
+      <div className="rounded-xl border border-[#262626] bg-[#161616] p-4">
+        <h4 className="text-xs text-gray-400 mb-3">Usage History</h4>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData}>
+              <XAxis dataKey="date" stroke="#555" tick={{ fontSize: 10 }} />
+              <YAxis stroke="#555" tick={{ fontSize: 10 }} />
+              <Tooltip contentStyle={{ background: '#1f1f1f', border: '1px solid #262626', fontSize: 11 }} />
+              <Bar dataKey="cpu" fill="#34d399" name="CPU hours" radius={[3,3,0,0]} />
+              <Bar dataKey="gpu" fill="#e879f9" name="GPU hours" radius={[3,3,0,0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
-      <ChartCard title="Usage History">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="cpu" fill="#6366f1" name="CPU hours" />
-            <Bar dataKey="gpu" fill="#10b981" name="GPU hours" />
-          </BarChart>
-        </ResponsiveContainer>
-      </ChartCard>
-      <div className="overflow-x-auto rounded-lg border dark:border-gray-800">
-        <table className="min-w-full text-left text-sm">
-          <thead className="bg-gray-100 dark:bg-gray-800">
-            <tr><th className="px-4 py-2">Date</th><th className="px-4 py-2">CPU Hours</th><th className="px-4 py-2">GPU Hours</th><th className="px-4 py-2">Storage GB</th><th className="px-4 py-2">Cost</th></tr>
+      <div className="overflow-x-auto rounded-xl border border-[#262626]">
+        <table className="min-w-full text-left text-xs">
+          <thead>
+            <tr className="bg-[#111111] border-b border-[#262626]">
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Date</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">CPU Hours</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">GPU Hours</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Storage GB</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Cost</th>
+            </tr>
           </thead>
-          <tbody className="divide-y dark:divide-gray-800">
+          <tbody className="divide-y divide-[#262626]">
             {usage?.map((u) => (
-              <tr key={u.date} className="bg-white dark:bg-gray-900">
-                <td className="px-4 py-2">{u.date}</td>
-                <td className="px-4 py-2">{u.cpu_hours}</td>
-                <td className="px-4 py-2">{u.gpu_hours}</td>
-                <td className="px-4 py-2">{u.storage_gb}</td>
-                <td className="px-4 py-2">${u.cost}</td>
+              <tr key={u.date} className="bg-[#161616]">
+                <td className="px-4 py-3 text-gray-300">{u.date}</td>
+                <td className="px-4 py-3 text-gray-300">{u.cpu_hours}</td>
+                <td className="px-4 py-3 text-gray-300">{u.gpu_hours}</td>
+                <td className="px-4 py-3 text-gray-300">{u.storage_gb}</td>
+                <td className="px-4 py-3 text-white font-medium">${u.cost}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+function MetricBlock({ title, value }: { title: string; value: string | number }) {
+  return (
+    <div className="rounded-xl border border-[#262626] bg-[#161616] p-4">
+      <p className="text-xs text-gray-500">{title}</p>
+      <p className="text-xl font-bold text-white mt-1">{value}</p>
     </div>
   )
 }

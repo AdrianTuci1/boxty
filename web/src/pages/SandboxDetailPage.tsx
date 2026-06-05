@@ -3,8 +3,8 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getSandbox, stopSandbox, execSandbox, forwardPort, snapshotSandbox, getSandboxMetrics } from '../api/sandboxes'
 import StatusBadge from '../components/StatusBadge'
-import Modal from '../components/Modal'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { X } from 'lucide-react'
 
 export default function SandboxDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -59,21 +59,21 @@ export default function SandboxDetailPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Sandbox {id?.slice(0, 8)}</h1>
-          <p className="text-sm text-gray-500">{data?.url || 'No URL'} · <Link to={`/apps/${data?.app_id}`} className="text-indigo-600 hover:underline dark:text-indigo-400">App</Link></p>
+          <h1 className="text-xl font-bold text-white">Sandbox {id?.slice(0, 8)}</h1>
+          <p className="text-sm text-gray-500">{data?.url || 'No URL'} · <Link to={`/apps/${data?.app_id}`} className="text-mint hover:underline">App</Link></p>
         </div>
         <StatusBadge status={data?.status || 'stopped'} />
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={handleStop} className="rounded bg-yellow-500 px-3 py-2 text-sm text-white hover:bg-yellow-600">Stop</button>
-        <button onClick={() => setExecOpen(true)} className="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700">Exec</button>
-        <button onClick={() => setForwardOpen(true)} className="rounded bg-indigo-600 px-3 py-2 text-sm text-white hover:bg-indigo-700">Forward Port</button>
-        <button onClick={handleSnapshot} className="rounded bg-gray-200 px-3 py-2 text-sm text-gray-800 hover:bg-gray-300 dark:bg-gray-800 dark:text-gray-200">Snapshot</button>
+        <button onClick={handleStop} className="rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors">Stop</button>
+        <button onClick={() => setExecOpen(true)} className="rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors">Exec</button>
+        <button onClick={() => setForwardOpen(true)} className="rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors">Forward Port</button>
+        <button onClick={handleSnapshot} className="rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors">Snapshot</button>
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <div className="space-y-2 rounded-lg border bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+        <div className="space-y-2 rounded-xl border border-[#262626] bg-[#161616] p-4">
           <p><strong>Started:</strong> {data?.started_at ? new Date(data.started_at).toLocaleString() : '-'}</p>
           <p><strong>Finished:</strong> {data?.finished_at ? new Date(data.finished_at).toLocaleString() : '-'}</p>
           <p><strong>Boot:</strong> {data?.boot_duration_ms ? `${data.boot_duration_ms}ms` : '-'}</p>
@@ -103,21 +103,43 @@ export default function SandboxDetailPage() {
         </div>
       </div>
 
-      <div className="rounded-lg border bg-black p-4 font-mono text-sm text-green-400 dark:border-gray-800">
+      <div className="rounded-xl border border-[#262626] bg-black p-4 font-mono text-[13px] text-green-400/70">
         <pre className="max-h-96 overflow-auto">{logs || '[waiting for logs...]'}</pre>
       </div>
 
-      <Modal open={execOpen} onClose={() => setExecOpen(false)} title="Exec Command">
-        <input className="mb-2 w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800" placeholder="command" value={cmd} onChange={(e) => setCmd(e.target.value)} />
-        <button onClick={handleExec} className="w-full rounded bg-indigo-600 py-2 text-white hover:bg-indigo-700">Run</button>
-        {execResult && <pre className="mt-2 max-h-48 overflow-auto rounded bg-gray-100 p-2 text-xs dark:bg-gray-800">{execResult}</pre>}
-      </Modal>
+      {/* Exec Modal */}
+      {execOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setExecOpen(false)}>
+          <div className="w-full max-w-md rounded-xl border border-[#262626] bg-[#161616] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white">Exec Command</h3>
+              <button onClick={() => setExecOpen(false)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="command" value={cmd} onChange={(e) => setCmd(e.target.value)} />
+              <button onClick={handleExec} className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Run</button>
+              {execResult && <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-[#262626] bg-[#111111] p-3 text-xs text-gray-300">{execResult}</pre>}
+            </div>
+          </div>
+        </div>
+      )}
 
-      <Modal open={forwardOpen} onClose={() => setForwardOpen(false)} title="Forward Port">
-        <input type="number" className="mb-2 w-full rounded border px-3 py-2 dark:border-gray-700 dark:bg-gray-800" value={port} onChange={(e) => setPort(Number(e.target.value))} />
-        <button onClick={handleForward} className="w-full rounded bg-indigo-600 py-2 text-white hover:bg-indigo-700">Forward</button>
-        {forwardUrl && <p className="mt-2 text-sm">URL: <a href={forwardUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline dark:text-indigo-400">{forwardUrl}</a></p>}
-      </Modal>
+      {/* Forward Port Modal */}
+      {forwardOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setForwardOpen(false)}>
+          <div className="w-full max-w-md rounded-xl border border-[#262626] bg-[#161616] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-white">Forward Port</h3>
+              <button onClick={() => setForwardOpen(false)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <input type="number" className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" value={port} onChange={(e) => setPort(Number(e.target.value))} />
+              <button onClick={handleForward} className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Forward</button>
+              {forwardUrl && <p className="mt-2 text-xs text-gray-300">URL: <a href={forwardUrl} target="_blank" rel="noreferrer" className="text-mint hover:underline">{forwardUrl}</a></p>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

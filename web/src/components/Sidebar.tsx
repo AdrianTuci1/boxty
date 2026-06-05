@@ -1,52 +1,50 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import {
-  LayoutDashboard,
-  Briefcase,
   Box,
-  Server,
-  CreditCard,
+  FileText,
   KeyRound,
-  Image,
-  CalendarClock,
   HardDrive,
-  Settings,
 } from 'lucide-react'
+import { useMemo } from 'react'
 
-const items = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/workspaces', label: 'Workspaces', icon: Briefcase },
-  { to: '/apps', label: 'Apps', icon: Box },
-  { to: '/sandboxes', label: 'Sandboxes', icon: Server },
-  { to: '/billing', label: 'Billing', icon: CreditCard },
+const staticItems = [
+  { to: '/logs', label: 'Logs', icon: FileText },
   { to: '/secrets', label: 'Secrets', icon: KeyRound },
-  { to: '/images', label: 'Images', icon: Image },
-  { to: '/schedules', label: 'Schedules', icon: CalendarClock },
-  { to: '/volumes', label: 'Volumes', icon: HardDrive },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/volumes', label: 'Storage', icon: HardDrive },
 ]
 
-export default function Sidebar({ collapsed }: { collapsed: boolean }) {
+export default function Sidebar() {
+  const location = useLocation()
+
+  const appsLink = useMemo(() => {
+    const match = location.pathname.match(/^\/apps\/([^/]+)\/([^/]+)/)
+    if (match) return `/apps/${match[1]}/${match[2]}`
+    return '/apps/adrian-tucicovenco/main'
+  }, [location.pathname])
+
+  const allItems = [
+    { to: appsLink, label: 'Apps', icon: Box },
+    ...staticItems,
+  ]
+
   return (
-    <aside className={`flex flex-col border-r bg-white dark:border-gray-800 dark:bg-gray-950 ${collapsed ? 'w-16' : 'w-56'}`}>
-      <div className="flex h-14 items-center justify-center border-b px-4 dark:border-gray-800">
-        <span className={`font-bold text-indigo-600 ${collapsed ? 'hidden' : 'block'}`}>Boxty</span>
-        {!collapsed && <span className="ml-1 text-xl">B</span>}
-      </div>
-      <nav className="flex-1 space-y-1 px-2 py-4">
-        {items.map((item) => (
+    <aside className="flex w-60 flex-col border-r border-[#262626] bg-[#111111] p-3">
+      <nav className="flex flex-col gap-1">
+        {allItems.map((item) => (
           <NavLink
-            key={item.to}
+            key={item.label}
             to={item.to}
+            end={item.label === 'Apps'}
             className={({ isActive }) =>
-              `flex items-center rounded-md px-3 py-2 text-sm font-medium transition ${
+              `flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
-                  ? 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
-                  : 'text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800'
+                  ? 'bg-[#1f1f1f] text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-[#1f1f1f]/50'
               }`
             }
           >
-            <item.icon className="h-5 w-5 shrink-0" />
-            {!collapsed && <span className="ml-3">{item.label}</span>}
+            <item.icon className="h-4 w-4 shrink-0" />
+            <span>{item.label}</span>
           </NavLink>
         ))}
       </nav>
