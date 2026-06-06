@@ -248,6 +248,38 @@ export default function AppDetailPage() {
                   )
                 })}
               </div>
+              {sandboxes.length > 0 && (
+                <>
+                  <div className="h-px bg-[#262626] my-2" />
+                  <div className="space-y-1">
+                    {sandboxes.map((sName: string) => {
+                      const isActive = selectedSandbox === sName
+                      return (
+                        <button
+                          key={sName}
+                          onClick={() => {
+                            setSelectedSandbox(sName)
+                            setNavTab(sName)
+                          }}
+                          className={classNames(
+                            'w-full text-left rounded-lg p-2.5 transition-colors',
+                            isActive
+                              ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
+                              : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
+                          )}
+                        >
+                          <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
+                            {sName}
+                          </div>
+                          <div className="text-gray-400 text-[10px] font-mono mt-1">
+                            Sandbox
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}
