@@ -91,38 +91,42 @@ export default function SandboxDetailSidebar({ isOpen, onClose, sandboxId }: San
 
           {/* Lifecycle Timeline */}
           <div className="p-4">
-            <div className="bg-[#161616] border border-[#262626] rounded-xl p-6">
-              <div className="relative flex items-center justify-between py-4">
-                {/* Timeline bar */}
-                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-[#262626] rounded-full">
-                  <div className="h-full bg-[#34d399] rounded-full" style={{ width: '100%' }} />
+            <div className="bg-[#161616] border border-[#262626] rounded-xl p-5">
+              {/* Labels row */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] text-gray-500">Created</span>
+                <span className="text-[11px] text-gray-500">Scheduled</span>
+                <span className="text-[11px] text-gray-500">Started</span>
+                <span className="text-[11px] text-gray-500">Terminated</span>
+              </div>
+
+              {/* Timeline bar with proportional segments */}
+              <div className="flex h-8 rounded-md overflow-hidden">
+                <div className="flex items-center justify-center bg-[#262626] text-white text-[11px] font-medium" style={{ width: '1%' }}>
+                  142ms
                 </div>
-                
-                {/* Timeline nodes */}
-                {[
-                  { label: 'Created', duration: '142ms', time: '04:34:35' },
-                  { label: 'Scheduled', duration: '762ms', time: '04:34:36' },
-                  { label: 'Started', duration: '1m 8s', time: '04:34:36' },
-                  { label: 'Terminated', duration: '', time: '04:35:44' },
-                ].map((stage, index, arr) => (
-                  <div key={stage.label} className="flex flex-col items-center relative z-10">
-                    {/* Label above */}
-                    <span className="text-[10px] text-gray-500 mb-3">{stage.label}</span>
-                    
-                    {/* Node dot */}
-                    <div className={`w-3 h-3 rounded-full border-2 ${
-                      index === arr.length - 1 ? 'bg-[#111111] border-[#34d399]' : 'bg-[#34d399] border-[#34d399]'
-                    }`} />
-                    
-                    {/* Duration below */}
-                    {stage.duration && (
-                      <span className="text-[10px] text-white mt-2">{stage.duration}</span>
-                    )}
-                    
-                    {/* Time below */}
-                    <span className="text-[10px] text-gray-500">{stage.time}</span>
-                  </div>
-                ))}
+                <div className="w-px bg-[#111111]" />
+                <div className="flex items-center justify-center bg-[#2a2a2a] text-white text-[11px] font-medium" style={{ width: '5%' }}>
+                  762ms
+                </div>
+                <div className="w-px bg-[#111111]" />
+                <div className="flex items-center justify-center bg-[#333333] text-white text-[11px] font-medium flex-1">
+                  1m 8s
+                </div>
+                <div className="w-px bg-[#111111]" />
+                <div className="flex items-center justify-center bg-[#262626] w-8">
+                  <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Timestamps row */}
+              <div className="flex items-center justify-between mt-2">
+                <span className="text-[11px] text-gray-500 font-mono">04:34:35</span>
+                <span className="text-[11px] text-gray-500 font-mono">04:34:36</span>
+                <span className="text-[11px] text-gray-500 font-mono">04:34:36</span>
+                <span className="text-[11px] text-gray-500 font-mono">04:35:44</span>
               </div>
             </div>
           </div>
@@ -265,14 +269,108 @@ export default function SandboxDetailSidebar({ isOpen, onClose, sandboxId }: San
             )}
 
             {activeTab === 'Details' && (
-              <div className="text-center text-gray-500 py-8">
-                Details coming soon
+              <div className="space-y-4">
+                {/* Information Section */}
+                <div className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]">
+                    <span className="text-sm font-medium text-white">Information</span>
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">Container ID</span>
+                        <Copy className="h-3.5 w-3.5 text-gray-500 cursor-pointer hover:text-white" />
+                      </div>
+                      <span className="text-sm text-white font-mono">ta-01KTD92N19HMG8DSJKSKAP7323</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-500">Image ID</span>
+                        <Copy className="h-3.5 w-3.5 text-gray-500 cursor-pointer hover:text-white" />
+                      </div>
+                      <span className="text-sm text-white font-mono">im-MkJOWR3ZF5JPyC7WtrecWp</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-500">Readiness probe</span>
+                      <span className="text-sm text-white">None</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Timeout Configuration Section */}
+                <div className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]">
+                    <span className="text-sm font-medium text-white">Timeout Configuration</span>
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="p-4 grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">Timeout</span>
+                      <span className="text-sm text-white">1h 0m</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">Idle Timeout</span>
+                      <span className="text-sm text-white">None</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resources Section */}
+                <div className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#262626]">
+                    <span className="text-sm font-medium text-white">Resources</span>
+                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                  </div>
+                  <div className="p-4 grid grid-cols-3 gap-4">
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">CPU request</span>
+                      <span className="text-sm text-white">8 cores</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">CPU limit</span>
+                      <span className="text-sm text-white">None</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">GPUs</span>
+                      <span className="text-sm text-white">None</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">Memory request</span>
+                      <span className="text-sm text-white">16384 MiB</span>
+                    </div>
+                    <div>
+                      <span className="text-sm text-gray-500 block mb-1">Memory limit</span>
+                      <span className="text-sm text-white">None</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
             {activeTab === 'Events' && (
-              <div className="text-center text-gray-500 py-8">
-                Events coming soon
+              <div className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-[#262626]">
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Event</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-400">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#262626]">
+                    {[
+                      { event: 'Created', timestamp: 'Jun 6, 04:34:35.931' },
+                      { event: 'Scheduled', timestamp: 'Jun 6, 04:34:36.073' },
+                      { event: 'Started', timestamp: 'Jun 6, 04:34:36.835' },
+                      { event: 'Terminated', timestamp: 'Jun 6, 04:35:44.992' },
+                    ].map((item, index) => (
+                      <tr key={index} className="hover:bg-[#1a1a1a] transition-colors">
+                        <td className="px-4 py-3 text-sm text-white">{item.event}</td>
+                        <td className="px-4 py-3 text-sm text-gray-400 font-mono">{item.timestamp}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
