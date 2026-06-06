@@ -118,10 +118,7 @@ export default function Navbar() {
         <button
           className="text-xs font-medium text-gray-400 hover:text-white transition-colors cursor-pointer"
           onClick={() => {
-            const url = new URL(window.location.href)
-            url.searchParams.set('drawer', 'workspace-metrics')
-            window.history.pushState({}, '', url.toString())
-            window.dispatchEvent(new PopStateEvent('popstate'))
+            window.dispatchEvent(new CustomEvent('toggle-workspace-metrics'))
           }}
         >
           • Workspace metrics
