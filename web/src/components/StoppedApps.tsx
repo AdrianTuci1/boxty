@@ -1,23 +1,28 @@
 import { useState } from 'react'
-import { Cloud, XCircle, FileText, Search, ChevronDown, Box } from 'lucide-react'
+import { Cloud, XCircle, Box, Search, ChevronDown } from 'lucide-react'
 
 interface StoppedApp {
   id: string
   name: string
   user: {
     name: string
-    initial: string
+    initials: string
+    gradient: string
   }
   stoppedAt: string
-  category: string | null
+  category: string
   hasSparkline: boolean
 }
 
-const mockApps: StoppedApp[] = [
+const mockStoppedApps: StoppedApp[] = [
   {
     id: '1',
     name: 'hermes-agent',
-    user: { name: 'adrian-tucicovenco', initial: 'A' },
+    user: {
+      name: 'adrian-tucicovenco',
+      initials: 'A',
+      gradient: 'from-pink-400 to-purple-500',
+    },
     stoppedAt: 'about 19 hours ago',
     category: 'Sandboxes',
     hasSparkline: true,
@@ -25,88 +30,84 @@ const mockApps: StoppedApp[] = [
   {
     id: '2',
     name: 'hermes-agent',
-    user: { name: 'adrian-tucicovenco', initial: 'A' },
-    stoppedAt: 'about 19 hours ago',
+    user: {
+      name: 'adrian-tucicovenco',
+      initials: 'A',
+      gradient: 'from-pink-400 to-purple-500',
+    },
+    stoppedAt: 'about 20 hours ago',
     category: 'Sandboxes',
     hasSparkline: true,
   },
   {
     id: '3',
     name: 'hermes-agent',
-    user: { name: 'adrian-tucicovenco', initial: 'A' },
-    stoppedAt: 'about 20 hours ago',
-    category: 'Sandboxes',
-    hasSparkline: true,
-  },
-  {
-    id: '4',
-    name: 'hermes-agent',
-    user: { name: 'adrian-tucicovenco', initial: 'A' },
+    user: {
+      name: 'adrian-tucicovenco',
+      initials: 'A',
+      gradient: 'from-pink-400 to-purple-500',
+    },
     stoppedAt: '1 day ago',
     category: 'Sandboxes',
     hasSparkline: true,
-  },
-  {
-    id: '5',
-    name: 'hermes-agent',
-    user: { name: 'adrian-tucicovenco', initial: 'A' },
-    stoppedAt: '1 day ago',
-    category: null,
-    hasSparkline: false,
   },
 ]
 
-const sortOptions = ['Most recent', 'Name', 'Size'] as const
+function Sparkline() {
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-gray-700 text-[11px] font-mono tracking-[0.2em] select-none">-----------------------</span>
+      <div className="flex items-end gap-0.5 h-4">
+        <div className="w-1 h-1 bg-pink-400/80 rounded-sm" />
+        <div className="w-1 h-2 bg-pink-400/80 rounded-sm" />
+        <div className="w-1 h-3 bg-pink-400/80 rounded-sm" />
+        <div className="w-1 h-1 bg-pink-400/80 rounded-sm" />
+      </div>
+    </div>
+  )
+}
 
 export default function StoppedApps() {
   const [activeTab, setActiveTab] = useState<'live' | 'stopped'>('stopped')
   const [searchQuery, setSearchQuery] = useState('')
-  const [sortBy, setSortBy] = useState<string>('Most recent')
-  const [showSortDropdown, setShowSortDropdown] = useState(false)
+  const [sortBy] = useState('Most recent')
 
-  const filteredApps = mockApps.filter((app) =>
-    app.name.toLowerCase().includes(searchQuery.toLowerCase()),
+  const filteredApps = mockStoppedApps.filter((app) =>
+    app.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-[26px] font-semibold text-white tracking-tight">Apps</h1>
-        <a
-          href="#"
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
-        >
-          <FileText className="h-3.5 w-3.5" />
+        <h1 className="text-2xl font-semibold text-white">Apps</h1>
+        <button className="flex items-center gap-2 text-gray-400 text-sm hover:text-white transition-colors">
+          <Box className="h-4 w-4" />
           Quickstart guide
-        </a>
+        </button>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-6">
         <button
           onClick={() => setActiveTab('live')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             activeTab === 'live'
-              ? 'bg-[#142920]/40 text-[#34d399] border border-[#1e3f31]'
+              ? 'bg-[#1f1f1f] text-white'
               : 'text-gray-400 hover:text-white'
           }`}
         >
           <Cloud className="h-4 w-4" />
           Live Apps
-          <span
-            className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-              activeTab === 'live'
-                ? 'bg-[#1b3a2b] text-[#34d399]'
-                : 'bg-[#222] text-gray-500'
-            }`}
-          >
+          <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
+            activeTab === 'live' ? 'bg-[#333] text-white' : 'bg-[#262626] text-gray-500'
+          }`}>
             3
           </span>
         </button>
         <button
           onClick={() => setActiveTab('stopped')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
             activeTab === 'stopped'
               ? 'bg-[#142920]/40 text-[#34d399] border border-[#1e3f31]'
               : 'text-gray-400 hover:text-white'
@@ -114,109 +115,65 @@ export default function StoppedApps() {
         >
           <XCircle className="h-4 w-4" />
           Stopped Apps
-          <span
-            className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
-              activeTab === 'stopped'
-                ? 'bg-[#1b3a2b] text-[#34d399]'
-                : 'bg-[#222] text-gray-500'
-            }`}
-          >
+          <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
+            activeTab === 'stopped' ? 'bg-[#1e3f31] text-[#34d399]' : 'bg-[#262626] text-gray-500'
+          }`}>
             52
           </span>
         </button>
       </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 bg-[#161616] border border-[#262626] rounded-lg px-3 py-2 w-80">
-          <Search className="h-3.5 w-3.5 text-gray-600 shrink-0" />
+      {/* Filter Bar */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2 rounded-md border border-[#262626] bg-[#161616] px-3 py-2 w-96">
+          <Search className="h-4 w-4 text-gray-600 shrink-0" />
           <input
-            className="flex-1 bg-transparent text-xs text-white outline-none placeholder:text-gray-600"
-            placeholder="Search or filter"
+            type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent text-sm text-white outline-none placeholder:text-gray-600"
+            placeholder="Search or filter"
           />
-          <span className="text-gray-600 text-xs">/</span>
+          <span className="text-gray-600 text-xs border border-[#333] rounded px-1.5 py-0.5">/</span>
           <ChevronDown className="h-3 w-3 text-gray-600" />
         </div>
-
-        <div className="relative">
-          <button
-            onClick={() => setShowSortDropdown(!showSortDropdown)}
-            className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
-          >
-            <span className="text-gray-500">Sort By:</span>
-            <span className="text-white">{sortBy}</span>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-500">Sort By:</span>
+          <button className="flex items-center gap-1 text-white hover:text-gray-300 transition-colors">
+            {sortBy}
             <ChevronDown className="h-3 w-3" />
           </button>
-
-          {showSortDropdown && (
-            <>
-              <div className="fixed inset-0" onClick={() => setShowSortDropdown(false)} />
-              <div className="absolute right-0 mt-2 w-44 bg-[#1f1f1f] border border-[#262626] rounded-lg shadow-2xl z-10">
-                {sortOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => {
-                      setSortBy(opt)
-                      setShowSortDropdown(false)
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs first:rounded-t-lg last:rounded-b-lg transition-colors ${
-                      sortBy === opt
-                        ? 'bg-[#262626] text-white'
-                        : 'text-gray-400 hover:bg-[#262626] hover:text-white'
-                    }`}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
         </div>
       </div>
 
       {/* App Cards */}
-      <div className="space-y-3 overflow-auto">
+      <div className="space-y-3">
         {filteredApps.map((app) => (
           <div
             key={app.id}
             className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden hover:border-[#333] transition-colors"
           >
-            {/* Upper section */}
-            <div className="flex items-center justify-between px-4 py-3">
-              <h3 className="text-sm font-semibold text-white">{app.name}</h3>
-              <div className="flex items-center gap-2">
-                <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-purple-400 to-pink-500 text-[10px] font-bold text-white">
-                  {app.user.initial}
+            {/* Top Section */}
+            <div className="p-4 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-white">{app.name}</h3>
+              <div className="flex items-center gap-3">
+                <div className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br ${app.user.gradient} text-[10px] font-bold text-white`}>
+                  {app.user.initials}
                 </div>
-                <span className="text-gray-400 text-xs">{app.user.name}</span>
-                <span className="text-gray-600 text-xs">{app.stoppedAt}</span>
+                <span className="text-gray-300 text-sm">{app.user.name}</span>
+                <span className="text-gray-500 text-sm">{app.stoppedAt}</span>
               </div>
             </div>
-
-            {/* Lower section */}
-            {(app.category || app.hasSparkline) && (
-              <div className="flex items-center justify-between px-4 py-2 border-t border-[#262626]/50">
-                <div className="flex items-center gap-1.5">
-                  {app.category && (
-                    <>
-                      <Box className="h-3.5 w-3.5 text-gray-500" />
-                      <span className="text-gray-400 text-xs">{app.category}</span>
-                    </>
-                  )}
-                </div>
-                {app.hasSparkline && (
-                  <div className="relative h-8 w-24">
-                    <div className="absolute bottom-1 left-0 right-0 border-t border-dashed border-[#333]" />
-                    <div
-                      className="absolute bottom-1 left-1/2 w-1.5 -translate-x-1/2 rounded-t bg-pink-500/80"
-                      style={{ height: '60%' }}
-                    />
-                  </div>
-                )}
+            {/* Divider */}
+            <div className="border-t border-[#262626]" />
+            {/* Bottom Section */}
+            <div className="p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Box className="h-4 w-4 text-gray-500" />
+                <span className="text-gray-300 text-sm">{app.category}</span>
               </div>
-            )}
+              {app.hasSparkline && <Sparkline />}
+            </div>
           </div>
         ))}
       </div>
