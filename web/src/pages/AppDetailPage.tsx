@@ -124,68 +124,54 @@ export default function AppDetailPage() {
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r border-[#262626] bg-[#111111] p-3 flex flex-col gap-3 overflow-y-auto">
-        <div className="space-y-1">
-          {appNavItems.map((item) => (
-            <button
-              key={item}
-              onClick={() => setNavTab(item)}
-              className={classNames(
-                'w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors',
-                navTab === item ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white'
-              )}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-        <div className="h-px bg-[#262626]" />
-        <div className="space-y-1 flex-1">
-          <div className="flex items-center gap-2 rounded-md border border-[#262626] bg-transparent px-3 py-1.5 mb-2">
-            <Search className="h-3.5 w-3.5 text-gray-600 shrink-0" />
-            <input className="flex-1 bg-transparent text-xs text-white outline-none placeholder:text-gray-600" placeholder="Search functions" />
-          </div>
+        {isSandboxView ? (
+          /* Sandbox Sidebar */
           <div className="space-y-1">
-            {functions.map((fName: string) => {
-              const inst = instances.find((i) => i.name === fName)
-              const isActive = fn === fName
-              return (
+            {['Sandboxes', 'Deployment History', 'App Logs', 'Usage'].map((item) => (
+              <button
+                key={item}
+                onClick={() => setNavTab(item)}
+                className={classNames(
+                  'w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors',
+                  navTab === item ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white'
+                )}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="space-y-1">
+              {appNavItems.map((item) => (
                 <button
-                  key={fName}
-                  onClick={() => {
-                    setSelectedFunction(fName)
-                    setNavTab(fName)
-                  }}
+                  key={item}
+                  onClick={() => setNavTab(item)}
                   className={classNames(
-                    'w-full text-left rounded-lg p-2.5 transition-colors',
-                    isActive
-                      ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
-                      : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
+                    'w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors',
+                    navTab === item ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white'
                   )}
                 >
-                  <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
-                    {fName}
-                  </div>
-                  <div className="text-gray-400 text-[10px] font-mono mt-1">
-                    Containers: {inst?.running_containers ?? 0} live
-                    <span className="mx-1 text-gray-700">-</span>
-                    Calls: 0 running
-                  </div>
+                  {item}
                 </button>
-              )
-            })}
-          </div>
-          {sandboxes.length > 0 && (
-            <>
-              <div className="h-px bg-[#262626] my-2" />
+              ))}
+            </div>
+            <div className="h-px bg-[#262626]" />
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2 rounded-md border border-[#262626] bg-transparent px-3 py-1.5 mb-2">
+                <Search className="h-3.5 w-3.5 text-gray-600 shrink-0" />
+                <input className="flex-1 bg-transparent text-xs text-white outline-none placeholder:text-gray-600" placeholder="Search functions" />
+              </div>
               <div className="space-y-1">
-                {sandboxes.map((sName: string) => {
-                  const isActive = selectedSandbox === sName
+                {functions.map((fName: string) => {
+                  const inst = instances.find((i) => i.name === fName)
+                  const isActive = fn === fName
                   return (
                     <button
-                      key={sName}
+                      key={fName}
                       onClick={() => {
-                        setSelectedSandbox(sName)
-                        setNavTab(sName)
+                        setSelectedFunction(fName)
+                        setNavTab(fName)
                       }}
                       className={classNames(
                         'w-full text-left rounded-lg p-2.5 transition-colors',
@@ -195,18 +181,52 @@ export default function AppDetailPage() {
                       )}
                     >
                       <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
-                        {sName}
+                        {fName}
                       </div>
                       <div className="text-gray-400 text-[10px] font-mono mt-1">
-                        Sandbox
+                        Containers: {inst?.running_containers ?? 0} live
+                        <span className="mx-1 text-gray-700">-</span>
+                        Calls: 0 running
                       </div>
                     </button>
                   )
                 })}
               </div>
-            </>
-          )}
-        </div>
+              {sandboxes.length > 0 && (
+                <>
+                  <div className="h-px bg-[#262626] my-2" />
+                  <div className="space-y-1">
+                    {sandboxes.map((sName: string) => {
+                      const isActive = selectedSandbox === sName
+                      return (
+                        <button
+                          key={sName}
+                          onClick={() => {
+                            setSelectedSandbox(sName)
+                            setNavTab(sName)
+                          }}
+                          className={classNames(
+                            'w-full text-left rounded-lg p-2.5 transition-colors',
+                            isActive
+                              ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
+                              : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
+                          )}
+                        >
+                          <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
+                            {sName}
+                          </div>
+                          <div className="text-gray-400 text-[10px] font-mono mt-1">
+                            Sandbox
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </>
+        )}
       </aside>
 
       {/* Main Content */}
