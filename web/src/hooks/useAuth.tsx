@@ -71,3 +71,18 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
   return ctx
 }
+
+export function useCurrentUser() {
+  const { token } = useAuth();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return {
+      id: payload.sub ?? payload.user_id ?? '',
+      email: payload.email ?? '',
+      name: payload.name ?? 'User',
+    };
+  } catch {
+    return null;
+  }
+}

@@ -1,127 +1,71 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listApps, stopApp, deleteApp, type App } from '../api/apps'
 import { useAuth } from './useAuth'
+import { mockApps } from '../core/mocks/apps.mock'
+import { shouldUseMocks } from '../core/services/mock-decider.service'
+import { getFilteredAndSortedApps, getLiveApps, getStoppedApps } from '../core/services/app.service'
+import type { AppFilter } from '../core/use-cases/filter-apps.use-case'
+import type { SortType } from '../core/use-cases/sort-apps.use-case'
+import { mapAppFromApi } from '../core/models/app.model'
 
-const MOCK_APPS: App[] = [
-  {
-    id: 'mock-statsparrot-pne',
-    name: 'statsparrot-pne',
-    environment_id: '',
-    status: 'active',
-    deployer_name: 'adrian-tucicovenco',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    functions: ['fastapi_app'],
-    instances: [
-      {
-        id: 'mock-inst-1',
-        app_id: 'mock-statsparrot-pne',
-        name: 'fastapi_app',
-        cpu: 1,
-        memory: 512,
-        gpu: null,
-        min_containers: 1,
-        max_containers: 5,
-        scaledown_window: 300,
-        running_containers: 2,
-        status: 'active',
-        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'mock-statsparrot-analytics',
-    name: 'statsparrot-analytics-worker',
-    environment_id: '',
-    status: 'active',
-    deployer_name: 'adrian-tucicovenco',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    functions: ['fastapi_app'],
-    instances: [
-      {
-        id: 'mock-inst-2',
-        app_id: 'mock-statsparrot-analytics',
-        name: 'fastapi_app',
-        cpu: 1,
-        memory: 512,
-        gpu: null,
-        min_containers: 1,
-        max_containers: 3,
-        scaledown_window: 300,
-        running_containers: 1,
-        status: 'active',
-        created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ],
-  },
-  {
-    id: 'mock-dental-seg',
-    name: 'dental-tooth-segmentation',
-    environment_id: '',
-    status: 'active',
-    deployer_name: 'adrian-tucicovenco',
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    functions: ['api_predict', 'predict_cli', 'run_prediction'],
-    instances: [
-      {
-        id: 'mock-inst-3',
-        app_id: 'mock-dental-seg',
-        name: 'api_predict',
-        cpu: 2,
-        memory: 1024,
-        gpu: 't4',
-        min_containers: 1,
-        max_containers: 2,
-        scaledown_window: 600,
-        running_containers: 1,
-        status: 'active',
-        created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'mock-inst-4',
-        app_id: 'mock-dental-seg',
-        name: 'predict_cli',
-        cpu: 2,
-        memory: 1024,
-        gpu: 't4',
-        min_containers: 0,
-        max_containers: 1,
-        scaledown_window: 600,
-        running_containers: 0,
-        status: 'stopped',
-        created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: 'mock-inst-5',
-        app_id: 'mock-dental-seg',
-        name: 'run_prediction',
-        cpu: 2,
-        memory: 1024,
-        gpu: 't4',
-        min_containers: 0,
-        max_containers: 1,
-        scaledown_window: 600,
-        running_containers: 0,
-        status: 'stopped',
-        created_at: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-    ],
-  },
-]
+function combineApps(apiApps: App[]): App[] {
+  const combined = [...apiApps]
+  // Adauga mock-uri daca nu exista deja
+  const mockAsApiApps = mockApps.map((m) => ({
+    ...m,
+    environment_id: m.environmentId,
+    deployer_name: m.deployerName,
+    created_at: m.createdAt.toISOString(),
+    updated_at: m.updatedAt.toISOString(),
+  })) as unknown as App[]
+  for (const mock of mockAsApiApps) {
+    if (!combined.find((a) => a.id === mock.id)) {
+      combined.push(mock)
+    }
+  }
+  return combined
+}
 
 export function useApps(envId?: string) {
   const { devMode } = useAuth()
+  const useMocks = devMode || shouldUseMocks()
 
   return useQuery<App[]>({
     queryKey: ['apps', envId],
-    queryFn: () => {
-      if (devMode) return MOCK_APPS
-      return listApps(envId)
+    queryFn: async () => {
+      if (useMocks) {
+        return mockApps.map((m) => ({
+          ...m,
+          environment_id: m.environmentId,
+          deployer_name: m.deployerName,
+          created_at: m.createdAt.toISOString(),
+          updated_at: m.updatedAt.toISOString(),
+        })) as unknown as App[]
+      }
+      const raw = await listApps(envId)
+      return combineApps(raw)
     },
-    staleTime: devMode ? Infinity : 0,
+    staleTime: useMocks ? Infinity : 30000,
   })
+}
+
+export function useFilteredApps(apps: App[] | undefined, filter: AppFilter, sort: SortType) {
+  // Aceasta e o functie utilitara apelata direct din pagini, nu un hook React Query
+  if (!apps) return []
+  const models = apps.map((a: any) => mapAppFromApi(a))
+  return getFilteredAndSortedApps(models, filter, sort)
+}
+
+export function useLiveApps(apps: App[] | undefined) {
+  if (!apps) return []
+  const models = apps.map((a: any) => mapAppFromApi(a))
+  return getLiveApps(models)
+}
+
+export function useStoppedApps(apps: App[] | undefined) {
+  if (!apps) return []
+  const models = apps.map((a: any) => mapAppFromApi(a))
+  return getStoppedApps(models)
 }
 
 export function useStopApp() {
