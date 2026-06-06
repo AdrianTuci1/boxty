@@ -56,7 +56,7 @@ export default function SandboxDetailSidebar({ isOpen, onClose, sandboxId }: San
       <div className="fixed inset-0 bg-black/50 z-40" onClick={onClose} />
 
       {/* Sidebar */}
-      <div className="fixed inset-y-0 right-0 w-[480px] bg-[#111111] border-l border-[#262626] z-50 flex flex-col overflow-hidden">
+      <div className="fixed inset-y-0 right-0 w-[560px] bg-[#111111] border-l border-[#262626] z-50 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#262626]">
           <span className="text-xs text-gray-500">Sandbox</span>
@@ -91,25 +91,35 @@ export default function SandboxDetailSidebar({ isOpen, onClose, sandboxId }: San
 
           {/* Lifecycle Timeline */}
           <div className="p-4">
-            <div className="bg-[#161616] border border-[#262626] rounded-xl p-4">
-              <div className="flex items-center justify-between mb-3">
+            <div className="bg-[#161616] border border-[#262626] rounded-xl p-6">
+              <div className="relative flex items-center justify-between py-4">
+                {/* Timeline bar */}
+                <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 bg-[#262626] rounded-full">
+                  <div className="h-full bg-[#34d399] rounded-full" style={{ width: '100%' }} />
+                </div>
+                
+                {/* Timeline nodes */}
                 {[
                   { label: 'Created', duration: '142ms', time: '04:34:35' },
                   { label: 'Scheduled', duration: '762ms', time: '04:34:36' },
                   { label: 'Started', duration: '1m 8s', time: '04:34:36' },
                   { label: 'Terminated', duration: '', time: '04:35:44' },
                 ].map((stage, index, arr) => (
-                  <div key={stage.label} className="flex-1 flex flex-col items-center relative">
-                    <span className="text-[10px] text-gray-500 mb-1">{stage.label}</span>
-                    <div className="w-full h-2 bg-[#262626] rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-[#34d399]" 
-                        style={{ width: index < arr.length - 1 ? '100%' : '0%' }}
-                      />
-                    </div>
+                  <div key={stage.label} className="flex flex-col items-center relative z-10">
+                    {/* Label above */}
+                    <span className="text-[10px] text-gray-500 mb-3">{stage.label}</span>
+                    
+                    {/* Node dot */}
+                    <div className={`w-3 h-3 rounded-full border-2 ${
+                      index === arr.length - 1 ? 'bg-[#111111] border-[#34d399]' : 'bg-[#34d399] border-[#34d399]'
+                    }`} />
+                    
+                    {/* Duration below */}
                     {stage.duration && (
-                      <span className="text-[10px] text-white mt-1">{stage.duration}</span>
+                      <span className="text-[10px] text-white mt-2">{stage.duration}</span>
                     )}
+                    
+                    {/* Time below */}
                     <span className="text-[10px] text-gray-500">{stage.time}</span>
                   </div>
                 ))}
