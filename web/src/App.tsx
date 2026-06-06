@@ -10,11 +10,12 @@ import AppDetailPage from './pages/AppDetailPage'
 import SandboxDetailPage from './pages/SandboxDetailPage'
 import BillingPage from './pages/BillingPage'
 import SecretsPage from './pages/SecretsPage'
+import CreateSecretPage from './pages/CreateSecretPage'
 import ImagesPage from './pages/ImagesPage'
 import SchedulesPage from './pages/SchedulesPage'
 import StoragePage from './pages/StoragePage'
 import VolumeDetailPage from './pages/VolumeDetailPage'
-import LogsPage from './pages/LogsPage'
+import StoppedApps from './components/StoppedApps'
 import SettingsLayout from './pages/SettingsPage'
 import ProfilePage from './pages/settings/ProfilePage'
 import WorkspacesListPage from './pages/settings/WorkspacesListPage'
@@ -36,16 +37,17 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/apps/:workspace/:environment" element={<DashboardPage />} />
         <Route path="/apps/:workspace/:environment/:appId" element={<AppDetailPage />} />
+        <Route path="/logs/:workspace/:environment" element={<StoppedApps />} />
+        <Route path="/secrets/:workspace/:environment" element={<SecretsPage />} />
+        <Route path="/secrets/:workspace/:environment/create" element={<CreateSecretPage />} />
+        <Route path="/storage/:workspace/:environment" element={<StoragePage />} />
+        <Route path="/storage/:workspace/:environment/:volumeName" element={<VolumeDetailPage />} />
         <Route path="/workspaces" element={<WorkspacesPage />} />
         <Route path="/workspaces/:id" element={<WorkspaceDetailPage />} />
         <Route path="/sandboxes/:id" element={<SandboxDetailPage />} />
         <Route path="/billing" element={<BillingPage />} />
-        <Route path="/secrets" element={<SecretsPage />} />
-        <Route path="/images" element={<ImagesPage />} />
-        <Route path="/schedules" element={<SchedulesPage />} />
-        <Route path="/storage" element={<StoragePage />} />
-        <Route path="/storage/:volumeName" element={<VolumeDetailPage />} />
-        <Route path="/logs" element={<LogsPage />} />
+        <Route path="/images/:workspace/:environment" element={<ImagesPage />} />
+        <Route path="/schedules/:workspace/:environment" element={<SchedulesPage />} />
         <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
       </Route>
       <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>

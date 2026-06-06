@@ -3,13 +3,20 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
 import { useSandboxes } from '../hooks/useSandboxes'
 import type { App } from '../api/apps'
-import { Cloud, XCircle, Search, ScrollText, ChevronDown, Globe } from 'lucide-react'
+import { Cloud, XCircle, Search, ScrollText, ChevronDown, Globe, ChevronRight, Check, ArrowLeft } from 'lucide-react'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
+
+type FilterType = 'deployer' | 'tag' | null
+type SortType = 'recent' | 'alphabetical' | 'newest' | 'oldest' | 'activity'
 
 export default function DashboardPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
   const { data: apps } = useApps(environment)
   const { data: sandboxes } = useSandboxes()
   const [filter, setFilter] = useState<'all' | 'live' | 'stopped'>('all')
+  const [filterType, setFilterType] = useState<FilterType>(null)
+  const [filterValue, setFilterValue] = useState<string | null>(null)
+  const [sortType, setSortType] = useState<SortType>('recent')
 
   // Only show apps that have at least one sandbox
   const appIdsWithSandboxes = useMemo(() => {
@@ -29,8 +36,62 @@ export default function DashboardPage() {
   const stoppedApps = appsWithSandboxes.filter(
     (a) => a.status !== 'active' && a.status !== 'running'
   )
-  const filteredApps =
+  const statusFiltered =
     filter === 'all' ? appsWithSandboxes : filter === 'live' ? liveApps : stoppedApps
+
+  // Unique values for filter submenus
+  const deployers = useMemo(
+    () => [...new Set(appsWithSandboxes.map((a) => a.deployer_name).filter(Boolean))] as string[],
+    [appsWithSandboxes]
+  )
+  const tags = useMemo(
+    () => [...new Set(appsWithSandboxes.map((a) => a.status).filter(Boolean))],
+    [appsWithSandboxes]
+  )
+
+  // Apply search filter
+  const filteredApps = useMemo(() => {
+    let result = statusFiltered
+    if (filterType === 'deployer' && filterValue) {
+      result = result.filter((a) => a.deployer_name === filterValue)
+    }
+    if (filterType === 'tag' && filterValue) {
+      result = result.filter((a) => a.status === filterValue)
+    }
+    return result
+  }, [statusFiltered, filterType, filterValue])
+
+  // Apply sorting
+  const sortedApps = useMemo(() => {
+    const sorted = [...filteredApps]
+    switch (sortType) {
+      case 'alphabetical':
+        sorted.sort((a, b) => a.name.localeCompare(b.name))
+        break
+      case 'newest':
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        break
+      case 'oldest':
+        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        break
+      case 'activity':
+        sorted.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        break
+      case 'recent':
+      default:
+        sorted.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        break
+    }
+    return sorted
+  }, [filteredApps, sortType])
+
+  const sortLabels: Record<SortType, string> = {
+    recent: 'Most recent',
+    alphabetical: 'Alphabetical',
+    newest: 'Newest',
+    oldest: 'Oldest',
+    activity: 'Activity',
+  }
 
   return (
     <div>
@@ -82,7 +143,7 @@ export default function DashboardPage() {
           </button>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5 hover:text-white transition-colors cursor-pointer">
+          <span className="text-gray-400 text-xs font-medium flex items-center gap-1.5">
             <ScrollText className="h-3.5 w-3.5" />
             Quickstart guide
           </span>
@@ -91,32 +152,29 @@ export default function DashboardPage() {
 
       {/* Search & Sort toolbar */}
       <div className="flex items-center justify-between w-full mb-6">
-        <div className="relative w-[320px] bg-[#111111] border border-[#262626] rounded-md px-3 py-1.5 flex items-center gap-2">
-          <Search className="h-3.5 w-3.5 text-gray-500 shrink-0" />
-          <input
-            className="bg-transparent border-0 outline-none p-0 text-xs text-white placeholder-gray-600 flex-1"
-            placeholder="Search or filter"
-          />
-          <div className="flex items-center gap-1">
-            <span className="font-mono text-gray-600 text-[11px] px-1 py-0.5 rounded border border-[#262626] leading-none">
-              /
-            </span>
-            <ChevronDown className="h-3 w-3 text-gray-500" />
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className="text-gray-500">Sort By:</span>
-          <span className="text-white font-medium">Most recent</span>
-          <ChevronDown className="h-3 w-3 text-gray-400" />
-        </div>
+        <SearchFilterDropdown
+          filterType={filterType}
+          filterValue={filterValue}
+          deployers={deployers}
+          tags={tags}
+          onSelectFilter={(type, value) => {
+            setFilterType(type)
+            setFilterValue(value)
+          }}
+          onClear={() => {
+            setFilterType(null)
+            setFilterValue(null)
+          }}
+        />
+        <SortDropdown sortType={sortType} sortLabels={sortLabels} onSelect={setSortType} />
       </div>
 
       {/* App listing */}
       <div className="flex flex-col gap-4 w-full">
-        {filteredApps.length === 0 && (
+        {sortedApps.length === 0 && (
           <p className="text-sm text-gray-500 py-8 text-center">No apps to display.</p>
         )}
-        {filteredApps.map((app) => (
+        {sortedApps.map((app) => (
           <AppCard
             key={app.id}
             app={app}
@@ -126,6 +184,227 @@ export default function DashboardPage() {
         ))}
       </div>
     </div>
+  )
+}
+
+function SearchFilterDropdown({
+  filterType,
+  filterValue,
+  deployers,
+  tags,
+  onSelectFilter,
+  onClear,
+}: {
+  filterType: FilterType
+  filterValue: string | null
+  deployers: string[]
+  tags: string[]
+  onSelectFilter: (type: FilterType, value: string | null) => void
+  onClear: () => void
+}) {
+  const filterLabel = filterType === 'deployer' ? 'deployed by' : filterType === 'tag' ? 'tag' : null
+  const [submenu, setSubmenu] = useState<FilterType>(null)
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+
+  const items: { label: string; key: FilterType }[] = [
+    { label: 'Last deployed by', key: 'deployer' },
+    { label: 'Tag', key: 'tag' },
+  ]
+
+  const dataMap: Record<string, string[]> = { deployer: deployers, tag: tags }
+  const currentItems = submenu ? dataMap[submenu] || [] : []
+  const filteredItems = currentItems.filter((item) =>
+    item.toLowerCase().includes(search.toLowerCase())
+  )
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    if (!next) {
+      setSubmenu(null)
+      setSearch('')
+    }
+  }
+
+  return (
+    <DropdownMenu.Root open={open} onOpenChange={handleOpenChange} modal={false}>
+      <DropdownMenu.Trigger asChild>
+        <button
+          onClick={() => setOpen(true)}
+          className={`w-[320px] bg-[#111111] border border-[#262626] rounded-md px-3 py-1.5 flex items-center gap-2 hover:border-[#3a3a3a] transition-colors ${
+            filterType ? 'border-[#34d399]/30 ring-1 ring-[#34d399]/20' : ''
+          }`}
+        >
+          <Search className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+          {filterType ? (
+            <>
+              <span className="text-xs text-gray-500 flex-1 text-left">
+                Filter: <span className="text-gray-300">{filterLabel}</span>
+                {filterValue && (
+                  <span className="text-[#34d399] ml-0.5">{filterValue}</span>
+                )}
+              </span>
+              <XCircle
+                className="h-3 w-3 text-gray-500 hover:text-gray-300 shrink-0 cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onClear()
+                }}
+              />
+            </>
+          ) : (
+            <>
+              <span className="text-xs text-gray-600 flex-1 text-left">Search or filter</span>
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-gray-600 text-[11px] px-1 py-0.5 rounded border border-[#262626] leading-none">
+                  /
+                </span>
+                <ChevronDown className="h-3 w-3 text-gray-500" />
+              </div>
+            </>
+          )}
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          sideOffset={8}
+          align="start"
+          onCloseAutoFocus={(e) => e.preventDefault()}
+          className="w-[320px] bg-[#1a1a1a] border border-[#262626] rounded-lg py-1 shadow-xl z-50 animate-in fade-in-0 zoom-in-95 data-[side=bottom]:slide-in-from-top-2"
+        >
+          {submenu ? (
+            <>
+              {/* Back + Search header */}
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b border-[#262626]">
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setSubmenu(null)
+                    setSearch('')
+                  }}
+                  className="text-gray-400 hover:text-white transition-colors shrink-0"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                </button>
+                <Search className="h-3.5 w-3.5 text-gray-500 shrink-0" />
+                <input
+                  autoFocus
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="bg-transparent border-0 outline-none p-0 text-xs text-white placeholder-gray-600 flex-1"
+                  placeholder={`Filter ${submenu}s...`}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => e.stopPropagation()}
+                />
+              </div>
+              {/* Items list */}
+              <div className="max-h-[240px] overflow-y-auto">
+                {filteredItems.map((item) => (
+                  <div
+                    key={item}
+                    onClick={() => {
+                      onSelectFilter(submenu, item)
+                      setOpen(false)
+                      setSubmenu(null)
+                      setSearch('')
+                    }}
+                    className="text-xs text-gray-300 px-3 py-1.5 cursor-pointer hover:bg-[#262626] hover:text-white flex items-center justify-between outline-none rounded-sm mx-1"
+                  >
+                    <span className="capitalize">{item}</span>
+                    {filterType === submenu && filterValue === item && (
+                      <Check className="h-3 w-3 text-[#34d399]" />
+                    )}
+                  </div>
+                ))}
+                {filteredItems.length === 0 && (
+                  <div className="text-xs text-gray-500 px-3 py-2 text-center">
+                    No results
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {items.map(({ label, key }) => (
+                <div
+                  key={key}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setSubmenu(key)
+                    setSearch('')
+                  }}
+                  className="text-xs text-gray-300 px-3 py-1.5 cursor-pointer hover:bg-[#262626] hover:text-white flex items-center justify-between outline-none rounded-sm mx-1"
+                >
+                  <span>{label}</span>
+                  {filterType === key && filterValue && (
+                    <span className="text-gray-500 text-[11px]">{filterValue}</span>
+                  )}
+                  <ChevronRight className="h-3 w-3 text-gray-500" />
+                </div>
+              ))}
+              {filterType && (
+                <>
+                  <div className="h-px bg-[#262626] my-1" />
+                  <div
+                    onClick={() => {
+                      onClear()
+                      setOpen(false)
+                    }}
+                    className="text-xs text-gray-400 px-3 py-1.5 cursor-pointer hover:bg-[#262626] hover:text-white outline-none rounded-sm mx-1"
+                  >
+                    Clear filter
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  )
+}
+
+function SortDropdown({
+  sortType,
+  sortLabels,
+  onSelect,
+}: {
+  sortType: SortType
+  sortLabels: Record<SortType, string>
+  onSelect: (type: SortType) => void
+}) {
+  const sortOptions: SortType[] = ['recent', 'alphabetical', 'newest', 'oldest', 'activity']
+
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button className="flex items-center gap-1.5 text-xs hover:opacity-80 transition-opacity">
+          <span className="text-gray-500">Sort By:</span>
+          <span className="text-white font-medium">{sortLabels[sortType]}</span>
+          <ChevronDown className="h-3 w-3 text-gray-400" />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          sideOffset={8}
+          align="end"
+          className="bg-[#1a1a1a] border border-[#262626] rounded-lg py-1 min-w-[160px] shadow-xl z-50"
+        >
+          {sortOptions.map((option) => (
+            <DropdownMenu.Item
+              key={option}
+              onClick={() => onSelect(option)}
+              className="text-xs text-gray-300 px-3 py-1.5 cursor-pointer hover:bg-[#262626] hover:text-white flex items-center justify-between outline-none rounded-sm mx-1"
+            >
+              <span>{sortLabels[option]}</span>
+              {sortType === option && <Check className="h-3 w-3 text-[#34d399]" />}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   )
 }
 
@@ -158,11 +437,11 @@ function AppCard({
   return (
     <div
       onClick={() => navigate(`/apps/${workspace}/${environment}/${app.id}`)}
-      className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden shadow-sm cursor-pointer hover:bg-[#1a1a1a] transition-colors"
+      className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden shadow-sm cursor-pointer transition-colors"
     >
       {/* Header row */}
       <div className="h-11 border-b border-[#262626]/60 px-4 flex items-center justify-between bg-[#191919]/30">
-        <span className="font-mono text-sm font-semibold text-gray-200 tracking-tight">
+        <span className="font-mono text-sm font-semibold text-gray-200 tracking-tight hover:text-white transition-colors">
           {app.name}
         </span>
         <div className="flex items-center gap-2">
@@ -178,8 +457,8 @@ function AppCard({
 
       {/* Function rows */}
       <div
-        className={`px-4 bg-transparent ${
-          isMultiFunction ? 'py-4 flex flex-col space-y-3.5' : 'py-3 flex flex-col gap-1'
+        className={`bg-transparent flex flex-col ${
+          isMultiFunction ? 'space-y-3.5' : 'gap-1'
         }`}
       >
         {functions.map((fn: string) => (
@@ -198,7 +477,7 @@ function FunctionRow({
   badges: { label: string; variant: 'cpu' | 'gpu' }[]
 }) {
   return (
-    <div className="flex items-center justify-between">
+    <div className="flex items-center justify-between hover:bg-[#1f1f1f] transition-colors px-4 py-3">
       <div className="flex items-center">
         <span className="font-mono text-xs text-gray-300 pl-4 relative before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1.5 before:h-1.5 before:border before:border-gray-600 before:rounded-full">
           {fn}

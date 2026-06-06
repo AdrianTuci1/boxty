@@ -7,24 +7,22 @@ import {
 } from 'lucide-react'
 import { useMemo } from 'react'
 
-const staticItems = [
-  { to: '/logs', label: 'Logs', icon: FileText },
-  { to: '/secrets', label: 'Secrets', icon: KeyRound },
-  { to: '/volumes', label: 'Storage', icon: HardDrive },
-]
-
 export default function Sidebar() {
   const location = useLocation()
 
-  const appsLink = useMemo(() => {
-    const match = location.pathname.match(/^\/apps\/([^/]+)\/([^/]+)/)
-    if (match) return `/apps/${match[1]}/${match[2]}`
-    return '/apps/adrian-tucicovenco/main'
+  const { workspace, environment } = useMemo(() => {
+    const m = location.pathname.match(/^\/(?:apps|logs|secrets|storage)\/([^/]+)\/([^/]+)/)
+    return {
+      workspace: m?.[1] || 'adrian-tucicovenco',
+      environment: m?.[2] || 'main',
+    }
   }, [location.pathname])
 
   const allItems = [
-    { to: appsLink, label: 'Apps', icon: Box },
-    ...staticItems,
+    { to: `/apps/${workspace}/${environment}`, label: 'Apps', icon: Box },
+    { to: `/logs/${workspace}/${environment}`, label: 'Logs', icon: FileText },
+    { to: `/secrets/${workspace}/${environment}`, label: 'Secrets', icon: KeyRound },
+    { to: `/storage/${workspace}/${environment}`, label: 'Storage', icon: HardDrive },
   ]
 
   return (

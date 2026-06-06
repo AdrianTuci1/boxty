@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { getApp, getAppMetrics, getAppDeployments } from '../api/apps'
@@ -11,9 +11,14 @@ import {
   ChevronDown, MoreHorizontal,
   Calendar, ChevronLeft, ChevronRight, Star, Activity,
 } from 'lucide-react'
+import FunctionCallsTable from '../components/FunctionCallsTable'
+import FunctionMetrics from '../components/FunctionMetrics'
+import FunctionDetails from '../components/FunctionDetails'
+import FunctionFiles from '../components/FunctionFiles'
+import AppLogs from '../components/AppLogs'
 
-const appNavItems = ['Overview', 'Deployment History', 'App Logs', 'Usage'] as const
-const logsSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files'] as const
+const appNavItems = ['Overview', 'Deployment History', 'Usage'] as const
+const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files', 'App Logs'] as const
 const hours = ['03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM', 'Fri 05', '03 AM']
 
 // Mock usage chart data
@@ -42,21 +47,34 @@ function timeAgo(dateStr: string) {
 }
 
 export default function AppDetailPage() {
-  const { workspace, appId } = useParams<{ workspace: string; environment: string; appId: string }>()
+  const { workspace, appId } = useParams<{
+    workspace: string
+    environment: string
+    appId: string
+  }>()
+
   const appQ = useQuery({ queryKey: ['apps', appId], queryFn: () => getApp(appId!), enabled: !!appId })
   const deploymentsQ = useQuery({ queryKey: ['apps', appId, 'deployments'], queryFn: () => getAppDeployments(appId!), enabled: !!appId })
   const metricsQ = useQuery({ queryKey: ['apps', appId, 'metrics'], queryFn: () => getAppMetrics(appId!), enabled: !!appId })
 
   const [navTab, setNavTab] = useState<string>('Overview')
-  const [activeFunction, setActiveFunction] = useState<string>('')
-  const [logsTab, setLogsTab] = useState<string>('Function Calls')
+  const [selectedFunction, setSelectedFunction] = useState<string>('')
+  const [functionTab, setFunctionTab] = useState<string>('Function Calls')
   const [showDeployments, setShowDeployments] = useState(true)
 
   const app = appQ.data
   const functions = app?.functions ?? app?.endpoints ?? ['fastapi_app']
   const instances = app?.instances ?? []
 
-  const fn = activeFunction || functions[0]
+  // Auto-select first function when data loads
+  useEffect(() => {
+    if (functions.length > 0 && !selectedFunction && navTab === 'Overview') {
+      setSelectedFunction(functions[0])
+      setNavTab(functions[0])
+    }
+  }, [functions, selectedFunction, navTab])
+
+  const fn = selectedFunction || functions[0]
   const activeInstance = instances.find((i) => i.name === fn)
   const appName = app?.name ?? 'App'
   const liveContainers = activeInstance?.running_containers ?? 0
@@ -86,6 +104,9 @@ export default function AppDetailPage() {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     )
   }, [deploymentsQ.data])
+
+  // Check if we're in function view mode
+  const isFunctionView = navTab !== 'Overview' && navTab !== 'Deployment History' && navTab !== 'Usage'
 
   return (
     <div className="flex h-full">
@@ -118,7 +139,10 @@ export default function AppDetailPage() {
               return (
                 <button
                   key={fName}
-                  onClick={() => setActiveFunction(fName)}
+                  onClick={() => {
+                    setSelectedFunction(fName)
+                    setNavTab(fName)
+                  }}
                   className={classNames(
                     'w-full text-left rounded-lg p-2.5 transition-colors',
                     isActive
@@ -175,9 +199,13 @@ export default function AppDetailPage() {
               <h2 className="text-base font-semibold text-white mt-6 mb-3">Functions</h2>
               <div className="space-y-3">
                 {functions.map((fName: string) => (
-                  <div
+                  <button
                     key={fName}
-                    className="bg-[#161616] border border-[#262626] rounded-xl p-4 flex items-center justify-between"
+                    onClick={() => {
+                      setSelectedFunction(fName)
+                      setNavTab(fName)
+                    }}
+                    className="w-full bg-[#161616] border border-[#262626] rounded-xl p-4 flex items-center justify-between hover:border-[#34d399]/30 transition-colors text-left"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -190,7 +218,7 @@ export default function AppDetailPage() {
                       <span className="text-gray-400 font-mono text-xs">No activity</span>
                       <span className="text-gray-700 text-[11px] font-mono tracking-[0.2em] select-none">-----------------------</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </>
@@ -285,8 +313,8 @@ export default function AppDetailPage() {
             </>
           )}
 
-          {/* ==================== APP LOGS ==================== */}
-          {navTab === 'App Logs' && (
+          {/* ==================== FUNCTION VIEW (replaces App Logs) ==================== */}
+          {isFunctionView && (
             <>
               {/* Header */}
               <div className="flex items-start justify-between">
@@ -352,14 +380,14 @@ export default function AppDetailPage() {
                 </div>
               </div>
 
-              {/* Function Call Results Chart */}
+              {/* Function call results Chart */}
               <div className="mt-6">
                 <p className="text-xs text-gray-400 font-medium mb-2">Function call results</p>
                 <div className="h-32 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={chartData.length > 0 ? chartData : [{ t: '00', cpu: 0 }]}>
                       <defs>
-                        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id="chartFillFn" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="0%" stopColor="#34d399" stopOpacity={0.15} />
                           <stop offset="100%" stopColor="#34d399" stopOpacity={0} />
                         </linearGradient>
@@ -382,7 +410,7 @@ export default function AppDetailPage() {
                         width={40}
                       />
                       <Tooltip contentStyle={{ background: '#1f1f1f', border: '1px solid #262626', fontSize: 11 }} />
-                      <Area type="monotone" dataKey="cpu" stroke="#34d399" fill="url(#chartFill)" strokeWidth={1.5} />
+                      <Area type="monotone" dataKey="cpu" stroke="#34d399" fill="url(#chartFillFn)" strokeWidth={1.5} />
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
@@ -396,12 +424,12 @@ export default function AppDetailPage() {
               {/* Sub-navigation tabs */}
               <div className="h-10 border-b border-[#262626] flex items-center justify-between mt-6">
                 <div className="flex items-center gap-5 h-full">
-                  {logsSubTabs.map((tab) => {
-                    const isActive = logsTab === tab
+                  {functionSubTabs.map((tab) => {
+                    const isActive = functionTab === tab
                     return (
                       <button
                         key={tab}
-                        onClick={() => setLogsTab(tab)}
+                        onClick={() => setFunctionTab(tab)}
                         className={`relative h-full flex items-center text-xs font-medium transition-colors ${
                           isActive ? 'text-white font-semibold' : 'text-gray-400 hover:text-white'
                         }`}
@@ -414,41 +442,17 @@ export default function AppDetailPage() {
                 </div>
               </div>
 
-              {/* Queue Operations */}
-              <div className="flex items-center justify-between py-3">
-                <div className="flex items-center gap-1 text-gray-300 text-xs font-medium">
-                  Status: Any <ChevronDown className="h-3 w-3 text-gray-500" />
+              {/* Tab Content */}
+              {functionTab === 'Function Calls' && <FunctionCallsTable />}
+              {functionTab === 'Containers' && (
+                <div className="mt-6 text-center text-gray-500 text-sm py-12">
+                  No containers running.
                 </div>
-                <button className="flex items-center gap-1.5 bg-red-950/10 border border-red-900/40 text-red-400 text-xs font-medium px-2.5 py-1 rounded-md hover:bg-red-950/30 transition-all cursor-pointer">
-                  <span className="text-sm leading-none">⨂</span> Clear queue
-                </button>
-              </div>
-
-              {/* Queue Table */}
-              <div className="overflow-x-auto rounded-xl border border-[#262626]">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-[#161616] text-gray-400 text-xs">
-                      <th className="px-3 py-2 text-left font-medium">Route</th>
-                      <th className="px-3 py-2 text-left font-medium">Enqueued (EEST)</th>
-                      <th className="px-3 py-2 text-left font-medium">Started (EEST)</th>
-                      <th className="px-3 py-2 text-left font-medium">Startup ℹ</th>
-                      <th className="px-3 py-2 text-left font-medium">Execution</th>
-                      <th className="px-3 py-2 text-left font-medium">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td colSpan={6} className="bg-[#161616]/30 font-mono text-xs text-gray-500 py-6 text-center">
-                        No matching function calls found.
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <p className="text-gray-400 text-xs italic text-center w-full mt-4">
-                Change the time interval to see more results.
-              </p>
+              )}
+              {functionTab === 'Metrics' && <FunctionMetrics />}
+              {functionTab === 'Details' && <FunctionDetails />}
+              {functionTab === 'Files' && <FunctionFiles />}
+              {functionTab === 'App Logs' && <AppLogs appName={appName} />}
             </>
           )}
 

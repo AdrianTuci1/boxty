@@ -1,0 +1,64 @@
+--- DETAILED SPECIFICATIONS FOR EVERY SETTINGS PAGE (app/(settings)/settings/*) ---
+
+The Settings Layout consists of a fixed left sidebar (w-64, bg-[#111111], border-r border-[#262626], p-4, space-y-6). 
+Navigation categories are grouped under sub-headers: "Account" (Profile, Workspaces, Email Preferences) and "Tokens" (API Tokens, Proxy Auth Tokens) and "Features" (Domains, Image Builder Version, Proxies [Beta]).
+
+1. PROFILE PAGE (app/settings/profile/page.tsx)
+   • Header: Text "Profile" (text-2xl, font-bold, text-white), followed by a muted subtitle "Manage your account profile." (text-gray-400, text-sm, mb-6).
+   • Card Wrapper: bg-[#161616] border border-[#262626] rounded-xl p-6 space-y-6.
+   • Component A: Avatar Upload Block
+     - Left side: Large circular gradient avatar placeholder (w-16, h-16) with a heavy capital letter "A" centered.
+     - Right side: Text link "Upload Photo" (text-gray-300, text-xs, hover:text-white, cursor-pointer, font-medium).
+   • Component B: Email Field
+     - Label: "Email" (text-gray-400, text-xs, font-medium, mb-1.5, block).
+     - Input Wrapper: flex items-center justify-between border-t border-[#262626] pt-3.
+     - Left text: "adrian.tucicovenco@gmail.com" (text-white, text-sm, font-mono).
+     - Right button: Square flat button (bg-[#1f1f1f] hover:bg-[#262626] border border-[#262626] text-white, text-xs, px-3, py-1.5, rounded-md, content: "Update").
+   • Component C: Preferences Block (Timezone Settings)
+     - Sub-Header: "Preferences" (text-sm, font-semibold, text-white, mt-8, mb-3).
+     - Card Inner: bg-[#161616] border border-[#262626] rounded-xl p-4 flex items-center justify-between.
+     - Content left: Inline flex container showing a Globe icon, text "Timezone" (text-gray-300, text-sm), and an info question mark circle icon.
+     - Content right: Interactive selector showing text "Browser Local Time (2:17 AM · GMT+3)" (text-gray-400, text-xs) next to a down chevron.
+   • Component D: Connected Accounts Table
+     - Sub-Header: "Connected Accounts" (text-sm, font-semibold, text-white, mt-8, mb-3).
+     - Table Structure: border border-[#262626] bg-[#161616] rounded-xl overflow-hidden structure.
+     - Header row (bg-[#111111], border-b border-[#262626], text-gray-500, text-xs, px-4, py-2.5, flex justify-between): Columns mapping ['Provider', 'Provider Username', 'Connected'].
+     - Data row (px-4, py-3, flex justify-between items-center text-xs font-mono): 
+       * Col 1: "Google" (text-white, font-sans).
+       * Col 2: "adrian.tucicovenco@gmail.com" (text-gray-300).
+       * Col 3: "Mar 9, 2026" (text-gray-500).
+
+2. WORKSPACES PAGE (app/settings/workspaces/page.tsx)
+   • Header: Text "Workspaces" (text-2xl, font-bold, text-white), subtitle "View and manage your active execution contexts."
+   • Content Layout: Grid structure grid-cols-1 md:grid-cols-2 gap-4.
+   • Card Component: bg-[#161616] border border-[#262626] p-4 rounded-xl flex justify-between items-center.
+     - Left: Workspace title "adrian-tucicovenco" (text-white, font-medium, text-sm) with matching purple "Starter" badge inline.
+     - Right: Indicator text "Active Workspace" (text-[#34d399], text-xs, font-mono, flex items-center gap-1.5 with a solid green pulsing dot animation).
+
+3. EMAIL PREFERENCES PAGE (app/settings/email/page.tsx)
+   • Header: Text "Email Preferences" (text-2xl, font-bold, text-white), subtitle "Control your notification settings."
+   • Form Element Stack: space-y-4, max-w-xl, bg-[#161616] border border-[#262626] p-6 rounded-xl.
+   • Toggle Row items (flex items-center justify-between py-3 border-b border-[#262626]/60):
+     - Text content: Title block (e.g., "Billing alerts", "Product Updates", "Security alerts") in text-sm text-white, with secondary functional descriptions below in text-xs text-gray-500.
+     - Interactive control: Radix UI Switch primitive (checked state has bg-[#34d399], thumb component shifts smoothly to right edge).
+
+4. USAGE & BILLING PAGE (app/settings/usage/page.tsx)
+   • Sub-Header Context: Displays inline navigation menu index: Overview (Active, underlined green), Usage, Credits, Plans.
+   • Action Row (Far right tracking): Top buttons aligned next to workspace headers: "View invoices ↗" and "Manage payment details ↗" using font-sans text-xs bg-[#1f1f1f] border border-[#262626] text-gray-200 px-3 py-1.5 rounded-md hover:text-white.
+   • Component A: Cost Summary Component Card
+     - Wrapper: bg-[#161616] border border-[#262626] rounded-xl mt-4.
+     - Inner Top Title bar: Context wrapper text "Cost Summary" (text-base, text-white, font-semibold) paired with a right-aligned inline custom Calendar dropdown component tracking value string: "Billing Cycle: Jun 1 – Jul 1, 2026".
+     - Left Grid Node: Layout block presenting core cost metrics text-sm. Row 1: "Total Spend: $0.00" (font-bold text-white). Row 2: "Total Usage" ($22.00 in text-gray-300). Row 3: "Credits Applied" ($-22.00 in text-gray-500 text-sm font-mono).
+     - Right Grid Node: Text header "Usage Breakdown: $22.00" (text-sm, text-gray-400) linked to an active inline link "View details ↗". Underneath mounts a continuous progress indicator line track filled completely with solid emerald #34d399 green utility mapping, backed below by label "• Deployed Apps $22.00".
+   • Component B: Bottom Dual Split Layout Panel (grid grid-cols-1 md:grid-cols-2 gap-4 mt-6)
+     - Box 1: "Current Plan": Text parameters mapping "Starter plan with $30.00 included compute credits per month." Footer features two native inline buttons styled with micro-arrow indicator typography tags: "Manage plan ↗" and "View credits ↗".
+     - Box 2: "Usage Limit": Detailed operational text: "This workspace can use up to $100 per billing period. Running apps will stop when usage reaches this limit." Followed by an un-bulleted clean spacing text list detailing multi-tier limits ("When usage reaches $50, you'll be charged $20..."). Terminated by a flat dark trigger button labeled "Set a budget".
+
+5. API TOKENS PAGE (app/settings/api-tokens/page.tsx)
+   • Navigation Context: Displays "adrian-tucicovenco / API Tokens" centered upper header with a right-aligned flat button element index: "Docs" (icon-link) and "New Token" (bg-[#ffffff], text-black, font-medium, rounded-md, text-xs, px-3, py-1.5).
+   • Data Vault Grid: Single core table component mapping out active authentication vectors.
+   • Column layout schema: Name / Token ID (left-aligned) | Created (center-aligned) | Actions (far-right icon wrapper).
+   • Data Row Layout Component (4 instances stacked dynamically):
+     - Name & Hash Block: Display token metadata name text-white font-bold (e.g., "hermes", "cli", "statsparrot"). Below it, render the truncated token hash key exactly in code monospace variant format font-mono text-gray-400 text-[12px] string alignment "ak-jllom3cesu0lxv4rvjzbkz" followed immediately by an inline structural document-copy vector icon button.
+     - Timing & Telemetry Block: Tracks dates exactly. Line 1: Text-gray-300 text-xs tracking calendar dates (e.g., "June 1, 2026", "March 9, 2026"). Line 2: Relative runtime utility metrics displayed in ultra-muted gray-500 scales ("Last used 25 minutes ago", "Last used 1 day ago", "No recent activity").
+     - Far-Right Operational block: Horizontal triple-dot menu component (Radix Dropdown Menu trigger) for token key deletion/revocation.

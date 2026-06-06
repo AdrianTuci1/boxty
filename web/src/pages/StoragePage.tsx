@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { HardDrive, Database, FileText, ArrowUpDown, Search } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 
@@ -17,6 +17,7 @@ const exampleVolumes = [
 ]
 
 export default function StoragePage() {
+  const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
   const navigate = useNavigate()
   const [activeFilter, setActiveFilter] = useState('Volumes')
   const [sortBy, setSortBy] = useState('Size')
@@ -131,7 +132,7 @@ export default function StoragePage() {
           >
             <div className="flex-1">
               <button
-                onClick={() => navigate(`/storage/${vol.name}`)}
+                onClick={() => navigate(`/storage/${workspace}/${environment}/${vol.name}`)}
                 className="font-mono font-semibold text-white text-xs hover:text-[#34d399] transition-colors"
               >
                 {vol.name}

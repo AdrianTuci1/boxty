@@ -1,8 +1,9 @@
 import * as Select from '@radix-ui/react-select'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { ChevronDown, Bell, Check } from 'lucide-react'
+import { ChevronDown, Bell, Check, Coins } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
+import { useCommandPalette } from './CommandPalette'
 
 const workspaceItems = ['adrian-tucicovenco']
 const environments = ['main', 'staging', 'production']
@@ -11,14 +12,16 @@ export default function Navbar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { logout } = useAuth()
+  const { setOpen } = useCommandPalette()
 
-  // Parse workspace/environment from URL if on an apps route
-  const match = location.pathname.match(/^\/apps\/([^/]+)\/([^/]+)/)
-  const currentWorkspace = match ? match[1] : 'adrian-tucicovenco'
-  const currentEnv = match ? match[2] : 'main'
+  // Parse workspace/environment and current page from URL
+  const match = location.pathname.match(/^\/(apps|logs|secrets|storage)(\/([^/]+)\/([^/]+))/)
+  const currentPage = match ? match[1] : 'apps'
+  const currentWorkspace = match ? match[3] : 'adrian-tucicovenco'
+  const currentEnv = match ? match[4] : 'main'
 
-  const goToApps = (workspace: string, env: string) => {
-    navigate(`/apps/${workspace}/${env}`)
+  const goToPage = (workspace: string, env: string) => {
+    navigate(`/${currentPage}/${workspace}/${env}`)
   }
 
   return (
@@ -53,7 +56,7 @@ export default function Navbar() {
               {workspaceItems.map((w) => (
                 <DropdownMenu.Item
                   key={w}
-                  onClick={() => goToApps(w, currentEnv)}
+                  onClick={() => goToPage(w, currentEnv)}
                   className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-gray-300 outline-none hover:bg-[#1f1f1f] hover:text-white"
                 >
                   {w}
@@ -73,7 +76,7 @@ export default function Navbar() {
         <span className="text-gray-600 mx-2">/</span>
 
         {/* Environment dropdown */}
-        <Select.Root value={currentEnv} onValueChange={(env) => goToApps(currentWorkspace, env)}>
+<Select.Root value={currentEnv} onValueChange={(env) => goToPage(currentWorkspace, env)}>
           <Select.Trigger className="flex items-center gap-1 text-sm font-mono text-gray-300 outline-none hover:text-white transition-colors">
             <Select.Value />
             <ChevronDown className="h-3 w-3 text-gray-500" />
@@ -102,11 +105,14 @@ export default function Navbar() {
 
       {/* Right section */}
       <div className="flex items-center gap-4">
-        {/* Search bar */}
-        <div className="flex w-[240px] items-center justify-between rounded border border-[#262626] bg-[#161616] px-3 py-1.5">
-          <span className="text-xs text-gray-500">Search docs, apps...</span>
-          <kbd className="rounded border border-[#333] px-1.5 py-0.5 font-mono text-[10px] text-gray-500">⌘K</kbd>
-        </div>
+        {/* Search trigger */}
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors cursor-pointer"
+        >
+          Search
+          <kbd className="rounded border border-[#333] px-1 py-0.5 font-mono text-[10px] text-gray-500">⌘K</kbd>
+        </button>
 
         {/* Workspace metrics link */}
         <button
@@ -121,10 +127,76 @@ export default function Navbar() {
           • Workspace metrics
         </button>
 
-        {/* Credits pill */}
-        <div className="flex items-center rounded-full border border-[#262626] bg-[#1a1a1a] px-3 py-1">
-          <span className="text-xs font-medium text-gray-300">Credits $9.44 left</span>
-        </div>
+        {/* Credits dropdown */}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button className="flex items-center rounded-full border border-[#262626] bg-[#1a1a1a] px-3 py-1 hover:border-[#34d399]/30 transition-colors outline-none">
+              <Coins className="h-3.5 w-3.5 text-[#34d399] mr-1.5" />
+              <span className="text-xs font-medium text-gray-300">Credits $9.44 left</span>
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 w-[260px] rounded-lg border border-[#262626] bg-[#161616] shadow-2xl"
+              sideOffset={6}
+              align="end"
+            >
+              {/* Header */}
+              <div className="px-4 pt-3 pb-2">
+                <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Credits balance</span>
+                <div className="flex items-baseline gap-1 mt-1">
+                  <span className="text-xl font-bold text-white tracking-tight">$9.44</span>
+                  <span className="text-xs text-gray-500 font-medium">remaining</span>
+                </div>
+              </div>
+
+              <DropdownMenu.Separator className="mx-2 h-px bg-[#262626]" />
+
+              {/* Budget */}
+              <div className="px-4 pt-3 pb-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Budget</span>
+                  <span className="text-xs text-gray-500 font-mono">$15 / mo</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-[#222222] overflow-hidden">
+                  <div className="h-full w-[37%] rounded-full bg-white" />
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[10px] text-gray-500 font-medium">$5.56 spent</span>
+                  <span className="text-[10px] text-gray-500 font-medium">$9.44 left</span>
+                </div>
+              </div>
+
+              <DropdownMenu.Separator className="mx-2 h-px bg-[#262626]" />
+
+              {/* Credits */}
+              <div className="px-4 py-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">Credits</span>
+                  <span className="text-xs text-gray-500 font-mono">500 / mo</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-[#222222] overflow-hidden">
+                  <div className="h-full w-[68%] rounded-full bg-[#34d399]" />
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[10px] text-gray-500 font-medium">340 used</span>
+                  <span className="text-[10px] text-gray-500 font-medium">160 left</span>
+                </div>
+              </div>
+
+              <DropdownMenu.Separator className="mx-2 h-px bg-[#262626]" />
+
+              <div className="p-1">
+                <DropdownMenu.Item
+                  onClick={() => navigate('/billing')}
+                  className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-gray-300 outline-none hover:bg-[#1f1f1f] hover:text-white"
+                >
+                  View billing
+                </DropdownMenu.Item>
+              </div>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
 
         {/* Notification bell */}
         <button className="text-gray-400 hover:text-white transition-colors">
