@@ -4,6 +4,7 @@ import {
   BarChart, Bar, CartesianGrid, Legend,
 } from 'recharts'
 import { ChevronDown, Pause, Filter, Info, Clock } from 'lucide-react'
+import SandboxDetailSidebar from './SandboxDetailSidebar'
 
 const hours = ['Sat 06', '03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM']
 
@@ -113,6 +114,13 @@ function ChartCard({ title, children }: ChartCardProps) {
 
 export default function SandboxMetrics({ appName }: { appName: string }) {
   const [activeTab, setActiveTab] = useState<'Metrics' | 'Sandboxes'>('Metrics')
+  const [selectedSandbox, setSelectedSandbox] = useState<string | null>(null)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const handleSandboxClick = (sandboxId: string) => {
+    setSelectedSandbox(sandboxId)
+    setSidebarOpen(true)
+  }
 
   return (
     <div className="flex flex-col h-full">
@@ -387,7 +395,8 @@ export default function SandboxMetrics({ appName }: { appName: string }) {
                 {sandboxInstances.map((instance) => (
                   <tr
                     key={instance.id}
-                    className="transition-colors hover:bg-[#1a1a1a]"
+                    className="transition-colors hover:bg-[#1a1a1a] cursor-pointer"
+                    onClick={() => handleSandboxClick(instance.id)}
                   >
                     <td className="px-6 py-4 text-sm text-gray-300 font-mono">
                       {instance.createdAt}
@@ -416,6 +425,13 @@ export default function SandboxMetrics({ appName }: { appName: string }) {
           </p>
         </div>
       )}
+
+      {/* Sandbox Detail Sidebar */}
+      <SandboxDetailSidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        sandboxId={selectedSandbox || ''}
+      />
     </div>
   )
 }
