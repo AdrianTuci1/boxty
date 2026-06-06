@@ -17,18 +17,12 @@ import FunctionDetails from '../components/FunctionDetails'
 import FunctionFiles from '../components/FunctionFiles'
 import AppLogs from '../components/AppLogs'
 import SandboxMetrics from '../components/SandboxMetrics'
+import { mockSandboxNames } from '../core/mocks/sandboxes.mock'
+import { timeAgo } from '../core/utils/time-ago'
 
 const appNavItems = ['Overview', 'Deployment History', 'Usage'] as const
 const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files'] as const
 const hours = ['03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM', 'Fri 05', '03 AM']
-
-// Mock sandboxes data
-const mockSandboxes = [
-  'hermes-agent-sandbox',
-  'data-processor-sandbox', 
-  'ml-inference-sandbox',
-  'web-scraper-sandbox'
-]
 
 // Mock usage chart data
 const usageChartData = [
@@ -40,19 +34,6 @@ const usageChartData = [
 
 function classNames(...classes: (string | false | undefined | null)[]) {
   return classes.filter(Boolean).join(' ')
-}
-
-function timeAgo(dateStr: string) {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return 'just now'
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  if (days < 30) return `${days}d ago`
-  const months = Math.floor(days / 30)
-  return `about ${months} month${months > 1 ? 's' : ''} ago`
 }
 
 export default function AppDetailPage() {
@@ -74,7 +55,7 @@ export default function AppDetailPage() {
 
   const app = appQ.data
   const functions = app?.functions ?? app?.endpoints ?? ['fastapi_app']
-  const sandboxes = (app as any)?.sandboxes ?? mockSandboxes
+  const sandboxes = (app as any)?.sandboxes ?? mockSandboxNames
   const instances = app?.instances ?? []
 
   // Auto-select first function when in Overview and functions exist
