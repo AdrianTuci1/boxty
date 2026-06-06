@@ -19,7 +19,7 @@ import AppLogs from '../components/AppLogs'
 import SandboxMetrics from '../components/SandboxMetrics'
 
 const appNavItems = ['Overview', 'Deployment History', 'Usage'] as const
-const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files', 'App Logs'] as const
+const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files'] as const
 const hours = ['03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM', 'Fri 05', '03 AM']
 
 // Mock sandboxes data
@@ -124,7 +124,62 @@ export default function AppDetailPage() {
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="w-56 shrink-0 border-r border-[#262626] bg-[#111111] p-3 flex flex-col gap-3 overflow-y-auto">
-        {isSandboxView ? (
+        {isFunctionView ? (
+          /* Function Sidebar */
+          <>
+            <div className="space-y-1">
+              {['Overview', 'App Logs', 'Deployment History', 'Usage'].map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setNavTab(item)}
+                  className={classNames(
+                    'w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors',
+                    navTab === item ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white'
+                  )}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            <div className="h-px bg-[#262626]" />
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2 rounded-md border border-[#262626] bg-transparent px-3 py-1.5 mb-2">
+                <Search className="h-3.5 w-3.5 text-gray-600 shrink-0" />
+                <input className="flex-1 bg-transparent text-xs text-white outline-none placeholder:text-gray-600" placeholder="Search functions" />
+              </div>
+              <div className="space-y-1">
+                {functions.map((fName: string) => {
+                  const inst = instances.find((i) => i.name === fName)
+                  const isActive = fn === fName
+                  return (
+                    <button
+                      key={fName}
+                      onClick={() => {
+                        setSelectedFunction(fName)
+                        setNavTab(fName)
+                      }}
+                      className={classNames(
+                        'w-full text-left rounded-lg p-2.5 transition-colors',
+                        isActive
+                          ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
+                          : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
+                      )}
+                    >
+                      <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
+                        {fName}
+                      </div>
+                      <div className="text-gray-400 text-[10px] font-mono mt-1">
+                        Containers: {inst?.running_containers ?? 0} live
+                        <span className="mx-1 text-gray-700">-</span>
+                        Calls: 0 running
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        ) : isSandboxView ? (
           /* Sandbox Sidebar */
           <div className="space-y-1">
             {['Sandboxes', 'Deployment History', 'App Logs', 'Usage'].map((item) => (
@@ -141,6 +196,7 @@ export default function AppDetailPage() {
             ))}
           </div>
         ) : (
+          /* Default Sidebar (Overview) */
           <>
             <div className="space-y-1">
               {appNavItems.map((item) => (
@@ -192,38 +248,6 @@ export default function AppDetailPage() {
                   )
                 })}
               </div>
-              {sandboxes.length > 0 && (
-                <>
-                  <div className="h-px bg-[#262626] my-2" />
-                  <div className="space-y-1">
-                    {sandboxes.map((sName: string) => {
-                      const isActive = selectedSandbox === sName
-                      return (
-                        <button
-                          key={sName}
-                          onClick={() => {
-                            setSelectedSandbox(sName)
-                            setNavTab(sName)
-                          }}
-                          className={classNames(
-                            'w-full text-left rounded-lg p-2.5 transition-colors',
-                            isActive
-                              ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
-                              : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
-                          )}
-                        >
-                          <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
-                            {sName}
-                          </div>
-                          <div className="text-gray-400 text-[10px] font-mono mt-1">
-                            Sandbox
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </>
-              )}
             </div>
           </>
         )}
@@ -516,8 +540,12 @@ export default function AppDetailPage() {
               {functionTab === 'Metrics' && <FunctionMetrics />}
               {functionTab === 'Details' && <FunctionDetails />}
               {functionTab === 'Files' && <FunctionFiles />}
-              {functionTab === 'App Logs' && <AppLogs appName={appName} />}
             </>
+          )}
+
+          {/* ==================== APP LOGS (Function View) ==================== */}
+          {isFunctionView && navTab === 'App Logs' && (
+            <AppLogs appName={appName} />
           )}
 
           {/* ==================== SANDBOX VIEW ==================== */}
