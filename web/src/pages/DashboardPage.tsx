@@ -9,6 +9,20 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 type FilterType = 'deployer' | 'tag' | null
 type SortType = 'recent' | 'alphabetical' | 'newest' | 'oldest' | 'activity'
 
+// Mock sandbox apps
+const mockSandboxApps: App[] = [
+  {
+    id: 'sandbox-app-1',
+    name: 'hermes-agent-sandbox',
+    environment_id: 'main',
+    status: 'active',
+    type: 'sandbox',
+    deployer_name: 'adrian-tucicovenco',
+    created_at: '2026-06-05T10:00:00Z',
+    updated_at: '2026-06-06T04:34:00Z',
+  },
+]
+
 export default function DashboardPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
   const { data: apps } = useApps(environment)
@@ -18,16 +32,30 @@ export default function DashboardPage() {
   const [filterValue, setFilterValue] = useState<string | null>(null)
   const [sortType, setSortType] = useState<SortType>('recent')
 
+  // Combine real apps with mock sandbox apps
+  const allApps = useMemo(() => {
+    const combined = [...(apps ?? [])]
+    // Add mock sandbox apps if not already present
+    mockSandboxApps.forEach((mockApp) => {
+      if (!combined.find((a) => a.id === mockApp.id)) {
+        combined.push(mockApp)
+      }
+    })
+    return combined
+  }, [apps])
+
   // Only show apps that have at least one sandbox
   const appIdsWithSandboxes = useMemo(() => {
     const ids = new Set<string>()
     sandboxes?.forEach((s) => ids.add(s.app_id))
+    // Also add mock sandbox app ids
+    mockSandboxApps.forEach((a) => ids.add(a.id))
     return ids
   }, [sandboxes])
 
   const appsWithSandboxes = useMemo(
-    () => apps?.filter((a) => appIdsWithSandboxes.has(a.id)) ?? [],
-    [apps, appIdsWithSandboxes]
+    () => allApps?.filter((a) => appIdsWithSandboxes.has(a.id)) ?? [],
+    [allApps, appIdsWithSandboxes]
   )
 
   const liveApps = appsWithSandboxes.filter(
@@ -422,6 +450,7 @@ function AppCard({
   const instances = app.instances ?? []
   const ownerInitial = (app.deployer_name || workspace || 'A')[0].toUpperCase()
   const isMultiFunction = functions.length > 1
+  const isSandbox = app.type === 'sandbox'
 
   const getBadgesForFn = (fn: string) => {
     const instance = instances.find((i) => i.name === fn)
@@ -455,16 +484,34 @@ function AppCard({
         </div>
       </div>
 
-      {/* Function rows */}
-      <div
-        className={`bg-transparent flex flex-col ${
-          isMultiFunction ? 'space-y-3.5' : 'gap-1'
-        }`}
-      >
-        {functions.map((fn: string) => (
-          <FunctionRow key={fn} fn={fn} badges={getBadgesForFn(fn)} />
-        ))}
-      </div>
+      {/* Function rows or Sandbox row */}
+      {isSandbox ? (
+        <div className="flex items-center justify-between hover:bg-[#1f1f1f] transition-colors px-4 py-3">
+          <div className="flex items-center">
+            <span className="font-mono text-xs text-gray-300 pl-4 relative before:content-[''] before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:w-1.5 before:h-1.5 before:border before:border-gray-600 before:rounded-full">
+              {app.name}
+            </span>
+            <div className="flex items-center gap-1.5 ml-4">
+              <span className="bg-[#1f1f1f] border border-[#2d2d2d] text-gray-400 font-mono text-[11px] px-1.5 py-0.5 rounded">
+                Sandbox
+              </span>
+            </div>
+          </div>
+          <span className="text-gray-700 text-[11px] font-mono tracking-[0.2em] select-none">
+            -----------------------
+          </span>
+        </div>
+      ) : (
+        <div
+          className={`bg-transparent flex flex-col ${
+            isMultiFunction ? 'space-y-3.5' : 'gap-1'
+          }`}
+        >
+          {functions.map((fn: string) => (
+            <FunctionRow key={fn} fn={fn} badges={getBadgesForFn(fn)} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

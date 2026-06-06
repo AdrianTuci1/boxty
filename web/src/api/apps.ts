@@ -13,6 +13,7 @@ export interface App {
   deployer_name?: string
   created_at: string
   updated_at: string
+  type?: 'function' | 'sandbox'
 }
 
 export interface InstanceConfig {

@@ -16,10 +16,14 @@ import FunctionMetrics from '../components/FunctionMetrics'
 import FunctionDetails from '../components/FunctionDetails'
 import FunctionFiles from '../components/FunctionFiles'
 import AppLogs from '../components/AppLogs'
+import SandboxMetrics from '../components/SandboxMetrics'
 
 const appNavItems = ['Overview', 'Deployment History', 'Usage'] as const
 const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files', 'App Logs'] as const
 const hours = ['03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM', 'Fri 05', '03 AM']
+
+// Mock sandboxes data
+const mockSandboxes = ['sandbox-1']
 
 // Mock usage chart data
 const usageChartData = [
@@ -59,20 +63,27 @@ export default function AppDetailPage() {
 
   const [navTab, setNavTab] = useState<string>('Overview')
   const [selectedFunction, setSelectedFunction] = useState<string>('')
+  const [selectedSandbox, setSelectedSandbox] = useState<string>('')
   const [functionTab, setFunctionTab] = useState<string>('Function Calls')
   const [showDeployments, setShowDeployments] = useState(true)
 
   const app = appQ.data
   const functions = app?.functions ?? app?.endpoints ?? ['fastapi_app']
+  const sandboxes = (app as any)?.sandboxes ?? mockSandboxes
   const instances = app?.instances ?? []
 
-  // Auto-select first function when data loads
+  // Auto-select first function or sandbox when data loads
   useEffect(() => {
-    if (functions.length > 0 && !selectedFunction && navTab === 'Overview') {
-      setSelectedFunction(functions[0])
-      setNavTab(functions[0])
+    if (navTab === 'Overview') {
+      if (functions.length > 0 && !selectedFunction) {
+        setSelectedFunction(functions[0])
+        setNavTab(functions[0])
+      } else if (sandboxes.length > 0 && !selectedSandbox && functions.length === 0) {
+        setSelectedSandbox(sandboxes[0])
+        setNavTab(sandboxes[0])
+      }
     }
-  }, [functions, selectedFunction, navTab])
+  }, [functions, sandboxes, selectedFunction, selectedSandbox, navTab])
 
   const fn = selectedFunction || functions[0]
   const activeInstance = instances.find((i) => i.name === fn)
@@ -106,7 +117,8 @@ export default function AppDetailPage() {
   }, [deploymentsQ.data])
 
   // Check if we're in function view mode
-  const isFunctionView = navTab !== 'Overview' && navTab !== 'Deployment History' && navTab !== 'Usage'
+  const isFunctionView = functions.includes(navTab)
+  const isSandboxView = sandboxes.includes(navTab)
 
   return (
     <div className="flex h-full">
@@ -162,6 +174,38 @@ export default function AppDetailPage() {
               )
             })}
           </div>
+          {sandboxes.length > 0 && (
+            <>
+              <div className="h-px bg-[#262626] my-2" />
+              <div className="space-y-1">
+                {sandboxes.map((sName: string) => {
+                  const isActive = selectedSandbox === sName
+                  return (
+                    <button
+                      key={sName}
+                      onClick={() => {
+                        setSelectedSandbox(sName)
+                        setNavTab(sName)
+                      }}
+                      className={classNames(
+                        'w-full text-left rounded-lg p-2.5 transition-colors',
+                        isActive
+                          ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
+                          : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
+                      )}
+                    >
+                      <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
+                        {sName}
+                      </div>
+                      <div className="text-gray-400 text-[10px] font-mono mt-1">
+                        Sandbox
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -454,6 +498,11 @@ export default function AppDetailPage() {
               {functionTab === 'Files' && <FunctionFiles />}
               {functionTab === 'App Logs' && <AppLogs appName={appName} />}
             </>
+          )}
+
+          {/* ==================== SANDBOX VIEW ==================== */}
+          {isSandboxView && (
+            <SandboxMetrics appName={appName} />
           )}
 
           {/* ==================== USAGE ==================== */}

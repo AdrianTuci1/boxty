@@ -15,7 +15,7 @@ import ImagesPage from './pages/ImagesPage'
 import SchedulesPage from './pages/SchedulesPage'
 import StoragePage from './pages/StoragePage'
 import VolumeDetailPage from './pages/VolumeDetailPage'
-import StoppedApps from './components/StoppedApps'
+import LogsPage from './pages/LogsPage'
 import SettingsLayout from './pages/SettingsPage'
 import ProfilePage from './pages/settings/ProfilePage'
 import WorkspacesListPage from './pages/settings/WorkspacesListPage'
@@ -37,7 +37,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/apps/:workspace/:environment" element={<DashboardPage />} />
         <Route path="/apps/:workspace/:environment/:appId" element={<AppDetailPage />} />
-        <Route path="/logs/:workspace/:environment" element={<StoppedApps />} />
+        <Route path="/logs/:workspace/:environment" element={<LogsPage />} />
         <Route path="/secrets/:workspace/:environment" element={<SecretsPage />} />
         <Route path="/secrets/:workspace/:environment/create" element={<CreateSecretPage />} />
         <Route path="/storage/:workspace/:environment" element={<StoragePage />} />
