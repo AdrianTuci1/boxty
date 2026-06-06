@@ -9,6 +9,56 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 type FilterType = 'deployer' | 'tag' | null
 type SortType = 'recent' | 'alphabetical' | 'newest' | 'oldest' | 'activity'
 
+// Mock apps for display
+const mockApps: App[] = [
+  {
+    id: 'app-1',
+    name: 'hermes-agent',
+    environment_id: 'main',
+    status: 'active',
+    type: 'function',
+    deployer_name: 'adrian-tucicovenco',
+    created_at: '2026-06-01T10:00:00Z',
+    updated_at: '2026-06-06T08:30:00Z',
+    functions: ['fastapi_app', 'web_endpoint', 'background_task'],
+    instances: [
+      { id: 'inst-1', app_id: 'app-1', name: 'fastapi_app', cpu: 1, memory: 512, gpu: null, min_containers: 0, max_containers: 10, scaledown_window: 60, running_containers: 2, status: 'running', created_at: '2026-06-01T10:00:00Z' },
+      { id: 'inst-2', app_id: 'app-1', name: 'web_endpoint', cpu: 0.5, memory: 256, gpu: null, min_containers: 0, max_containers: 5, scaledown_window: 60, running_containers: 1, status: 'running', created_at: '2026-06-01T10:00:00Z' },
+      { id: 'inst-3', app_id: 'app-1', name: 'background_task', cpu: 0.5, memory: 256, gpu: null, min_containers: 0, max_containers: 3, scaledown_window: 60, running_containers: 0, status: 'stopped', created_at: '2026-06-01T10:00:00Z' },
+    ],
+  },
+  {
+    id: 'app-2',
+    name: 'data-processor',
+    environment_id: 'main',
+    status: 'active',
+    type: 'function',
+    deployer_name: 'adrian-tucicovenco',
+    created_at: '2026-06-03T14:00:00Z',
+    updated_at: '2026-06-05T16:45:00Z',
+    functions: ['process_data', 'generate_report'],
+    instances: [
+      { id: 'inst-4', app_id: 'app-2', name: 'process_data', cpu: 2, memory: 1024, gpu: null, min_containers: 0, max_containers: 5, scaledown_window: 60, running_containers: 1, status: 'running', created_at: '2026-06-03T14:00:00Z' },
+      { id: 'inst-5', app_id: 'app-2', name: 'generate_report', cpu: 1, memory: 512, gpu: null, min_containers: 0, max_containers: 3, scaledown_window: 60, running_containers: 0, status: 'stopped', created_at: '2026-06-03T14:00:00Z' },
+    ],
+  },
+  {
+    id: 'app-3',
+    name: 'ml-inference',
+    environment_id: 'main',
+    status: 'stopped',
+    type: 'function',
+    deployer_name: 'adrian-tucicovenco',
+    created_at: '2026-05-20T09:00:00Z',
+    updated_at: '2026-06-02T11:20:00Z',
+    functions: ['predict', 'train_model'],
+    instances: [
+      { id: 'inst-6', app_id: 'app-3', name: 'predict', cpu: 4, memory: 8192, gpu: 'T4', min_containers: 0, max_containers: 2, scaledown_window: 120, running_containers: 0, status: 'stopped', created_at: '2026-05-20T09:00:00Z' },
+      { id: 'inst-7', app_id: 'app-3', name: 'train_model', cpu: 8, memory: 16384, gpu: 'A100', min_containers: 0, max_containers: 1, scaledown_window: 300, running_containers: 0, status: 'stopped', created_at: '2026-05-20T09:00:00Z' },
+    ],
+  },
+]
+
 // Mock sandbox apps
 const mockSandboxApps: App[] = [
   {
@@ -32,9 +82,15 @@ export default function DashboardPage() {
   const [filterValue, setFilterValue] = useState<string | null>(null)
   const [sortType, setSortType] = useState<SortType>('recent')
 
-  // Combine real apps with mock sandbox apps
+  // Combine real apps with mock apps
   const allApps = useMemo(() => {
     const combined = [...(apps ?? [])]
+    // Add mock apps if not already present
+    mockApps.forEach((mockApp) => {
+      if (!combined.find((a) => a.id === mockApp.id)) {
+        combined.push(mockApp)
+      }
+    })
     // Add mock sandbox apps if not already present
     mockSandboxApps.forEach((mockApp) => {
       if (!combined.find((a) => a.id === mockApp.id)) {
