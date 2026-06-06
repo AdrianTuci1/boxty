@@ -3,7 +3,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
   BarChart, Bar, CartesianGrid, Legend,
 } from 'recharts'
-import { ChevronDown, Pause } from 'lucide-react'
+import { ChevronDown, Pause, Filter, Info, Clock } from 'lucide-react'
 
 const hours = ['Sat 06', '03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM']
 
@@ -63,6 +63,24 @@ const startupData = [
   { t: '12', p50: 600, p90: 1200, p99: 2400 },
   { t: '16', p50: 450, p90: 900, p99: 1800 },
   { t: '20', p50: 700, p90: 1400, p99: 2800 },
+]
+
+// Mock sandbox instances data
+const sandboxInstances = [
+  {
+    id: '1',
+    createdAt: 'Jun 6, 2026, 04:34:35',
+    timeToStarted: '904ms',
+    lifetime: '1m 8s',
+    status: 'Terminated',
+  },
+  {
+    id: '2',
+    createdAt: 'Jun 6, 2026, 04:04:43',
+    timeToStarted: '1.12s',
+    lifetime: '8m 58s',
+    status: 'Terminated',
+  },
 ]
 
 interface MetricCardProps {
@@ -330,8 +348,72 @@ export default function SandboxMetrics({ appName }: { appName: string }) {
       )}
 
       {activeTab === 'Sandboxes' && (
-        <div className="text-center text-gray-500 text-sm py-12">
-          No sandboxes found.
+        <div className="flex flex-col h-full">
+          {/* Add Filter Button */}
+          <button className="mb-4 inline-flex items-center rounded-lg border border-[#262626] bg-transparent px-4 py-2 text-sm text-gray-300 transition-colors hover:bg-[#1f1f1f] hover:text-white w-fit">
+            <Filter className="h-4 w-4 mr-2" />
+            Add filter
+          </button>
+
+          {/* Table Container */}
+          <div className="overflow-hidden rounded-lg border border-[#262626]">
+            <table className="w-full">
+              {/* Table Header */}
+              <thead>
+                <tr className="border-b border-[#262626] bg-[#161616]">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400">
+                    Created (EEST)
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400">
+                    <span className="inline-flex items-center">
+                      Time to Started
+                      <Info className="h-3 w-3 ml-1 text-gray-500" />
+                    </span>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400">
+                    <span className="inline-flex items-center">
+                      Lifetime
+                      <Info className="h-3 w-3 ml-1 text-gray-500" />
+                    </span>
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-400">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+
+              {/* Table Body */}
+              <tbody className="divide-y divide-[#262626] bg-[#111111]">
+                {sandboxInstances.map((instance) => (
+                  <tr
+                    key={instance.id}
+                    className="transition-colors hover:bg-[#1a1a1a]"
+                  >
+                    <td className="px-6 py-4 text-sm text-gray-300 font-mono">
+                      {instance.createdAt}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-300 font-mono">
+                      {instance.timeToStarted}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-300 font-mono">
+                      {instance.lifetime}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="inline-flex items-center rounded-full px-3 py-1 text-xs bg-[#262626] text-gray-300">
+                        <Clock className="h-3 w-3 mr-1.5" />
+                        {instance.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Footer Message */}
+          <p className="mt-6 text-center text-sm italic text-gray-500">
+            Change the time interval to see more results.
+          </p>
         </div>
       )}
     </div>
