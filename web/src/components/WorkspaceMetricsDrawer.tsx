@@ -74,7 +74,7 @@ export function WorkspaceMetricsDrawer() {
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setIsOpen(false)} />
-      <div className="fixed inset-y-0 right-0 w-[480px] bg-[#111111] border-l border-[#262626] z-50 flex flex-col">
+      <div className="fixed inset-y-0 right-0 w-[600px] bg-[#111111] border-l border-[#262626] z-50 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-[#262626]">
           <h2 className="text-lg font-semibold text-white">Workspace metrics</h2>
