@@ -165,12 +165,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div>
-      {/* Page title */}
-      <h1 className="text-[26px] font-semibold text-white tracking-tight mb-5">Apps</h1>
+    <div className="flex flex-col h-full">
+      {/* Page title - fixed */}
+      <h1 className="text-[26px] font-semibold text-white tracking-tight mb-5 shrink-0">Apps</h1>
 
-      {/* Filter pills row */}
-      <div className="flex items-center justify-between w-full mb-4">
+      {/* Filter pills row - fixed */}
+      <div className="flex items-center justify-between w-full mb-4 shrink-0">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setFilter('live')}
@@ -221,8 +221,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Search & Sort toolbar */}
-      <div className="flex items-center justify-between w-full mb-6">
+      {/* Search & Sort toolbar - fixed */}
+      <div className="flex items-center justify-between w-full mb-6 shrink-0">
         <SearchFilterDropdown
           filterType={filterType}
           filterValue={filterValue}
@@ -240,8 +240,8 @@ export default function DashboardPage() {
         <SortDropdown sortType={sortType} sortLabels={sortLabels} onSelect={setSortType} />
       </div>
 
-      {/* App listing */}
-      <div className="flex flex-col gap-4 w-full">
+      {/* App listing - scrollable */}
+      <div className="flex flex-col gap-4 w-full overflow-y-auto flex-1 min-h-0">
         {sortedApps.length === 0 && (
           <p className="text-sm text-gray-500 py-8 text-center">No apps to display.</p>
         )}
