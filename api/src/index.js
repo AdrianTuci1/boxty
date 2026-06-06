@@ -29,6 +29,7 @@ import appRoutes from './routes/apps.js';
 import routeRoutes from './routes/route.js';
 import scheduleRoutes from './routes/schedules.js';
 import adminRoutes from './routes/admin.js';
+import dashboardRoutes from './routes/dashboard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,6 +62,7 @@ await app.register(appRoutes, { prefix: '/api/apps' });
 await app.register(routeRoutes);
 await app.register(scheduleRoutes, { prefix: '/api/schedules' });
 await app.register(adminRoutes, { prefix: '/api/admin' });
+await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
 
 await app.register(fastifyStatic, {
   root: path.join(__dirname, '../docs'),
