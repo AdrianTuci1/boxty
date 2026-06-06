@@ -23,7 +23,12 @@ const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', '
 const hours = ['03 AM', '06 AM', '09 AM', '12 PM', '03 PM', '06 PM', '09 PM', 'Fri 05', '03 AM']
 
 // Mock sandboxes data
-const mockSandboxes = ['sandbox-1']
+const mockSandboxes = [
+  'hermes-agent-sandbox',
+  'data-processor-sandbox', 
+  'ml-inference-sandbox',
+  'web-scraper-sandbox'
+]
 
 // Mock usage chart data
 const usageChartData = [
@@ -72,18 +77,13 @@ export default function AppDetailPage() {
   const sandboxes = (app as any)?.sandboxes ?? mockSandboxes
   const instances = app?.instances ?? []
 
-  // Auto-select first function or sandbox when data loads
+  // Auto-select first function when in Overview and functions exist
   useEffect(() => {
-    if (navTab === 'Overview') {
-      if (functions.length > 0 && !selectedFunction) {
-        setSelectedFunction(functions[0])
-        setNavTab(functions[0])
-      } else if (sandboxes.length > 0 && !selectedSandbox && functions.length === 0) {
-        setSelectedSandbox(sandboxes[0])
-        setNavTab(sandboxes[0])
-      }
+    if (navTab === 'Overview' && functions.length > 0 && !selectedFunction) {
+      setSelectedFunction(functions[0])
+      setNavTab(functions[0])
     }
-  }, [functions, sandboxes, selectedFunction, selectedSandbox, navTab])
+  }, [functions, selectedFunction, navTab])
 
   const fn = selectedFunction || functions[0]
   const activeInstance = instances.find((i) => i.name === fn)
@@ -119,6 +119,13 @@ export default function AppDetailPage() {
   // Check if we're in function view mode
   const isFunctionView = functions.includes(navTab)
   const isSandboxView = sandboxes.includes(navTab)
+
+  // Auto-select first sandbox when in sandbox view
+  useEffect(() => {
+    if (isSandboxView && sandboxes.length > 0 && !selectedSandbox) {
+      setSelectedSandbox(sandboxes[0])
+    }
+  }, [isSandboxView, sandboxes, selectedSandbox])
 
   return (
     <div className="flex h-full">
@@ -181,20 +188,56 @@ export default function AppDetailPage() {
           </>
         ) : isSandboxView ? (
           /* Sandbox Sidebar */
-          <div className="space-y-1">
-            {['Sandboxes', 'Deployment History', 'App Logs', 'Usage'].map((item) => (
-              <button
-                key={item}
-                onClick={() => setNavTab(item)}
-                className={classNames(
-                  'w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors',
-                  navTab === item ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white'
-                )}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="space-y-1">
+              {['Sandboxes', 'Deployment History', 'App Logs', 'Usage'].map((item) => (
+                <button
+                  key={item}
+                  onClick={() => setNavTab(item)}
+                  className={classNames(
+                    'w-full rounded-md px-3 py-2 text-left text-xs font-medium transition-colors',
+                    navTab === item ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white'
+                  )}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            <div className="h-px bg-[#262626]" />
+            <div className="space-y-1 flex-1">
+              <div className="flex items-center gap-2 rounded-md border border-[#262626] bg-transparent px-3 py-1.5 mb-2">
+                <Search className="h-3.5 w-3.5 text-gray-600 shrink-0" />
+                <input className="flex-1 bg-transparent text-xs text-white outline-none placeholder:text-gray-600" placeholder="Search sandboxes" />
+              </div>
+              <div className="space-y-1">
+                {sandboxes.map((sName: string) => {
+                  const isActive = selectedSandbox === sName
+                  return (
+                    <button
+                      key={sName}
+                      onClick={() => {
+                        setSelectedSandbox(sName)
+                        setNavTab(sName)
+                      }}
+                      className={classNames(
+                        'w-full text-left rounded-lg p-2.5 transition-colors',
+                        isActive
+                          ? 'bg-[#142920]/40 border border-[#1e3f31] border-l-2 border-l-[#34d399]'
+                          : 'bg-transparent border border-transparent hover:bg-[#1a1a1a]'
+                      )}
+                    >
+                      <div className={classNames('font-mono text-xs font-semibold', isActive ? 'text-[#34d399]' : 'text-gray-300')}>
+                        {sName}
+                      </div>
+                      <div className="text-gray-400 text-[10px] font-mono mt-1">
+                        Sandbox
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </>
         ) : (
           /* Default Sidebar (Overview) */
           <>
