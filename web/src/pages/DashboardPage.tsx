@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useApps } from '../hooks/useApps'
-import { useSandboxes } from '../hooks/useSandboxes'
 import type { App } from '../api/apps'
 import { Cloud, XCircle, Search, ScrollText, ChevronDown, Globe, ChevronRight, Check, ArrowLeft } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
@@ -76,8 +75,7 @@ const mockSandboxApps: App[] = [
 export default function DashboardPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
   const { data: apps } = useApps(environment)
-  const { data: sandboxes } = useSandboxes()
-  const [filter, setFilter] = useState<'all' | 'live' | 'stopped'>('all')
+  const [filter, setFilter] = useState<'all' | 'live' | 'stopped'>('live')
   const [filterType, setFilterType] = useState<FilterType>(null)
   const [filterValue, setFilterValue] = useState<string | null>(null)
   const [sortType, setSortType] = useState<SortType>('recent')
@@ -100,19 +98,8 @@ export default function DashboardPage() {
     return combined
   }, [apps])
 
-  // Only show apps that have at least one sandbox
-  const appIdsWithSandboxes = useMemo(() => {
-    const ids = new Set<string>()
-    sandboxes?.forEach((s) => ids.add(s.app_id))
-    // Also add mock sandbox app ids
-    mockSandboxApps.forEach((a) => ids.add(a.id))
-    return ids
-  }, [sandboxes])
-
-  const appsWithSandboxes = useMemo(
-    () => allApps?.filter((a) => appIdsWithSandboxes.has(a.id)) ?? [],
-    [allApps, appIdsWithSandboxes]
-  )
+  // Use all apps directly without sandbox filtering
+  const appsWithSandboxes = allApps
 
   const liveApps = appsWithSandboxes.filter(
     (a) => a.status === 'active' || a.status === 'running'
