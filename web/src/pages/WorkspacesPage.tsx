@@ -17,7 +17,8 @@ export default function WorkspacesPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Workspaces</h1>
         <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-gray-200 transition-colors">
@@ -50,6 +51,7 @@ export default function WorkspacesPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

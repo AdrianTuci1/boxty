@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listApps, stopApp, deleteApp, type App } from '../api/apps'
 import { useAuth } from './useAuth'
-import { mockApps } from '../core/mocks/apps.mock'
+import { mockApps, mockSandboxApps } from '../core/mocks/apps.mock'
 import { shouldUseMocks } from '../core/services/mock-decider.service'
 import { getFilteredAndSortedApps, getLiveApps, getStoppedApps } from '../core/services/app.service'
 import type { AppFilter } from '../core/use-cases/filter-apps.use-case'
@@ -34,7 +34,8 @@ export function useApps(envId?: string) {
     queryKey: ['apps', envId],
     queryFn: async () => {
       if (useMocks) {
-        return mockApps.map((m) => ({
+        const allMocks = [...mockApps, ...mockSandboxApps]
+        return allMocks.map((m) => ({
           ...m,
           environment_id: m.environmentId,
           deployer_name: m.deployerName,
@@ -44,6 +45,35 @@ export function useApps(envId?: string) {
       }
       const raw = await listApps(envId)
       return combineApps(raw)
+    },
+    staleTime: useMocks ? Infinity : 30000,
+  })
+}
+
+export function useAppById(appId?: string) {
+  const { devMode } = useAuth()
+  const useMocks = devMode || shouldUseMocks()
+
+  return useQuery<App>({
+    queryKey: ['apps', appId],
+    enabled: !!appId,
+    queryFn: async () => {
+      if (useMocks) {
+        const allMocks = [...mockApps, ...mockSandboxApps]
+        const found = allMocks.find((m) => m.id === appId)
+        if (found) {
+          return {
+            ...found,
+            environment_id: found.environmentId,
+            deployer_name: found.deployerName,
+            created_at: found.createdAt.toISOString(),
+            updated_at: found.updatedAt.toISOString(),
+          } as unknown as App
+        }
+        throw new Error(`Mock app not found: ${appId}`)
+      }
+      const { getApp } = await import('../api/apps')
+      return getApp(appId!)
     },
     staleTime: useMocks ? Infinity : 30000,
   })

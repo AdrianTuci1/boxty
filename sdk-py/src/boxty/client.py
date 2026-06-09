@@ -1,4 +1,7 @@
 from __future__ import annotations
+import json
+import os
+from pathlib import Path
 import httpx
 from typing import Any, List, Optional
 from .sandbox import Sandbox
@@ -10,6 +13,27 @@ from .volume import Volume
 from .workspace import Workspace
 from .environment import Environment
 from .exceptions import BoxtyAPIError
+
+def _config_path() -> Path:
+    return Path.home() / ".boxty" / "config.json"
+
+def _load_config() -> dict:
+    try:
+        p = _config_path()
+        if p.exists():
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_config(data: dict) -> None:
+    p = _config_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    cfg = _load_config()
+    cfg.update(data)
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
 
 class Client:
     def __init__(self, api_key: Optional[str] = None, base_url: str = "https://api.boxty.dev"):

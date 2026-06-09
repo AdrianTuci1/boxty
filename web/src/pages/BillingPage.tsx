@@ -15,11 +15,16 @@ export default function BillingPage() {
 
   const handleBuy = async () => {
     const res = await createCheckoutSession()
-    window.location.href = res.url
+    if (res.checkout_url) {
+      window.location.href = res.checkout_url
+    } else if (res.dev_mode) {
+      alert(`Dev mode: ${res.credits_added} credits added`)
+    }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6 space-y-6">
       <h1 className="text-xl font-bold text-white">Billing</h1>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <MetricBlock title="Credit Balance" value={balance ? `${balance.credits} ${balance.currency}` : '...'} />
@@ -63,6 +68,7 @@ export default function BillingPage() {
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   )

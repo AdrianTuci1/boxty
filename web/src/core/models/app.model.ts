@@ -41,9 +41,15 @@ export function mapAppFromApi(raw: Record<string, any>): AppModel {
     status: (raw.status as AppStatus) ?? 'active',
     type: (raw.type as AppType) ?? 'function',
     deployerName: raw.deployer_name ?? raw.deployerName ?? '',
-    image: raw.image ?? raw.image_url,
+    image: raw.image ?? raw.image_url ?? raw.base_image,
     url: raw.url,
-    functions: raw.functions ?? raw.endpoints ?? [],
+    functions: (raw.functions && raw.functions.length > 0)
+      ? raw.functions
+      : (raw.endpoints && raw.endpoints.length > 0)
+      ? raw.endpoints
+      : (raw.instances && raw.instances.length > 0)
+      ? raw.instances.map((i: any) => i.name)
+      : [],
     instances: (raw.instances ?? []).map(mapInstanceFromApi),
     createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
     updatedAt: new Date(raw.updated_at ?? raw.updatedAt ?? Date.now()),

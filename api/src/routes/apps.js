@@ -20,6 +20,7 @@ export default async function appRoutes(app) {
       image: req.body.image,
       timeout: req.body.timeout || 3600,
       status: 'active',
+      type: req.body.type || 'function',
       created_at: new Date().toISOString(),
     };
     await putItem(item);
@@ -33,7 +34,17 @@ export default async function appRoutes(app) {
     const out = [];
     for (const it of apps) {
       const a = await getItem(`APP#${it.app_id}`, 'META');
-      if (a) out.push(a);
+      if (a) {
+        // Include instance configs
+        const instances = await queryByPK(`APP_INSTANCES#${it.app_id}`);
+        const instOut = [];
+        for (const idx of instances) {
+          const inst = await getItem(`APP_INSTANCE#${idx.instance_id}`, 'META');
+          if (inst) instOut.push(inst);
+        }
+        a.instances = instOut;
+        out.push(a);
+      }
     }
     reply.send(out);
   });

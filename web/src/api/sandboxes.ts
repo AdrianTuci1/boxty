@@ -36,7 +36,7 @@ export function getSandbox(id: string) {
 }
 
 export function stopSandbox(id: string) {
-  return apiFetch<void>(`/sandboxes/${id}/stop`, { method: 'POST' })
+  return apiFetch<void>(`/sandboxes/${id}`, { method: 'DELETE' })
 }
 
 export function execSandbox(id: string, command: string) {

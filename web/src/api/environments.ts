@@ -8,16 +8,16 @@ export interface Environment {
 }
 
 export function listEnvironments(workspaceId: string) {
-  return apiFetch<Environment[]>(`/workspaces/${workspaceId}/environments`)
+  return apiFetch<Environment[]>(`/environments?workspace_id=${workspaceId}`)
 }
 
-export function createEnvironment(workspaceId: string, name: string) {
-  return apiFetch<Environment>(`/workspaces/${workspaceId}/environments`, {
+export function createEnvironment(workspaceId: string, name: string, type?: string) {
+  return apiFetch<Environment>('/environments', {
     method: 'POST',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ workspace_id: workspaceId, name, type }),
   })
 }
 
-export function deleteEnvironment(workspaceId: string, envId: string) {
-  return apiFetch<void>(`/workspaces/${workspaceId}/environments/${envId}`, { method: 'DELETE' })
+export function deleteEnvironment(envId: string) {
+  return apiFetch<void>(`/environments/${envId}`, { method: 'DELETE' })
 }

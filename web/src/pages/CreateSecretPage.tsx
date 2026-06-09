@@ -86,7 +86,8 @@ export default function CreateSecretPage() {
   }
 
   return (
-    <div className="flex gap-10">
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6 flex gap-10">
       {/* Left column — Back */}
       <div className="w-32 shrink-0">
         <button
@@ -202,6 +203,7 @@ export default function CreateSecretPage() {
             {submitting ? 'Saving…' : 'Done'}
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

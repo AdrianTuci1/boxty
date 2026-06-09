@@ -83,7 +83,8 @@ export default function VolumeDetailPage() {
   }
 
   return (
-    <div>
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6">
       {/* Volume header */}
       <div className="flex items-start justify-between">
         <div>
@@ -244,6 +245,7 @@ export default function VolumeDetailPage() {
             <span className="w-24 text-gray-300 font-mono">{entry.size || ''}</span>
           </div>
         ))}
+      </div>
       </div>
     </div>
   )

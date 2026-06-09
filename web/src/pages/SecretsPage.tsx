@@ -16,7 +16,8 @@ export default function SecretsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Secrets</h1>
         <button onClick={() => navigate(`/secrets/${workspace}/${environment}/create`)} className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-gray-200 transition-colors">
@@ -39,16 +40,17 @@ export default function SecretsPage() {
               <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No secrets yet.</td></tr>
             )}
             {data?.map((s) => (
-              <tr key={s.id} className="bg-[#161616]">
+              <tr key={s.name} className="bg-[#161616]">
                 <td className="px-4 py-3 text-white font-medium">{s.name}</td>
                 <td className="px-4 py-3 text-gray-500">{new Date(s.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3">
-                  <button onClick={() => handleDelete(s.id)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Delete</button>
+                  <button onClick={() => handleDelete(s.name)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Delete</button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
       </div>
     </div>
   )

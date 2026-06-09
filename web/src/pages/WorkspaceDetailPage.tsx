@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getWorkspace } from '../api/workspaces'
-import { listEnvironments, createEnvironment, type Environment } from '../api/environments'
+import { listEnvironments, createEnvironment, deleteEnvironment, type Environment } from '../api/environments'
 import { listApps } from '../api/apps'
 import AppCard from '../components/AppCard'
 import { X } from 'lucide-react'
@@ -30,22 +30,36 @@ export default function WorkspaceDetailPage() {
     qc.invalidateQueries({ queryKey: ['environments', id] })
   }
 
+  const handleDeleteEnv = async (envId: string) => {
+    if (!confirm('Delete environment?')) return
+    await deleteEnvironment(envId)
+    qc.invalidateQueries({ queryKey: ['environments', id] })
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6 space-y-4">
       <h1 className="text-xl font-bold text-white">{workspace?.name ?? 'Workspace'}</h1>
       <div className="flex items-center gap-2 flex-wrap">
         {environments?.map((env) => (
-          <button
-            key={env.id}
-            onClick={() => setActiveEnv(env.id)}
-            className={`rounded-md border px-3 py-1 text-xs transition-colors ${
-              activeEnv === env.id
-                ? 'bg-[#142920] text-[#34d399] border-[#1e3f31]'
-                : 'bg-[#1f1f1f] text-gray-400 border-[#333] hover:text-white'
-            }`}
-          >
-            {env.name}
-          </button>
+          <div key={env.id} className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveEnv(env.id)}
+              className={`rounded-md border px-3 py-1 text-xs transition-colors ${
+                activeEnv === env.id
+                  ? 'bg-[#142920] text-[#34d399] border-[#1e3f31]'
+                  : 'bg-[#1f1f1f] text-gray-400 border-[#333] hover:text-white'
+              }`}
+            >
+              {env.name}
+            </button>
+            <button
+              onClick={() => handleDeleteEnv(env.id)}
+              className="text-gray-600 hover:text-red-400 text-xs px-1"
+            >
+              ×
+            </button>
+          </div>
         ))}
         <button onClick={() => setOpen(true)} className="rounded-md border border-[#333] bg-[#1f1f1f] px-3 py-1 text-xs text-gray-400 hover:text-white transition-colors">+ Environment</button>
       </div>
@@ -72,6 +86,7 @@ export default function WorkspaceDetailPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }

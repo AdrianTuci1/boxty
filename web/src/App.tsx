@@ -40,6 +40,7 @@ function AppRoutes() {
         <Route path="/logs/:workspace/:environment" element={<LogsPage />} />
         <Route path="/secrets/:workspace/:environment" element={<SecretsPage />} />
         <Route path="/secrets/:workspace/:environment/create" element={<CreateSecretPage />} />
+        <Route path="/volumes/:workspace/:environment" element={<StoragePage />} />
         <Route path="/storage/:workspace/:environment" element={<StoragePage />} />
         <Route path="/storage/:workspace/:environment/:volumeName" element={<VolumeDetailPage />} />
         <Route path="/workspaces" element={<WorkspacesPage />} />

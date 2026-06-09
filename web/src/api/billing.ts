@@ -19,5 +19,5 @@ export function listUsage() {
 }
 
 export function createCheckoutSession() {
-  return apiFetch<{ url: string }>('/billing/checkout', { method: 'POST' })
+  return apiFetch<{ checkout_url: string | null; dev_mode?: boolean; credits_added?: number }>('/billing/credits', { method: 'POST' })
 }

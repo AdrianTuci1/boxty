@@ -10,8 +10,6 @@ export default function Layout() {
   const location = useLocation()
   // Sidebar appears only on sandbox detail pages
   const isSandboxDetail = !!location.pathname.match(/^\/sandboxes\//)
-  // App detail pages have their own embedded double sidebar
-  const isAppDetail = !!location.pathname.match(/^\/apps\/[^/]+\/[^/]+\/[^/]+/)
 
   return (
     <CommandPaletteProvider>
@@ -23,7 +21,7 @@ export default function Layout() {
           <SubNavbar />
           <div className="flex flex-1 overflow-hidden">
             {isSandboxDetail && <Sidebar />}
-            <main className={`flex-1 overflow-auto ${!isAppDetail ? 'mx-auto w-full max-w-6xl p-6' : ''}`}>
+            <main className="flex-1 overflow-hidden">
               <Outlet />
             </main>
           </div>

@@ -3,8 +3,8 @@ import { apiFetch } from './client'
 export interface Image {
   id: string
   name: string
-  image_url: string
-  status: 'building' | 'ready' | 'failed'
+  base_image: string
+  status: 'building' | 'done' | 'failed'
   created_at: string
 }
 

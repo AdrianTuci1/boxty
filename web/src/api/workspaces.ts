@@ -3,9 +3,10 @@ import { apiFetch } from './client'
 export interface Workspace {
   id: string
   name: string
+  description?: string
   created_at: string
-  environment_count: number
-  app_count: number
+  environment_count?: number
+  app_count?: number
 }
 
 export function listWorkspaces() {

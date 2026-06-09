@@ -28,7 +28,8 @@ export default function ImagesPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="h-full overflow-y-auto">
+        <div className="max-w-6xl mx-auto w-full p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-white">Images</h1>
         <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-gray-200 transition-colors">
@@ -47,7 +48,7 @@ export default function ImagesPage() {
               <h3 className="text-sm font-semibold text-white">{img.name}</h3>
               <StatusBadge status={img.status} />
             </div>
-            <p className="text-xs text-gray-500 font-mono">{img.image_url}</p>
+            <p className="text-xs text-gray-500 font-mono">{img.base_image}</p>
             <p className="mt-2 text-[11px] text-gray-600">{new Date(img.created_at).toLocaleString()}</p>
             <button onClick={() => handleDelete(img.id)} className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>
           </div>
@@ -71,6 +72,7 @@ export default function ImagesPage() {
           </div>
         </div>
       )}
+      </div>
     </div>
   )
 }
