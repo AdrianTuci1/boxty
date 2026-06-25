@@ -1,0 +1,326 @@
+name: 📦 Publish Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g., 1.2.3)'
+        required: true
+        type: string
+      publish_sdk_python:
+        description: 'Publish Python SDK to PyPI'
+        required: true
+        type: boolean
+        default: true
+      publish_sdk_js:
+        description: 'Publish JS SDK to npm'
+        required: true
+        type: boolean
+        default: true
+      publish_cli:
+        description: 'Build & Publish CLI binaries'
+        required: true
+        type: boolean
+        default: true
+      deploy_web:
+        description: 'Deploy web page to Cloudflare Pages'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  VERSION: ${{ github.event.inputs.version }}
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # 1. VALIDATE
+  # ═══════════════════════════════════════════════════════════
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ env.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ env.VERSION }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Invalid version format. Expected: x.y.z"
+            exit 1
+          fi
+          echo "✅ Version: ${{ env.VERSION }}"
+
+  # ═══════════════════════════════════════════════════════════
+  # 2. SDK PYTHON → PyPI
+  # ═══════════════════════════════════════════════════════════
+  sdk-python-build:
+    needs: validate
+    if: github.event.inputs.publish_sdk_python == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Install deps
+        run: pip install build hatch
+      - name: Update version
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ env.VERSION }}"/' pyproject.toml
+          cat pyproject.toml | grep "^version"
+      - name: Build
+        run: python -m build
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-python-dist
+          path: sdk/python/dist/
+
+  sdk-python-publish:
+    needs: sdk-python-build
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: sdk-python-dist, path: dist }
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: dist
+
+  sdk-python-verify:
+    needs: sdk-python-publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.9', '3.10', '3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/setup-python@v5
+        with: { python-version: '${{ matrix.python }}' }
+      - run: pip install boxty==${{ env.VERSION }}
+      - run: python -c "import boxty; print(boxty.__version__)"
+
+  # ═══════════════════════════════════════════════════════════
+  # 3. SDK JS → npm
+  # ═══════════════════════════════════════════════════════════
+  sdk-js-build:
+    needs: validate
+    if: github.event.inputs.publish_sdk_js == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
+      - run: npm ci
+      - name: Update version
+        run: npm version ${{ env.VERSION }} --no-git-tag-version --allow-same-version
+      - run: npm run build
+      - run: npm pack
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-js-dist
+          path: sdk/js/*.tgz
+
+  sdk-js-publish:
+    needs: sdk-js-build
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', registry-url: 'https://registry.npmjs.org' }
+      - uses: actions/download-artifact@v4
+        with: { name: sdk-js-dist, path: dist }
+      - run: |
+          cd dist
+          npm publish $(ls *.tgz | head -1) --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  sdk-js-verify:
+    needs: sdk-js-publish
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: ['18', '20', '22']
+    steps:
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ matrix.node }}' }
+      - run: npm install @boxty/sdk@${{ env.VERSION }}
+      - run: node -e "const sdk = require('@boxty/sdk'); console.log('OK')"
+
+  # ═══════════════════════════════════════════════════════════
+  # 4. CLI → Cross-platform binaries + Cloudflare R2
+  # ═══════════════════════════════════════════════════════════
+  cli-build:
+    needs: validate
+    if: github.event.inputs.publish_cli == 'true'
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: boxty-linux-x64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: boxty-macos-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: boxty-macos-arm64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            name: boxty-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build release
+        working-directory: cli/sdk
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Prepare binary
+        shell: bash
+        run: |
+          mkdir -p cli-binaries
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp cli/sdk/target/${{ matrix.target }}/release/boxty.exe cli-binaries/${{ matrix.name }}
+          else
+            cp cli/sdk/target/${{ matrix.target }}/release/boxty cli-binaries/${{ matrix.name }}
+          fi
+          ls -la cli-binaries/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-${{ matrix.target }}
+          path: cli-binaries/
+
+  cli-release:
+    needs: cli-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: cli-*
+          path: cli-all
+          merge-multiple: true
+      - name: Show binaries
+        run: ls -la cli-all/
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Generate signing key
+        run: cosign generate-key-pair k8s://boxty/cosign
+        env:
+          COSIGN_PASSWORD: ""
+      - name: Sign binaries
+        run: |
+          for f in cli-all/*; do
+            [ -f "$f" ] || continue
+            cosign sign-blob --yes --key cosign.key --output-signature "${f}.sig" "$f"
+            sha256sum "$f" > "${f}.sha256"
+          done
+        env:
+          COSIGN_PASSWORD: ""
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          name: Boxty CLI v${{ env.VERSION }}
+          files: cli-all/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          pip install awscli
+          for f in cli-all/*; do
+            aws s3 cp "$f" "s3://${R2_BUCKET}/cli/${{ env.VERSION }}/$(basename $f)" --endpoint-url=${AWS_ENDPOINT_URL}
+            aws s3 cp "$f" "s3://${R2_BUCKET}/cli/latest/$(basename $f)" --endpoint-url=${AWS_ENDPOINT_URL}
+          done
+      - name: Upload public key to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT_URL }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          aws s3 cp cosign.pub "s3://${R2_BUCKET}/cli/cosign.pub" --endpoint-url=${AWS_ENDPOINT_URL}
+
+  # ═══════════════════════════════════════════════════════════
+  # 5. WEB → Cloudflare Pages
+  # ═══════════════════════════════════════════════════════════
+  web-build:
+    needs: validate
+    if: github.event.inputs.deploy_web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - run: npm run build
+      - name: Inject CLI download info
+        run: |
+          printf '%s\n' '{' '"version": "${{ env.VERSION }}",' '"platforms": {' '"linux-x64": "boxty-linux-x64",' '"macos-x64": "boxty-macos-x64",' '"macos-arm64": "boxty-macos-arm64",' '"windows-x64": "boxty-windows-x64.exe"' '},' '"baseUrl": "https://cli.boxty.dev"' '}' > dist/cli-info.json
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+
+  web-deploy:
+    needs: [web-build, cli-release]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist, path: web-dist }
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: ${{ secrets.CLOUDFLARE_PAGES_PROJECT }}
+          directory: web-dist
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # ═══════════════════════════════════════════════════════════
+  # 6. SUMMARY
+  # ═══════════════════════════════════════════════════════════
+  summary:
+    needs: [sdk-python-verify, sdk-js-verify, cli-release, web-deploy]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print summary
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║           📦 BOXTY RELEASE v${{ env.VERSION }}                      ║"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║  Python SDK (PyPI):    ${{ needs.sdk-python-verify.result == 'success' && '✅' || '❌' }}                               ║"
+          echo "║  JS SDK (npm):         ${{ needs.sdk-js-verify.result == 'success' && '✅' || '❌' }}                               ║"
+          echo "║  CLI Binaries:         ${{ needs.cli-release.result == 'success' && '✅' || '❌' }}                               ║"
+          echo "║  Web (Cloudflare):     ${{ needs.web-deploy.result == 'success' && '✅' || '❌' }}                               ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "Install:"
+          echo "  pip install boxty==${{ env.VERSION }}"
+          echo "  npm install @boxty/sdk@${{ env.VERSION }}"
+          echo "  curl -fsSL https://cli.boxty.dev/install | sh"

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boxty"
+version = "1.0.0"
+description = "Boxty SDK — interact with secrets, volumes, databases, and app state from your Boxty workloads"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [{name = "Adrian Tucicovenco"}]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = ["httpx>=0.27"]
+
+[project.urls]
+Homepage = "https://github.com/adriantucicovenco/boxty"
+Repository = "https://github.com/adriantucicovenco/boxty"
+
+[tool.hatch.build.targets.wheel]
+packages = ["boxty"]

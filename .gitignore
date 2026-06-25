@@ -19,3 +19,5 @@ sdk-py/*.egg-info/
 .DS_Store
 *.swp
 *.swo
+
+cli/sdk/target

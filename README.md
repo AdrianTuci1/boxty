@@ -1,95 +1,33 @@
-# Boxty — Programmable Sandbox Platform
+# Boxty
 
-**Boxty** e o platformă de sandbox-uri izolate programatic — GPU, scale-to-zero, per-second billing. Inspirat de Modal.
+Boxty is being consolidated around a centralized FastAPI control plane, a dedicated worker runtime, the active CLI, and the existing root `web/` frontend.
 
-```python
-import boxty as bx
+## Active Repository Layout
 
-s = bx.Sandbox.create(image="pytorch:latest", gpu="A100")
-print(s.exec("python train.py").stdout)
-```
-
-## Arhitectură
-
-```
-  CLI / SDK  ──▶  Node.js API  ──▶  Worker Go   ──▶  Sandbox (container)
-  (Python, JS)      │                  │                  │
-                    ▼                  ▼                  ▼
-               DynamoDB          gVisor + runc        S3 volumes
-               Stripe billing    TCP tunnel           ECR registry
-                                 /proc metrics
-```
-
-## Features
-
-| Categorie | Ce oferă |
-|---|---|
-| **Sandbox-uri** | CPU/GPU on-demand, scale-to-zero, idle timeout, snapshots, volumes persistente |
-| **Workspace & RBAC** | Workspace-uri + Environment-uri (`main` default), API keys cu scoping per workspace/env, permissions `read`/`write`/`deploy`/`admin` |
-| **Autentificare** | Register (web), Login (JWT), API keys (`boxty_...`), CLI: `boxty login <key>` / `boxty whoami` |
-| **Billing** | Per-second billing, free trial credits, Stripe Checkout |
-| **GPU** | T4, A10, L40S, A100, H100 — provisioning automat pe AWS (EC2 Spot) |
-| **Build de imagini** | Din Dockerfile sau comenzi, push automat în container registry |
-| **CLI** | `boxty run`, `boxty deploy`, `boxty shell`, `boxty logs`, `boxty forward` |
-| **SDK** | Python + TypeScript — client complet pentru toate resursele API |
-| **Web Dashboard** | React — workspace-uri, sandbox-uri, secrets, billing, API keys |
-| **Infrastructură** | Terraform AWS (EC2, DynamoDB, S3, ECR), Docker Compose (dev local), GitHub Actions CI/CD |
-
-## Structure
-
-```
+```text
 boxty/
-├── api/          # Node.js API server (Fastify)
-│   ├── src/
-│   │   ├── middleware/auth.js     # Auth, register, login, API keys, RBAC
-│   │   ├── routes/                # sandboxes, apps, volumes, secrets, workspaces, environments, billing...
-│   │   └── services/              # cloud-provider, capacity-manager, billing-engine, worker-pool...
-│   └── docs/                      # OpenAPI spec
-├── worker/       # Go worker agent
-│   ├── cmd/worker/                # Main entrypoint
-│   └── internal/                  # sandbox, imagebuilder, secrets, metrics...
-├── sdk-py/       # Python SDK
-│   └── src/boxty/
-│       ├── client.py              # Client: workspaces, sandboxes, apps, secrets, volumes...
-│       └── cli/                   # boxty CLI (login, whoami, run, deploy, shell...)
-├── sdk-js/       # TypeScript SDK
-│   └── src/
-│       ├── client.ts              # Client: same API as Python SDK
-│       └── cli/index.ts           # boxty CLI (same commands)
-├── web/           # React dashboard (Vite + Tailwind)
-│   └── src/
-│       ├── pages/                 # LoginPage, RegisterPage, Dashboard, SettingsPage...
-│       └── api/                   # auth, volumes, secrets, apps...
-├── infra/
-│   ├── docker/                    # Docker Compose (dev local)
-│   ├── terraform/aws/             # AWS: EC2, DynamoDB, S3, ECR, IAM
-│   └── packer/                    # AMI build for worker VMs
-└── scripts/                       # run-boxty.sh (Hermes orchestrator)
+├── control_plane/   # FastAPI control plane, user/worker/admin CLIs, tests
+├── cli/             # Active CLI codebase retained from agentnet
+├── ansible/         # Contabo deployment for control plane and workers
+├── sdk/             # Python and JavaScript SDKs
+├── landing/         # Marketing / landing frontend
+├── web/             # Existing product frontend kept in place for now
+├── docs/            # Current backend/runtime/platform documentation
+├── examples/        # Example workloads and sample apps
+└── scripts/         # Operator and setup scripts
 ```
 
-## Quick Start
+## Current Direction
 
-```bash
-# Dev local
-docker compose -f infra/docker/docker-compose.yml up
+- No new work should depend on the old P2P/Solana architecture.
+- The control plane is the source of truth for users, workspaces, environments, API keys, invites, providers, workloads, and billing.
+- Workers now move toward a provider model that claims workloads from the control plane and executes them locally via Docker or Podman.
+- The root `web/` frontend is intentionally left untouched in this phase.
 
-# Install Python SDK
-cd sdk-py && pip install -e . && cd ..
+## Key Docs
 
-# Register via Web UI → get API key → login
-boxty login boxty_xxxxxxxxxxxx
-
-# Run a sandbox
-boxty run examples/train.py
-```
-
-## Docs
-
-- [Architecture](docs/architecture.md)
-- [Auth & RBAC](docs/auth.md)
-- [Quick Start](docs/quickstart.md)
-- [API Reference](docs/api-reference.md)
-
-## License
-
-MIT
+- [Platform Docs](docs/README.md)
+- [Central Control Plane](docs/central-control-plane.md)
+- [DynamoDB Single Table](docs/dynamodb-single-table.md)
+- [Infrastructure: Contabo + R2](docs/infrastructure-contabo.md)
+- [Runtime Migration Plan](docs/runtime-migration-plan.md)

@@ -1,0 +1,42 @@
+name: Deploy Workers Contabo
+
+on:
+  workflow_dispatch:
+    inputs:
+      inventory_path:
+        description: Ansible inventory path
+        required: true
+        default: ansible/inventory.yml
+      target_group:
+        description: Ansible target group
+        required: true
+        default: boxty_workers
+
+jobs:
+  deploy-workers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Write worker SSH key
+        env:
+          WORKER_SSH_KEY: ${{ secrets.WORKER_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$WORKER_SSH_KEY" > ~/.ssh/boxty_workers
+          chmod 600 ~/.ssh/boxty_workers
+
+      - name: Deploy worker fleet
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "false"
+        run: |
+          ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-workers.yml --limit "${{ inputs.target_group }}"

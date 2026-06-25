@@ -1,0 +1,89 @@
+.vs-ssh-visualizer {
+  background-color: #0c0c0e;
+  border: 1px solid var(--vs-border);
+  border-radius: 8px;
+  overflow: hidden;
+  font-family: 'JetBrains Mono', monospace;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  text-align: left;
+  height: 480px; /* Taller visualizer height to fit the full SSH session logs */
+  display: flex;
+  flex-direction: column;
+}
+
+/* SSH Walkthrough Header */
+.vs-ssh-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 44px;
+  background-color: #09090b;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--vs-border);
+  flex-shrink: 0;
+}
+
+.vs-ssh-middle-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--vs-muted);
+  letter-spacing: 0.15em;
+}
+
+.vs-ssh-time-badge-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vs-accent);
+  letter-spacing: 0.05em;
+}
+
+/* Full Terminal View Body */
+.vs-ssh-terminal-body-full {
+  padding: 24px;
+  background-color: #0c0c0e;
+  flex: 1;
+  overflow-y: auto;
+  color: #e3e3e6;
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.vs-term-line {
+  min-height: 1.8em;
+  margin-bottom: 4px;
+  white-space: pre-wrap;
+}
+
+.vs-term-line.success {
+  color: var(--vs-accent);
+}
+
+.vs-term-line.info {
+  color: var(--vs-muted);
+}
+
+.vs-term-line.log {
+  color: var(--vs-muted-light);
+}
+
+.vs-term-prompt {
+  color: var(--vs-accent);
+  font-weight: bold;
+}
+
+.vs-term-cursor {
+  display: inline-block;
+  width: 6px;
+  height: 12px;
+  background-color: var(--vs-accent);
+  margin-left: 3px;
+  animation: cursor-blink-terminal 1s infinite step-end;
+  vertical-align: middle;
+}
+
+@keyframes cursor-blink-terminal {
+  from, to { background-color: transparent; }
+  50% { background-color: var(--vs-accent); }
+}

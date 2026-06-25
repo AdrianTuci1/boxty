@@ -1,0 +1,235 @@
+name: 🧪 Test CI/CD (Dry Run)
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_python_sdk:
+        description: 'Test Python SDK build'
+        type: boolean
+        default: true
+      test_js_sdk:
+        description: 'Test JS SDK build'
+        type: boolean
+        default: true
+      test_cli_build:
+        description: 'Test CLI cross-platform build'
+        type: boolean
+        default: true
+      test_web_build:
+        description: 'Test web build'
+        type: boolean
+        default: true
+      test_ansible:
+        description: 'Test Ansible syntax'
+        type: boolean
+        default: true
+
+jobs:
+  # ═══════════════════════════════════════════════════════════
+  # 1. VALIDATE WORKFLOW SYNTAX
+  # ═══════════════════════════════════════════════════════════
+  validate-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate workflow YAML
+        run: |
+          cat > /tmp/validate_yaml.py << 'PYEOF'
+          import yaml
+          with open('.github/workflows/publish-release.yml') as f:
+              yaml.safe_load(f)
+          print('✅ publish-release.yml valid')
+          PYEOF
+          python3 /tmp/validate_yaml.py
+      - name: Check required secrets referenced
+        run: |
+          secrets=$(grep -oP 'secrets\.\w+' .github/workflows/publish-release.yml | sort -u)
+          echo "Referenced secrets:"
+          echo "$secrets"
+          
+          required="PYPI_API_TOKEN NPM_TOKEN CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_PAGES_PROJECT R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT_URL R2_BUCKET"
+          missing=""
+          for secret in $required; do
+            if ! echo "$secrets" | grep -q "secrets.$secret"; then
+              missing="$missing $secret"
+            fi
+          done
+          
+          if [ -n "$missing" ]; then
+            echo "⚠️ Missing secret references:$missing"
+          else
+            echo "✅ All required secrets referenced"
+          fi
+
+  # ═══════════════════════════════════════════════════════════
+  # 2. TEST PYTHON SDK BUILD (no publish)
+  # ═══════════════════════════════════════════════════════════
+  test-python-sdk:
+    if: github.event.inputs.test_python_sdk == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Install build deps
+        run: pip install build hatch
+      - name: Build package
+        run: python -m build
+      - name: Verify wheel
+        run: |
+          ls -la dist/
+          pip install dist/*.whl --dry-run
+      - name: Test import
+        run: |
+          pip install dist/*.whl
+          python -c "import boxty; print(boxty.__version__)"
+
+  # ═══════════════════════════════════════════════════════════
+  # 3. TEST JS SDK BUILD (no publish)
+  # ═══════════════════════════════════════════════════════════
+  test-js-sdk:
+    if: github.event.inputs.test_js_sdk == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/js
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - run: npm run build
+      - name: Verify build artifacts
+        run: |
+          ls -la dist/
+          test -f dist/index.js
+          test -f dist/index.d.ts
+          test -f dist/index.cjs
+      - name: Test pack
+        run: npm pack --dry-run
+
+  # ═══════════════════════════════════════════════════════════
+  # 4. TEST CLI BUILD (no release)
+  # ═══════════════════════════════════════════════════════════
+  test-cli-build:
+    if: github.event.inputs.test_cli_build == 'true'
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            name: boxty-linux-x64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            name: boxty-macos-x64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            name: boxty-macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build CLI
+        working-directory: cli/sdk
+        run: cargo build --release --target ${{ matrix.target }}
+      - name: Verify binary
+        shell: bash
+        run: |
+          binary="cli/sdk/target/${{ matrix.target }}/release/boxty"
+          ls -la "$binary"
+          "$binary" --version || true
+
+  # ═══════════════════════════════════════════════════════════
+  # 5. TEST WEB BUILD (no deploy)
+  # ═══════════════════════════════════════════════════════════
+  test-web-build:
+    if: github.event.inputs.test_web_build == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - run: npm run build
+      - name: Verify build
+        run: |
+          ls -la dist/
+          test -f dist/index.html
+          test -f dist/cli-info.json || echo "⚠️ cli-info.json not found (expected in CI)"
+
+  # ═══════════════════════════════════════════════════════════
+  # 6. TEST ANSIBLE SYNTAX
+  # ═══════════════════════════════════════════════════════════
+  test-ansible:
+    if: github.event.inputs.test_ansible == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ansible
+        run: |
+          pip install ansible
+          ansible --version
+      - name: Validate playbook syntax
+        run: |
+          cd ansible
+          ansible-playbook deploy-workers.yml --syntax-check
+      - name: Validate inventory
+        run: |
+          cd ansible
+          ansible-inventory -i inventory.yml --list
+
+  # ═══════════════════════════════════════════════════════════
+  # 7. TEST INSTALL SCRIPT
+  # ═══════════════════════════════════════════════════════════
+  test-install-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test install script syntax
+        run: bash -n cli/install.sh
+      - name: Test install script (dry run)
+        run: |
+          # Create mock server with test binaries
+          mkdir -p /tmp/mock-cli/latest
+          echo "mock binary" > /tmp/mock-cli/latest/boxty-linux-x64
+          
+          # Test script with local URL
+          export BOXTY_CLI_URL="file:///tmp/mock-cli"
+          bash cli/install.sh || echo "Expected to fail with mock binary"
+
+  # ═══════════════════════════════════════════════════════════
+  # 8. SUMMARY
+  # ═══════════════════════════════════════════════════════════
+  summary:
+    needs: [validate-workflow, test-python-sdk, test-js-sdk, test-cli-build, test-web-build, test-ansible, test-install-script]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print summary
+        run: |
+          echo ""
+          echo "╔══════════════════════════════════════════════════════════════╗"
+          echo "║           🧪 CI/CD TEST SUMMARY (Dry Run)                     ║"
+          echo "╠══════════════════════════════════════════════════════════════╣"
+          echo "║  Workflow YAML:      ${{ needs.validate-workflow.result == 'success' && '✅' || '❌' }}                               ║"
+          echo "║  Python SDK Build:   ${{ needs.test-python-sdk.result == 'success' && '✅' || needs.test-python-sdk.result == 'skipped' && '⏭️' || '❌' }}                               ║"
+          echo "║  JS SDK Build:      ${{ needs.test-js-sdk.result == 'success' && '✅' || needs.test-js-sdk.result == 'skipped' && '⏭️' || '❌' }}                               ║"
+          echo "║  CLI Build:         ${{ needs.test-cli-build.result == 'success' && '✅' || needs.test-cli-build.result == 'skipped' && '⏭️' || '❌' }}                               ║"
+          echo "║  Web Build:         ${{ needs.test-web-build.result == 'success' && '✅' || needs.test-web-build.result == 'skipped' && '⏭️' || '❌' }}                               ║"
+          echo "║  Ansible Syntax:    ${{ needs.test-ansible.result == 'success' && '✅' || needs.test-ansible.result == 'skipped' && '⏭️' || '❌' }}                               ║"
+          echo "║  Install Script:    ${{ needs.test-install-script.result == 'success' && '✅' || '❌' }}                               ║"
+          echo "╚══════════════════════════════════════════════════════════════╝"
+          echo ""
+          echo "All tests passed? Ready to deploy with:"
+          echo "  gh workflow run publish-release.yml -f version=X.Y.Z"

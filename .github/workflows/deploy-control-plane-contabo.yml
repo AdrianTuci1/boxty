@@ -1,0 +1,42 @@
+name: Deploy Control Plane Contabo
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+      inventory_path:
+        description: Ansible inventory path
+        required: true
+        default: ansible/inventory.yml
+
+jobs:
+  deploy-control-plane:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Write SSH key
+        env:
+          CONTROL_PLANE_SSH_KEY: ${{ secrets.CONTROL_PLANE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CONTROL_PLANE_SSH_KEY" > ~/.ssh/control_plane
+          chmod 600 ~/.ssh/control_plane
+
+      - name: Deploy control plane
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "false"
+        run: |
+          ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-control-plane.yml

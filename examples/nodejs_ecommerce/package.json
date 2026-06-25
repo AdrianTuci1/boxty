@@ -1,0 +1,12 @@
+{
+  "name": "boxty-nodejs-ecommerce-example",
+  "version": "1.0.0",
+  "description": "Multi-file e-commerce server example integrating Boxty replicated NoSQL database and persistent volumes",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}

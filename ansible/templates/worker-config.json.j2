@@ -1,0 +1,29 @@
+{
+  "node": {
+    "id": "{{ inventory_hostname }}",
+    "region": "{{ boxty_region | default('eu-central') }}",
+    "labels": {{ boxty_labels | default({}) | to_json }}
+  },
+  "control_plane": {
+    "url": "{{ boxty_control_plane_url | default('https://control.boxty.dev') }}",
+    "provider_pool": "{{ boxty_provider_pool | default('general') }}",
+    "retry_interval_ms": 5000,
+    "max_retries": 10
+  },
+  "worker": {
+    "concurrency": {{ boxty_concurrency | default(4) }},
+    "heartbeat_interval_sec": 30,
+    "task_timeout_sec": 300
+  },
+  "sandbox": {
+    "ssh_mode": "sandbox_only"
+  },
+  "backends": {
+    "runpod_enabled": {{ boxty_runpod_enabled | default(true) | to_json }},
+    "runpod_default_template": "{{ boxty_runpod_default_template | default('gpu-inference') }}"
+  },
+  "resources": {
+    "max_memory_mb": {{ boxty_max_memory | default(2048) }},
+    "max_cpu_cores": {{ boxty_max_cpu | default(2) }}
+  }
+}
