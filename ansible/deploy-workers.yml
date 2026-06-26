@@ -40,7 +40,21 @@
         name:
           - curl
           - jq
+          - docker.io
         state: present
+
+    - name: Ensure docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Add boxty user to docker group
+      ansible.builtin.user:
+        name: "{{ boxty_user }}"
+        groups: docker
+        append: true
+      notify: Restart boxty worker
 
     # ═══════════════════════════════════════════════════════════
     # 2. DOWNLOAD CLI BINARY
@@ -152,21 +166,27 @@
     # ═══════════════════════════════════════════════════════════
     # 6. HEALTH CHECK & MONITORING
     # ═══════════════════════════════════════════════════════════
-    - name: Wait for service to be ready
-      ansible.builtin.wait_for:
-        path: "/var/run/boxty/worker.sock"
-        timeout: 30
+    - name: Wait for worker to register with control plane
+      ansible.builtin.uri:
+        url: "{{ boxty_control_plane_url }}/healthz"
+        method: GET
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 10
+      delay: 3
       ignore_errors: true
 
-    - name: Check worker health
+    - name: Check worker binary version
       ansible.builtin.command:
         cmd: "{{ boxty_install_dir }}/boxty --version"
       register: boxty_version_check
       changed_when: false
+      ignore_errors: true
 
-    - name: Display version
+    - name: Display status
       ansible.builtin.debug:
-        msg: "Boxty worker v{{ boxty_version_check.stdout }} running on {{ inventory_hostname }}"
+        msg: "Boxty worker on {{ inventory_hostname }}: binary={{ boxty_version_check.stdout | default('unknown') }}, control_plane={{ health_check.status | default('unreachable') }}"
 
   handlers:
     - name: Reload systemd

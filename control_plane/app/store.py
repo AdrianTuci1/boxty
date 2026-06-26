@@ -489,6 +489,27 @@ class InMemoryStore:
         self._put_item(provider_item(provider))
         return provider
 
+    def unregister_provider(self, provider_id: str) -> None:
+        self.providers.pop(provider_id, None)
+        self._delete_item(f"PROVIDER#{provider_id}", "PROFILE")
+        now = utc_now()
+        for workload_id, workload in list(self.workloads.items()):
+            if workload.assigned_provider_id != provider_id:
+                continue
+            if workload.status == WorkloadStatus.scheduled:
+                workload.assigned_provider_id = None
+                workload.updated_at = now
+                self.workloads[workload_id] = workload
+                self._put_item(workload_item(workload))
+            elif workload.status in {WorkloadStatus.claimed, WorkloadStatus.running}:
+                workload.status = WorkloadStatus.failed
+                workload.claimed_by_provider_id = None
+                workload.claim_lease_expires_at = None
+                workload.assigned_provider_id = None
+                workload.updated_at = now
+                self.workloads[workload_id] = workload
+                self._put_item(workload_item(workload))
+
     def select_backend(self, request: WorkloadCreateRequest) -> tuple[ExecutionBackend, str | None]:
         self.expire_stale_providers()
         self.reclaim_expired_assignments()

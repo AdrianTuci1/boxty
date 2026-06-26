@@ -25,5 +25,8 @@
   "resources": {
     "max_memory_mb": {{ boxty_max_memory | default(2048) }},
     "max_cpu_cores": {{ boxty_max_cpu | default(2) }}
+  },
+  "gateway": {
+    "port": {{ boxty_gateway_port | default(8080) }}
   }
 }

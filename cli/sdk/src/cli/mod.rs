@@ -1,5 +1,6 @@
 pub mod client;
 pub mod provider;
+pub mod tunnel;
 pub mod worker;
 
 use clap::{Parser, Subcommand};

@@ -11,8 +11,8 @@ all:
         ansible_python_interpreter: /usr/bin/python3
         boxty_provider_pool: general
         boxty_runpod_enabled: true
-        boxty_dynamodb_table_name: boxty-control-plane
-        boxty_r2_bucket: boxty-prod
+        # Secrets must be provided via GitHub Secrets or CI environment variables
+        # See ansible/DEPLOYMENT.md for the full list of required secrets
     boxty_workers:
       hosts:
         worker-01:
@@ -41,4 +41,6 @@ all:
         boxty_allow_public_ssh: false
         boxty_runpod_enabled: true
         boxty_runpod_default_template: gpu-inference
-        platform_fee_bps: 50
+        boxty_gateway_port: 0
+        # Secrets must be provided via GitHub Secrets or CI environment variables
+        # See ansible/DEPLOYMENT.md for the full list of required secrets

@@ -6,6 +6,8 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 type WorkerResult<T> = Result<T, Box<dyn Error>>;
@@ -537,11 +539,12 @@ impl ControlPlaneClient {
         provider_token: &str,
         available_slots: u32,
         running_workloads: u32,
+        status: &str,
     ) -> WorkerResult<()> {
         let payload = ProviderHeartbeatRequestPayload {
             available_slots,
             running_workloads,
-            status: "online".to_string(),
+            status: status.to_string(),
         };
         let _: Value = self
             .post_runtime_json(
@@ -552,6 +555,23 @@ impl ControlPlaneClient {
             )
             .await?;
         Ok(())
+    }
+
+    async fn unregister_provider(
+        &self,
+        provider_id: &str,
+        provider_token: &str,
+    ) -> WorkerResult<()> {
+        let response = self
+            .with_runtime_headers(
+                self.http
+                    .delete(format!("{}/v1/providers/{}", self.base_url, provider_id)),
+                provider_id,
+                provider_token,
+            )
+            .send()
+            .await?;
+        self.parse_unit(response).await
     }
 
     async fn claim_next_assignment(
@@ -1183,6 +1203,30 @@ pub async fn handle_worker(
     let max_retries = config.control_plane.max_retries.max(1);
     let mut consecutive_failures = 0u32;
 
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let shutdown_clone = shutdown.clone();
+    tokio::spawn(async move {
+        let mut sigterm = match tokio::signal::unix::signal(
+            tokio::signal::unix::SignalKind::terminate(),
+        ) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let mut sigint = match tokio::signal::unix::signal(
+            tokio::signal::unix::SignalKind::interrupt(),
+        ) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        tokio::select! {
+            _ = sigterm.recv() => {},
+            _ = sigint.recv() => {},
+            _ = tokio::signal::ctrl_c() => {},
+        }
+        shutdown_clone.store(true, Ordering::SeqCst);
+        println!("[worker] shutdown signal received, draining...");
+    });
+
     if let Some(token) = attach_session_token {
         return handle_worker_attach(&client, &runtime, token).await;
     }
@@ -1207,6 +1251,11 @@ pub async fn handle_worker(
     persist_state(&state);
 
     maybe_start_gateway();
+
+    let control_plane_url = config.control_plane.url.clone();
+    tokio::spawn(async move {
+        crate::cli::tunnel::run_tunnel_loop(control_plane_url).await;
+    });
 
     let retry_delay = Duration::from_millis(config.control_plane.retry_interval_ms.max(500));
 
@@ -1267,14 +1316,24 @@ pub async fn handle_worker(
             .iter()
             .filter(|job| job.status == "running")
             .count() as u32;
-        let available_slots = config.worker.concurrency.saturating_sub(running_jobs);
+        let available_slots = if shutdown.load(Ordering::SeqCst) {
+            0
+        } else {
+            config.worker.concurrency.saturating_sub(running_jobs)
+        };
 
+        let status = if shutdown.load(Ordering::SeqCst) {
+            "draining"
+        } else {
+            "online"
+        };
         match client
             .heartbeat_provider(
                 &state.provider_id,
                 &state.provider_auth_token,
                 available_slots,
                 running_jobs,
+                status,
             )
             .await
         {
@@ -1304,20 +1363,34 @@ pub async fn handle_worker(
             }
         }
 
-        if available_slots > 0 {
-            match client
-                .claim_next_assignment(&state.provider_id, &state.provider_auth_token)
-                .await
-            {
-                Ok(Some(assignment)) => {
-                    launch_assignment(&client, &runtime, &mut state, assignment.workload).await?;
-                }
-                Ok(None) => {}
-                Err(error) => {
-                    consecutive_failures += 1;
-                    state.last_error = format!("claim failed: {error}");
+        if !shutdown.load(Ordering::SeqCst) {
+            if available_slots > 0 {
+                match client
+                    .claim_next_assignment(&state.provider_id, &state.provider_auth_token)
+                    .await
+                {
+                    Ok(Some(assignment)) => {
+                        launch_assignment(&client, &runtime, &mut state, assignment.workload).await?;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        consecutive_failures += 1;
+                        state.last_error = format!("claim failed: {error}");
+                    }
                 }
             }
+        } else if running_jobs == 0 {
+            if let Err(e) = client
+                .unregister_provider(&state.provider_id, &state.provider_auth_token)
+                .await
+            {
+                eprintln!("[worker] unregister failed: {e}");
+            }
+            state.provider_id.clear();
+            state.provider_auth_token.clear();
+            persist_state(&state);
+            println!("[worker] gracefully shut down");
+            break;
         }
 
         state.active_jobs = state
@@ -1331,10 +1404,13 @@ pub async fn handle_worker(
         if once {
             break;
         }
-        tokio::time::sleep(Duration::from_secs(
-            config.worker.heartbeat_interval_sec.max(1),
-        ))
-        .await;
+        let interval = config.worker.heartbeat_interval_sec.max(1);
+        for _ in 0..interval {
+            if shutdown.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
     }
 
     Ok(())

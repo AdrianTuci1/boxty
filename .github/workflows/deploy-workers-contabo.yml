@@ -38,5 +38,16 @@ jobs:
       - name: Deploy worker fleet
         env:
           ANSIBLE_HOST_KEY_CHECKING: "false"
+          BOXTY_CONTROL_PLANE_URL: ${{ secrets.BOXTY_CONTROL_PLANE_URL }}
+          BOXTY_PROVIDER_SHARED_TOKEN: ${{ secrets.BOXTY_PROVIDER_SHARED_TOKEN }}
+          BOXTY_R2_ACCOUNT_ID: ${{ secrets.BOXTY_R2_ACCOUNT_ID }}
+          BOXTY_R2_BUCKET: ${{ secrets.BOXTY_R2_BUCKET }}
+          BOXTY_R2_ACCESS_KEY_ID: ${{ secrets.BOXTY_R2_ACCESS_KEY_ID }}
+          BOXTY_R2_SECRET_ACCESS_KEY: ${{ secrets.BOXTY_R2_SECRET_ACCESS_KEY }}
+          BOXTY_R2_PUBLIC_BASE_URL: ${{ secrets.BOXTY_R2_PUBLIC_BASE_URL }}
+          BOXTY_RUNPOD_API_KEY: ${{ secrets.BOXTY_RUNPOD_API_KEY }}
+          BOXTY_RUNPOD_DEFAULT_TEMPLATE: ${{ secrets.BOXTY_RUNPOD_DEFAULT_TEMPLATE }}
+          BOXTY_NODE_KEY: ${{ secrets.BOXTY_NODE_KEY }}
+          BOXTY_LLM_API_KEY: ${{ secrets.BOXTY_LLM_API_KEY }}
         run: |
           ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-workers.yml --limit "${{ inputs.target_group }}"

@@ -38,5 +38,20 @@ jobs:
       - name: Deploy control plane
         env:
           ANSIBLE_HOST_KEY_CHECKING: "false"
+          BOXTY_SECRET_ENCRYPTION_KEY: ${{ secrets.BOXTY_SECRET_ENCRYPTION_KEY }}
+          BOXTY_PROVIDER_SHARED_TOKEN: ${{ secrets.BOXTY_PROVIDER_SHARED_TOKEN }}
+          BOXTY_R2_ACCOUNT_ID: ${{ secrets.BOXTY_R2_ACCOUNT_ID }}
+          BOXTY_R2_BUCKET: ${{ secrets.BOXTY_R2_BUCKET }}
+          BOXTY_R2_ACCESS_KEY_ID: ${{ secrets.BOXTY_R2_ACCESS_KEY_ID }}
+          BOXTY_R2_SECRET_ACCESS_KEY: ${{ secrets.BOXTY_R2_SECRET_ACCESS_KEY }}
+          BOXTY_R2_PUBLIC_BASE_URL: ${{ secrets.BOXTY_R2_PUBLIC_BASE_URL }}
+          BOXTY_DYNAMODB_TABLE_NAME: ${{ secrets.BOXTY_DYNAMODB_TABLE_NAME }}
+          BOXTY_DYNAMODB_REGION: ${{ secrets.BOXTY_DYNAMODB_REGION || 'eu-central-1' }}
+          BOXTY_RUNPOD_API_KEY: ${{ secrets.BOXTY_RUNPOD_API_KEY }}
+          BOXTY_SMTP_HOST: ${{ secrets.BOXTY_SMTP_HOST }}
+          BOXTY_SMTP_PORT: ${{ secrets.BOXTY_SMTP_PORT || '587' }}
+          BOXTY_SMTP_USERNAME: ${{ secrets.BOXTY_SMTP_USERNAME }}
+          BOXTY_SMTP_PASSWORD: ${{ secrets.BOXTY_SMTP_PASSWORD }}
+          BOXTY_INVITE_EMAIL_FROM: ${{ secrets.BOXTY_INVITE_EMAIL_FROM }}
         run: |
           ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-control-plane.yml

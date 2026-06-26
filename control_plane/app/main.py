@@ -1,4 +1,4 @@
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 
 from .config import settings
 from .models import (
@@ -21,6 +21,11 @@ from .models import (
     generated_id,
 )
 from .runpod import runpod_adapter
+import asyncio
+import base64
+import json
+import uuid
+
 from .store import issued_access_token, store
 
 app = FastAPI(title=settings.app_name)
@@ -296,6 +301,18 @@ def provider_heartbeat(
     return provider.model_dump(mode="json")
 
 
+@app.delete(f"{settings.api_prefix}/providers/{{provider_id}}")
+def unregister_provider(
+    provider_id: str,
+    auth_provider_id: str = Depends(require_provider_runtime_auth),
+) -> dict:
+    if auth_provider_id != provider_id:
+        raise HTTPException(status_code=403, detail="provider id mismatch")
+    store.unregister_provider(provider_id)
+    active_tunnels.pop(provider_id, None)
+    return {"unregistered": True}
+
+
 @app.post(f"{settings.api_prefix}/providers/{{provider_id}}/assignments/next")
 def claim_next_assignment(provider_id: str, auth_provider_id: str = Depends(require_provider_runtime_auth)) -> dict | None:
     if auth_provider_id != provider_id:
@@ -407,3 +424,101 @@ def meter_usage(request: UsageMeterRequest, _: str = Depends(require_provider_ru
 @app.get(f"{settings.api_prefix}/admin/dynamodb-items")
 def list_dynamodb_items() -> list[dict]:
     return [item.model_dump(mode="json") for item in store.export_single_table_items()]
+
+
+active_tunnels: dict[str, WebSocket] = {}
+pending_responses: dict[str, asyncio.Future] = {}
+
+
+@app.websocket(f"{settings.api_prefix}/providers/{{provider_id}}/tunnel")
+async def provider_tunnel(websocket: WebSocket, provider_id: str, token: str = Query(...)):
+    if not store.verify_provider_token(provider_id, token):
+        await websocket.close(code=1008, reason="invalid token")
+        return
+    await websocket.accept()
+    active_tunnels[provider_id] = websocket
+    try:
+        while True:
+            data = await websocket.receive_text()
+            message = json.loads(data)
+            if message.get("type") == "response":
+                request_id = message.get("request_id")
+                future = pending_responses.pop(request_id, None)
+                if future and not future.done():
+                    future.set_result(message)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        active_tunnels.pop(provider_id, None)
+
+
+@app.api_route("/r/{endpoint_name}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+async def proxy_endpoint(request: Request, endpoint_name: str) -> Response:
+    workload = None
+    for w in store.workloads.values():
+        if w.endpoint_name == endpoint_name:
+            workload = w
+            break
+
+    if not workload:
+        raise HTTPException(status_code=404, detail="endpoint not found")
+
+    provider_id = workload.assigned_provider_id
+    if not provider_id:
+        raise HTTPException(status_code=503, detail="endpoint not assigned to a provider")
+
+    websocket = active_tunnels.get(provider_id)
+    if not websocket:
+        raise HTTPException(status_code=503, detail="endpoint provider not connected")
+
+    body = await request.body()
+    request_id = str(uuid.uuid4())
+
+    headers = {}
+    for key, value in request.headers.items():
+        if key.lower() not in {"host", "connection", "content-length"}:
+            headers[key] = value
+
+    path = request.url.path.removeprefix(f"/r/{endpoint_name}")
+    if not path:
+        path = "/"
+    query = str(request.query_params)
+    if query:
+        path = f"{path}?{query}"
+
+    message = {
+        "type": "request",
+        "request_id": request_id,
+        "endpoint_name": endpoint_name,
+        "method": request.method,
+        "path": path,
+        "headers": headers,
+        "body": base64.b64encode(body).decode() if body else "",
+    }
+
+    future = asyncio.get_event_loop().create_future()
+    pending_responses[request_id] = future
+
+    try:
+        await websocket.send_text(json.dumps(message))
+        response_data = await asyncio.wait_for(future, timeout=30.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=504, detail="gateway timeout")
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"tunnel error: {exc}") from exc
+    finally:
+        pending_responses.pop(request_id, None)
+
+    status_code = response_data.get("status", 502)
+    response_headers = response_data.get("headers", {})
+    response_body = base64.b64decode(response_data.get("body", "")) if response_data.get("body") else b""
+
+    return Response(
+        content=response_body,
+        status_code=status_code,
+        headers={
+            k: v
+            for k, v in response_headers.items()
+            if k.lower() not in {"content-length", "transfer-encoding"}
+        },
+    )
