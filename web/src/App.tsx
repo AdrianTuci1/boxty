@@ -22,6 +22,8 @@ import WorkspacesListPage from './pages/settings/WorkspacesListPage'
 import EmailPage from './pages/settings/EmailPage'
 import UsagePage from './pages/settings/UsagePage'
 import APITokensPage from './pages/settings/APITokensPage'
+import DocsLayout from './components/DocsLayout'
+import DocsPage from './pages/DocsPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, devMode } = useAuth()
@@ -32,6 +34,11 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
+      <Route path="/docs" element={<Navigate to="/docs/guide/introduction" replace />} />
+      <Route path="/docs/guide/introduction" element={<DocsLayout><DocsPage /></DocsLayout>} />
+      <Route path="/docs/examples" element={<Navigate to="/docs/guide/introduction" replace />} />
+      <Route path="/docs/reference" element={<Navigate to="/docs/guide/introduction" replace />} />
+      <Route path="/playground" element={<Navigate to="/docs/guide/introduction" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
