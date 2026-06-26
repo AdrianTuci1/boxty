@@ -1,0 +1,1257 @@
+Repo: AdrianTuci1/boxty
+Branch de lucru: boxty/web-refactor-v3 (bazat pe boxty/release-v2)
+
+IMPORTANT: Inainte de orice, verifica ca esti pe branch-ul corect:
+```bash
+cd /tmp/repo
+git checkout boxty/release-v2
+git pull origin boxty/release-v2
+git checkout -b boxty/web-refactor-v3
+```
+
+TASK: Refactorizare completa Boxty Web App — arhitectura curata, contracte clare, BFF layer
+
+=== CONTEXT GENERAL ===
+
+Boxty e o platforma serverless (tip Modal/Replit). Proiectul e un monorepo:
+- web/ — React 18 + TypeScript + Vite + Tailwind + Radix UI + React Query v5 + React Router v6 + Recharts
+- api/ — Node.js + Fastify, stocare DynamoDB in-memory (prin db/schema.js)
+- gateway/, worker/, sdk-js/, sdk-py/
+
+PROBLEME ACTUALE:
+1. Mock data hardcodat in pagini (DashboardPage.tsx linii 12-73, AppDetailPage.tsx linii 26-31, useApps.ts linii 5-112)
+2. Functia timeAgo duplicata in DashboardPage.tsx:597 si AppDetailPage.tsx:45
+3. Logica de business (filtrare, sortare, combinare date) direct in componente React
+4. Frontend-ul face N call-uri HTTP separate pentru dashboard — fara agregare
+5. Contractele de date sunt inconsistente: API returneaza snake_case, frontend-ul are type-uri separate
+6. Fara separare intre business logic si UI
+
+SOLUTIA: Crearea unui strat core/ cu business logic pura + BFF endpoint + refactorizarea paginilor.
+
+================================================================================
+FAZA 0: PREGATIRE — CITESTE FISIERELE EXISTENTE
+================================================================================
+
+Inainte de a scrie orice cod, citeste aceste fisiere ca sa intelegi structura actuala:
+
+```
+web/src/api/client.ts
+web/src/api/apps.ts
+web/src/api/workspaces.ts
+web/src/api/sandboxes.ts
+web/src/api/billing.ts
+web/src/api/secrets.ts
+web/src/api/environments.ts
+web/src/api/images.ts
+web/src/api/volumes.ts
+web/src/api/schedules.ts
+web/src/api/auth.ts
+web/src/App.tsx
+web/src/hooks/useApps.ts
+web/src/hooks/useAuth.tsx
+web/src/hooks/useWorkspaces.ts
+web/src/hooks/useSandboxes.ts
+web/src/pages/DashboardPage.tsx
+web/src/pages/AppDetailPage.tsx
+api/src/index.js
+api/src/routes/apps.js
+api/src/routes/workspaces.js
+api/src/routes/sandboxes.js
+api/src/db/schema.js
+api/src/middleware/auth.js
+```
+
+================================================================================
+FAZA 1: STRATUL CORE/ — MODELS, MOCKS, UTILS
+================================================================================
+
+Creeaza directorul web/src/core/ cu urmatoarea structura.
+
+--- 1A: MODELS (web/src/core/models/) ---
+
+Fiecare model are campuri camelCase si un mapper static care converteste din API response (snake_case).
+
+web/src/core/models/app.model.ts:
+```typescript
+export type AppStatus = 'active' | 'stopped' | 'deploying' | 'failed';
+export type AppType = 'function' | 'sandbox';
+
+export interface AppModel {
+  id: string;
+  name: string;
+  workspaceId: string;
+  environmentId: string;
+  status: AppStatus;
+  type: AppType;
+  deployerName: string;
+  image?: string;
+  url?: string;
+  functions: string[];
+  instances: InstanceConfigModel[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface InstanceConfigModel {
+  id: string;
+  appId: string;
+  name: string;
+  cpu: number;
+  memory: number;
+  gpu: string | null;
+  minContainers: number;
+  maxContainers: number;
+  scaledownWindow: number;
+  runningContainers: number;
+  status: 'active' | 'stopped';
+  createdAt: Date;
+}
+
+export function mapAppFromApi(raw: Record<string, any>): AppModel {
+  return {
+    id: raw.id,
+    name: raw.name,
+    workspaceId: raw.workspace_id ?? raw.workspaceId ?? '',
+    environmentId: raw.environment_id ?? raw.environmentId ?? raw.env_id ?? '',
+    status: (raw.status as AppStatus) ?? 'active',
+    type: (raw.type as AppType) ?? 'function',
+    deployerName: raw.deployer_name ?? raw.deployerName ?? '',
+    image: raw.image ?? raw.image_url,
+    url: raw.url,
+    functions: raw.functions ?? raw.endpoints ?? [],
+    instances: (raw.instances ?? []).map(mapInstanceFromApi),
+    createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
+    updatedAt: new Date(raw.updated_at ?? raw.updatedAt ?? Date.now()),
+  };
+}
+
+export function mapInstanceFromApi(raw: Record<string, any>): InstanceConfigModel {
+  return {
+    id: raw.id,
+    appId: raw.app_id ?? raw.appId ?? '',
+    name: raw.name,
+    cpu: raw.cpu ?? 1,
+    memory: raw.memory ?? 512,
+    gpu: raw.gpu ?? null,
+    minContainers: raw.min_containers ?? raw.minContainers ?? 0,
+    maxContainers: raw.max_containers ?? raw.maxContainers ?? 10,
+    scaledownWindow: raw.scaledown_window ?? raw.scaledownWindow ?? 300,
+    runningContainers: raw.running_containers ?? raw.runningContainers ?? 0,
+    status: (raw.status as 'active' | 'stopped') ?? 'active',
+    createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
+  };
+}
+```
+
+web/src/core/models/workspace.model.ts:
+```typescript
+export interface WorkspaceModel {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: Date;
+  environmentCount: number;
+  appCount: number;
+}
+
+export interface EnvironmentModel {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: Date;
+}
+
+export function mapWorkspaceFromApi(raw: Record<string, any>): WorkspaceModel {
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description ?? '',
+    createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
+    environmentCount: raw.environment_count ?? raw.environmentCount ?? 0,
+    appCount: raw.app_count ?? raw.appCount ?? 0,
+  };
+}
+
+export function mapEnvironmentFromApi(raw: Record<string, any>): EnvironmentModel {
+  return {
+    id: raw.id,
+    workspaceId: raw.workspace_id ?? raw.workspaceId ?? '',
+    name: raw.name,
+    createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
+  };
+}
+```
+
+web/src/core/models/sandbox.model.ts:
+```typescript
+export type SandboxStatus = 'running' | 'stopped' | 'snapshotted';
+
+export interface SandboxModel {
+  id: string;
+  appId?: string;
+  status: SandboxStatus;
+  startedAt?: Date;
+  finishedAt?: Date;
+  bootDurationMs?: number;
+  url?: string;
+  workerId?: string;
+  cpuMaxPct?: number;
+  cpuAvgPct?: number;
+  memoryMaxMb?: number;
+  memoryAvgMb?: number;
+  networkRxBytes?: number;
+  networkTxBytes?: number;
+  gpuUtilPct?: number;
+  gpuMemoryMb?: number;
+  image?: string;
+  cpu?: number;
+  memory?: number;
+  gpu?: string | null;
+  port?: number;
+}
+
+export interface SandboxMetricsModel {
+  timestamps: string[];
+  cpu: number[];
+  memory: number[];
+  networkRx: number[];
+  networkTx: number[];
+  gpuUtil?: number[];
+}
+
+export function mapSandboxFromApi(raw: Record<string, any>): SandboxModel {
+  return {
+    id: raw.id,
+    appId: raw.app_id,
+    status: (raw.status as SandboxStatus) ?? 'stopped',
+    startedAt: raw.started_at ? new Date(raw.started_at) : undefined,
+    finishedAt: raw.finished_at ? new Date(raw.finished_at) : undefined,
+    bootDurationMs: raw.boot_duration_ms,
+    url: raw.url,
+    workerId: raw.worker_id,
+    cpuMaxPct: raw.cpu_max_pct,
+    cpuAvgPct: raw.cpu_avg_pct,
+    memoryMaxMb: raw.memory_max_mb,
+    memoryAvgMb: raw.memory_avg_mb,
+    networkRxBytes: raw.network_rx_bytes,
+    networkTxBytes: raw.network_tx_bytes,
+    gpuUtilPct: raw.gpu_util_pct,
+    gpuMemoryMb: raw.gpu_memory_mb,
+    image: raw.image,
+    cpu: raw.cpu,
+    memory: raw.memory,
+    gpu: raw.gpu,
+    port: raw.port,
+  };
+}
+```
+
+web/src/core/models/billing.model.ts:
+```typescript
+export interface BalanceModel {
+  credits: number;
+  currency: string;
+}
+
+export interface UsageRecordModel {
+  date: Date;
+  cpuHours: number;
+  gpuHours: number;
+  storageGb: number;
+  cost: number;
+}
+
+export function mapBalanceFromApi(raw: Record<string, any>): BalanceModel {
+  return { credits: raw.credits ?? 0, currency: raw.currency ?? 'USD' };
+}
+```
+
+web/src/core/models/secret.model.ts:
+```typescript
+export interface SecretModel {
+  id: string;
+  name: string;
+  createdAt: Date;
+}
+```
+
+web/src/core/models/image.model.ts:
+```typescript
+export type ImageStatus = 'building' | 'ready' | 'failed';
+
+export interface ImageModel {
+  id: string;
+  name: string;
+  imageUrl: string;
+  status: ImageStatus;
+  createdAt: Date;
+}
+```
+
+web/src/core/models/volume.model.ts:
+```typescript
+export type VolumeStatus = 'available' | 'attached' | 'detached';
+
+export interface VolumeModel {
+  id: string;
+  name: string;
+  sizeGb: number;
+  status: VolumeStatus;
+  createdAt: Date;
+}
+```
+
+web/src/core/models/schedule.model.ts:
+```typescript
+export type ScheduleStatus = 'active' | 'paused';
+
+export interface ScheduleModel {
+  id: string;
+  name: string;
+  cron?: string;
+  periodSeconds?: number;
+  nextRun: string;
+  status: ScheduleStatus;
+  createdAt: Date;
+}
+```
+
+web/src/core/models/index.ts:
+```typescript
+export * from './app.model';
+export * from './workspace.model';
+export * from './sandbox.model';
+export * from './billing.model';
+export * from './secret.model';
+export * from './image.model';
+export * from './volume.model';
+export * from './schedule.model';
+```
+
+--- 1B: MOCKS (web/src/core/mocks/) ---
+
+Extrage toate mock-urile din pagini si hooks in fisiere separate.
+ATENTIE: NU sterge mock-urile din pagini inca — doar le copii in fisierele noi.
+Stergerea din pagini se face in FAZA 3.
+
+web/src/core/mocks/apps.mock.ts — combina mock-urile din DashboardPage.tsx (mockApps + mockSandboxApps) si useApps.ts (MOCK_APPS):
+```typescript
+import type { AppModel } from '../models/app.model';
+
+export const mockApps: AppModel[] = [
+  {
+    id: 'mock-statsparrot-pne',
+    name: 'statsparrot-pne',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'active',
+    type: 'function',
+    deployerName: 'adrian-tucicovenco',
+    functions: ['fastapi_app'],
+    instances: [
+      {
+        id: 'mock-inst-1',
+        appId: 'mock-statsparrot-pne',
+        name: 'fastapi_app',
+        cpu: 1,
+        memory: 512,
+        gpu: null,
+        minContainers: 1,
+        maxContainers: 5,
+        scaledownWindow: 300,
+        runningContainers: 2,
+        status: 'active',
+        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      },
+    ],
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'mock-statsparrot-analytics',
+    name: 'statsparrot-analytics-worker',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'active',
+    type: 'function',
+    deployerName: 'adrian-tucicovenco',
+    functions: ['fastapi_app'],
+    instances: [
+      {
+        id: 'mock-inst-2',
+        appId: 'mock-statsparrot-analytics',
+        name: 'fastapi_app',
+        cpu: 1,
+        memory: 512,
+        gpu: null,
+        minContainers: 1,
+        maxContainers: 3,
+        scaledownWindow: 300,
+        runningContainers: 1,
+        status: 'active',
+        createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+      },
+    ],
+    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+  },
+  {
+    id: 'mock-dental-seg',
+    name: 'dental-tooth-segmentation',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'active',
+    type: 'function',
+    deployerName: 'adrian-tucicovenco',
+    functions: ['api_predict', 'predict_cli', 'run_prediction'],
+    instances: [
+      {
+        id: 'mock-inst-3',
+        appId: 'mock-dental-seg',
+        name: 'api_predict',
+        cpu: 2,
+        memory: 1024,
+        gpu: 't4',
+        minContainers: 1,
+        maxContainers: 2,
+        scaledownWindow: 600,
+        runningContainers: 1,
+        status: 'active',
+        createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+      },
+      {
+        id: 'mock-inst-4',
+        appId: 'mock-dental-seg',
+        name: 'predict_cli',
+        cpu: 2,
+        memory: 1024,
+        gpu: 't4',
+        minContainers: 0,
+        maxContainers: 1,
+        scaledownWindow: 600,
+        runningContainers: 0,
+        status: 'stopped',
+        createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+      },
+      {
+        id: 'mock-inst-5',
+        appId: 'mock-dental-seg',
+        name: 'run_prediction',
+        cpu: 2,
+        memory: 1024,
+        gpu: 't4',
+        minContainers: 0,
+        maxContainers: 1,
+        scaledownWindow: 600,
+        runningContainers: 0,
+        status: 'stopped',
+        createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+      },
+    ],
+    createdAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+    updatedAt: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000),
+  },
+  // Din DashboardPage.tsx mockApps:
+  {
+    id: 'app-1',
+    name: 'hermes-agent',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'active',
+    type: 'function',
+    deployerName: 'adrian-tucicovenco',
+    functions: ['fastapi_app', 'web_endpoint', 'background_task'],
+    instances: [
+      { id: 'inst-1', appId: 'app-1', name: 'fastapi_app', cpu: 1, memory: 512, gpu: null, minContainers: 0, maxContainers: 10, scaledownWindow: 60, runningContainers: 2, status: 'active', createdAt: new Date('2026-06-01T10:00:00Z') },
+      { id: 'inst-2', appId: 'app-1', name: 'web_endpoint', cpu: 0.5, memory: 256, gpu: null, minContainers: 0, maxContainers: 5, scaledownWindow: 60, runningContainers: 1, status: 'active', createdAt: new Date('2026-06-01T10:00:00Z') },
+      { id: 'inst-3', appId: 'app-1', name: 'background_task', cpu: 0.5, memory: 256, gpu: null, minContainers: 0, maxContainers: 3, scaledownWindow: 60, runningContainers: 0, status: 'stopped', createdAt: new Date('2026-06-01T10:00:00Z') },
+    ],
+    createdAt: new Date('2026-06-01T10:00:00Z'),
+    updatedAt: new Date('2026-06-06T08:30:00Z'),
+  },
+  {
+    id: 'app-2',
+    name: 'data-processor',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'active',
+    type: 'function',
+    deployerName: 'adrian-tucicovenco',
+    functions: ['process_data', 'generate_report'],
+    instances: [
+      { id: 'inst-4', appId: 'app-2', name: 'process_data', cpu: 2, memory: 1024, gpu: null, minContainers: 0, maxContainers: 5, scaledownWindow: 60, runningContainers: 1, status: 'active', createdAt: new Date('2026-06-03T14:00:00Z') },
+      { id: 'inst-5', appId: 'app-2', name: 'generate_report', cpu: 1, memory: 512, gpu: null, minContainers: 0, maxContainers: 3, scaledownWindow: 60, runningContainers: 0, status: 'stopped', createdAt: new Date('2026-06-03T14:00:00Z') },
+    ],
+    createdAt: new Date('2026-06-03T14:00:00Z'),
+    updatedAt: new Date('2026-06-05T16:45:00Z'),
+  },
+  {
+    id: 'app-3',
+    name: 'ml-inference',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'stopped',
+    type: 'function',
+    deployerName: 'adrian-tucicovenco',
+    functions: ['predict', 'train_model'],
+    instances: [
+      { id: 'inst-6', appId: 'app-3', name: 'predict', cpu: 4, memory: 8192, gpu: 'T4', minContainers: 0, maxContainers: 2, scaledownWindow: 120, runningContainers: 0, status: 'stopped', createdAt: new Date('2026-05-20T09:00:00Z') },
+      { id: 'inst-7', appId: 'app-3', name: 'train_model', cpu: 8, memory: 16384, gpu: 'A100', minContainers: 0, maxContainers: 1, scaledownWindow: 300, runningContainers: 0, status: 'stopped', createdAt: new Date('2026-05-20T09:00:00Z') },
+    ],
+    createdAt: new Date('2026-05-20T09:00:00Z'),
+    updatedAt: new Date('2026-06-02T11:20:00Z'),
+  },
+];
+
+// Din DashboardPage.tsx mockSandboxApps:
+export const mockSandboxApps: AppModel[] = [
+  {
+    id: 'sandbox-app-1',
+    name: 'hermes-agent-sandbox',
+    workspaceId: '',
+    environmentId: 'main',
+    status: 'active',
+    type: 'sandbox',
+    deployerName: 'adrian-tucicovenco',
+    functions: [],
+    instances: [],
+    createdAt: new Date('2026-06-05T10:00:00Z'),
+    updatedAt: new Date('2026-06-06T04:34:00Z'),
+  },
+];
+```
+
+web/src/core/mocks/sandboxes.mock.ts:
+```typescript
+import type { SandboxModel } from '../models/sandbox.model';
+
+export const mockSandboxNames: string[] = [
+  'hermes-agent-sandbox',
+  'data-processor-sandbox',
+  'ml-inference-sandbox',
+  'web-scraper-sandbox',
+];
+```
+
+web/src/core/mocks/index.ts:
+```typescript
+export * from './apps.mock';
+export * from './sandboxes.mock';
+```
+
+--- 1C: UTILS (web/src/core/utils/) ---
+
+web/src/core/utils/time-ago.ts — functia comuna, extrasa din pagini:
+```typescript
+export function timeAgo(dateStr: string | Date): string {
+  const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr;
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  return `about ${months} month${months > 1 ? 's' : ''} ago`;
+}
+```
+
+web/src/core/utils/formatters.ts:
+```typescript
+export function formatDate(date: Date | string): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+export function formatCurrency(amount: number, currency = 'USD'): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amount);
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
+```
+
+web/src/core/utils/index.ts:
+```typescript
+export * from './time-ago';
+export * from './formatters';
+```
+
+--- 1D: CORE INDEX ---
+
+web/src/core/index.ts:
+```typescript
+export * from './models';
+export * from './mocks';
+export * from './utils';
+```
+
+--- VALIDARE FAZA 1 ---
+
+```bash
+cd /tmp/repo/web && npx tsc --noEmit
+```
+
+================================================================================
+FAZA 2: USE-CASES SI SERVICES (business logic pura)
+================================================================================
+
+--- 2A: USE-CASES (web/src/core/use-cases/) ---
+
+web/src/core/use-cases/filter-apps.use-case.ts:
+```typescript
+import type { AppModel } from '../models/app.model';
+
+export type FilterType = 'deployer' | 'tag' | null;
+
+export interface AppFilter {
+  status: 'all' | 'live' | 'stopped';
+  filterType: FilterType;
+  filterValue: string | null;
+}
+
+export function filterApps(apps: AppModel[], filter: AppFilter): AppModel[] {
+  let result = [...apps];
+
+  // Status filter
+  if (filter.status === 'live') {
+    result = result.filter((a) => a.status === 'active' || a.status === 'running');
+  } else if (filter.status === 'stopped') {
+    result = result.filter((a) => a.status !== 'active' && a.status !== 'running');
+  }
+
+  // Search filter
+  if (filter.filterType === 'deployer' && filter.filterValue) {
+    result = result.filter((a) => a.deployerName === filter.filterValue);
+  }
+  if (filter.filterType === 'tag' && filter.filterValue) {
+    result = result.filter((a) => a.status === filter.filterValue);
+  }
+
+  return result;
+}
+```
+
+web/src/core/use-cases/sort-apps.use-case.ts:
+```typescript
+import type { AppModel } from '../models/app.model';
+
+export type SortType = 'recent' | 'alphabetical' | 'newest' | 'oldest' | 'activity';
+
+export const SORT_LABELS: Record<SortType, string> = {
+  recent: 'Most recent',
+  alphabetical: 'Alphabetical',
+  newest: 'Newest',
+  oldest: 'Oldest',
+  activity: 'Activity',
+};
+
+export function sortApps(apps: AppModel[], sort: SortType): AppModel[] {
+  const sorted = [...apps];
+  switch (sort) {
+    case 'alphabetical':
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    case 'newest':
+      sorted.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      break;
+    case 'oldest':
+      sorted.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+      break;
+    case 'activity':
+      sorted.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      break;
+    case 'recent':
+    default:
+      sorted.sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      break;
+  }
+  return sorted;
+}
+```
+
+web/src/core/use-cases/get-dashboard-data.use-case.ts:
+```typescript
+import type { AppModel } from '../models/app.model';
+import type { SandboxModel } from '../models/sandbox.model';
+
+export interface DashboardSummary {
+  totalApps: number;
+  liveApps: number;
+  stoppedApps: number;
+  totalSandboxes: number;
+  totalCpuCores: number;
+  totalMemoryMb: number;
+  totalGpuCount: number;
+}
+
+export interface DashboardData {
+  apps: AppModel[];
+  sandboxes: SandboxModel[];
+  summary: DashboardSummary;
+}
+
+export function computeDashboardSummary(apps: AppModel[], sandboxes: SandboxModel[]): DashboardSummary {
+  let totalCpu = 0;
+  let totalMem = 0;
+  let totalGpu = 0;
+
+  for (const app of apps) {
+    for (const inst of app.instances) {
+      if (inst.status === 'active' && inst.runningContainers > 0) {
+        totalCpu += inst.cpu * inst.runningContainers;
+        totalMem += inst.memory * inst.runningContainers;
+        if (inst.gpu) totalGpu += inst.runningContainers;
+      }
+    }
+  }
+
+  return {
+    totalApps: apps.length,
+    liveApps: apps.filter((a) => a.status === 'active').length,
+    stoppedApps: apps.filter((a) => a.status !== 'active').length,
+    totalSandboxes: sandboxes.length,
+    totalCpuCores: totalCpu,
+    totalMemoryMb: totalMem,
+    totalGpuCount: totalGpu,
+  };
+}
+
+export function getDashboardData(apps: AppModel[], sandboxes: SandboxModel[]): DashboardData {
+  return {
+    apps,
+    sandboxes,
+    summary: computeDashboardSummary(apps, sandboxes),
+  };
+}
+```
+
+web/src/core/use-cases/index.ts:
+```typescript
+export * from './filter-apps.use-case';
+export * from './sort-apps.use-case';
+export * from './get-dashboard-data.use-case';
+```
+
+--- 2B: SERVICES (web/src/core/services/) ---
+
+web/src/core/services/mock-decider.service.ts:
+```typescript
+export function shouldUseMocks(): boolean {
+  try {
+    return (import.meta as any).env?.VITE_USE_MOCKS === 'true';
+  } catch {
+    return false;
+  }
+}
+```
+
+web/src/core/services/app.service.ts:
+```typescript
+import type { AppModel } from '../models/app.model';
+import { filterApps, sortApps, type AppFilter, type SortType } from '../use-cases';
+
+export function getFilteredAndSortedApps(
+  apps: AppModel[],
+  filter: AppFilter,
+  sort: SortType
+): AppModel[] {
+  const filtered = filterApps(apps, filter);
+  return sortApps(filtered, sort);
+}
+
+export function getLiveApps(apps: AppModel[]): AppModel[] {
+  return apps.filter((a) => a.status === 'active' || a.status === 'running');
+}
+
+export function getStoppedApps(apps: AppModel[]): AppModel[] {
+  return apps.filter((a) => a.status !== 'active' && a.status !== 'running');
+}
+
+export function mergeAppsWithMocks(realApps: AppModel[], mockApps: AppModel[]): AppModel[] {
+  const combined = [...realApps];
+  for (const mock of mockApps) {
+    if (!combined.find((a) => a.id === mock.id)) {
+      combined.push(mock);
+    }
+  }
+  return combined;
+}
+
+export function getUniqueDeployers(apps: AppModel[]): string[] {
+  return [...new Set(apps.map((a) => a.deployerName).filter(Boolean))] as string[];
+}
+```
+
+web/src/core/services/index.ts:
+```typescript
+export * from './mock-decider.service';
+export * from './app.service';
+```
+
+--- VALIDARE FAZA 2 ---
+
+```bash
+cd /tmp/repo/web && npx tsc --noEmit
+```
+
+================================================================================
+FAZA 3: BFF API ENDPOINT
+================================================================================
+
+--- 3A: CREEAZA api/src/routes/dashboard.js ---
+
+```javascript
+import { authenticate } from '../middleware/auth.js';
+import { queryByPK, getItem } from '../db/schema.js';
+
+export default async function dashboardRoutes(app) {
+  // GET /api/dashboard/:workspaceId/:envId — aggregate dashboard data
+  app.get('/:workspaceId/:envId', { preHandler: [authenticate] }, async (req, reply) => {
+    const { workspaceId, envId } = req.params;
+    const userId = req.user.id;
+
+    // Apps
+    const appRefs = await queryByPK(`USER_APPS#${userId}`);
+    const appsOut = [];
+    for (const ref of appRefs) {
+      const a = await getItem(`APP#${ref.app_id}`, 'META');
+      if (a && a.workspace_id === workspaceId && a.env_id === envId) {
+        const instRefs = await queryByPK(`APP_INSTANCES#${ref.app_id}`);
+        const instOut = [];
+        for (const ir of instRefs) {
+          const inst = await getItem(`APP_INSTANCE#${ir.instance_id}`, 'META');
+          if (inst) {
+            const sbs = await queryByPK(`INSTANCE_SANDBOXES#${ir.instance_id}`);
+            inst.running_containers = sbs.filter(s => s.status === 'running').length;
+            instOut.push(inst);
+          }
+        }
+        a.instances = instOut;
+        appsOut.push(a);
+      }
+    }
+
+    // Sandboxes
+    const sbRefs = await queryByPK(`USER_SANDBOXES#${userId}`);
+    const sandboxesOut = [];
+    for (const ref of sbRefs) {
+      const sb = await getItem(`SANDBOX#${ref.sandbox_id}`, 'META');
+      if (sb) sandboxesOut.push(sb);
+    }
+
+    // Compute summary
+    let totalCpu = 0, totalMem = 0, totalGpu = 0;
+    for (const a of appsOut) {
+      for (const inst of (a.instances || [])) {
+        if (inst.status === 'active' && inst.running_containers > 0) {
+          totalCpu += (inst.cpu || 0) * inst.running_containers;
+          totalMem += (inst.memory || 0) * inst.running_containers;
+          if (inst.gpu) totalGpu += inst.running_containers;
+        }
+      }
+    }
+
+    reply.send({
+      apps: appsOut,
+      sandboxes: sandboxesOut,
+      summary: {
+        totalApps: appsOut.length,
+        liveApps: appsOut.filter(a => a.status === 'active').length,
+        stoppedApps: appsOut.filter(a => a.status !== 'active').length,
+        totalSandboxes: sandboxesOut.length,
+        totalCpuCores: totalCpu,
+        totalMemoryMb: totalMem,
+        totalGpuCount: totalGpu,
+      },
+    });
+  });
+
+  // GET /api/dashboard/:workspaceId/:envId/summary — summary only (lightweight)
+  app.get('/:workspaceId/:envId/summary', { preHandler: [authenticate] }, async (req, reply) => {
+    const { workspaceId, envId } = req.params;
+    const userId = req.user.id;
+
+    const appRefs = await queryByPK(`USER_APPS#${userId}`);
+    let totalApps = 0, liveApps = 0;
+    for (const ref of appRefs) {
+      const a = await getItem(`APP#${ref.app_id}`, 'META');
+      if (a && a.workspace_id === workspaceId && a.env_id === envId) {
+        totalApps++;
+        if (a.status === 'active') liveApps++;
+      }
+    }
+
+    const sbRefs = await queryByPK(`USER_SANDBOXES#${userId}`);
+    const totalSandboxes = sbRefs.length;
+
+    reply.send({
+      totalApps,
+      liveApps,
+      stoppedApps: totalApps - liveApps,
+      totalSandboxes,
+    });
+  });
+}
+```
+
+--- 3B: INREGISTREAZA RUTA in api/src/index.js ---
+
+Adauga linia de import dupa celelalte import-uri de rute (dupa linia cu `import adminRoutes from './routes/admin.js';`):
+```javascript
+import dashboardRoutes from './routes/dashboard.js';
+```
+
+Adauga inregistrarea dupa celelalte rute (dupa `await app.register(adminRoutes, { prefix: '/api/admin' });`):
+```javascript
+await app.register(dashboardRoutes, { prefix: '/api/dashboard' });
+```
+
+--- 3C: CREEAZA web/src/api/dashboard.ts (tipuri TypeScript pentru noul endpoint) ---
+
+```typescript
+import { apiFetch } from './client';
+import type { AppModel } from '../core/models/app.model';
+import type { SandboxModel } from '../core/models/sandbox.model';
+import { mapAppFromApi } from '../core/models/app.model';
+import { mapSandboxFromApi } from '../core/models/sandbox.model';
+
+export interface DashboardApiResponse {
+  apps: Record<string, any>[];
+  sandboxes: Record<string, any>[];
+  summary: DashboardApiSummary;
+}
+
+export interface DashboardApiSummary {
+  totalApps: number;
+  liveApps: number;
+  stoppedApps: number;
+  totalSandboxes: number;
+  totalCpuCores?: number;
+  totalMemoryMb?: number;
+  totalGpuCount?: number;
+}
+
+export interface DashboardData {
+  apps: AppModel[];
+  sandboxes: SandboxModel[];
+  summary: DashboardApiSummary;
+}
+
+export async function getDashboardData(
+  workspaceId: string,
+  envId: string
+): Promise<DashboardData> {
+  const raw = await apiFetch<DashboardApiResponse>(`/dashboard/${workspaceId}/${envId}`);
+  return {
+    apps: raw.apps.map(mapAppFromApi),
+    sandboxes: raw.sandboxes.map(mapSandboxFromApi),
+    summary: raw.summary,
+  };
+}
+
+export async function getDashboardSummary(
+  workspaceId: string,
+  envId: string
+): Promise<DashboardApiSummary> {
+  return apiFetch<DashboardApiSummary>(`/dashboard/${workspaceId}/${envId}/summary`);
+}
+```
+
+--- VALIDARE FAZA 3 ---
+
+```bash
+cd /tmp/repo/api && npm install && node -e "
+  import('./src/index.js').then(() => {
+    console.log('API loaded OK');
+    process.exit(0);
+  }).catch(e => {
+    console.error(e);
+    process.exit(1);
+  });
+"
+```
+
+================================================================================
+FAZA 4: REFACTORIZARE HOOKS
+================================================================================
+
+--- 4A: web/src/hooks/useApps.ts ---
+
+Sterge tot continutul si rescrie:
+```typescript
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { listApps, stopApp, deleteApp, type App } from '../api/apps';
+import { useAuth } from './useAuth';
+import { mockApps } from '../core/mocks/apps.mock';
+import { shouldUseMocks } from '../core/services/mock-decider.service';
+import { getFilteredAndSortedApps, getLiveApps, getStoppedApps } from '../core/services/app.service';
+import type { AppFilter, SortType } from '../core/use-cases/filter-apps.use-case';
+import { mapAppFromApi } from '../core/models/app.model';
+
+function combineApps(apiApps: App[]): App[] {
+  const combined = [...apiApps];
+  // Adauga mock-uri daca nu exista deja
+  const mockAsApiApps = mockApps.map((m) => ({
+    ...m,
+    environment_id: m.environmentId,
+    deployer_name: m.deployerName,
+    created_at: m.createdAt.toISOString(),
+    updated_at: m.updatedAt.toISOString(),
+  })) as unknown as App[];
+  for (const mock of mockAsApiApps) {
+    if (!combined.find((a) => a.id === mock.id)) {
+      combined.push(mock);
+    }
+  }
+  return combined;
+}
+
+export function useApps(envId?: string) {
+  const { devMode } = useAuth();
+  const useMocks = devMode || shouldUseMocks();
+
+  return useQuery<App[]>({
+    queryKey: ['apps', envId],
+    queryFn: async () => {
+      if (useMocks) {
+        return mockApps.map((m) => ({
+          ...m,
+          environment_id: m.environmentId,
+          deployer_name: m.deployerName,
+          created_at: m.createdAt.toISOString(),
+          updated_at: m.updatedAt.toISOString(),
+        })) as unknown as App[];
+      }
+      const raw = await listApps(envId);
+      return combineApps(raw);
+    },
+    staleTime: useMocks ? Infinity : 30000,
+  });
+}
+
+export function useFilteredApps(apps: App[] | undefined, filter: AppFilter, sort: SortType) {
+  // Aceasta e o functie utilitara apelata direct din pagini, nu un hook React Query
+  if (!apps) return [];
+  const models = apps.map((a: any) => mapAppFromApi(a));
+  return getFilteredAndSortedApps(models, filter, sort);
+}
+
+export function useLiveApps(apps: App[] | undefined) {
+  if (!apps) return [];
+  const models = apps.map((a: any) => mapAppFromApi(a));
+  return getLiveApps(models);
+}
+
+export function useStoppedApps(apps: App[] | undefined) {
+  if (!apps) return [];
+  const models = apps.map((a: any) => mapAppFromApi(a));
+  return getStoppedApps(models);
+}
+
+export function useStopApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: stopApp,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['apps'] }),
+  });
+}
+
+export function useDeleteApp() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: deleteApp,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['apps'] }),
+  });
+}
+```
+
+--- 4B: web/src/hooks/useAuth.tsx ---
+
+Adauga un hook new `useCurrentUser` la sfarsitul fisierului (NU sterge ce exista):
+```typescript
+export function useCurrentUser() {
+  const { token } = useAuth();
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return {
+      id: payload.sub ?? payload.user_id ?? '',
+      email: payload.email ?? '',
+      name: payload.name ?? 'User',
+    };
+  } catch {
+    return null;
+  }
+}
+```
+
+--- 4C: web/src/hooks/useWorkspaces.ts ---
+
+Asigura-te ca foloseste modelele noi. Daca fisierul e simplu (doar useQuery wrapper), lasa-l aproape neschimbat, dar importa tipurile din core/models/:
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { listWorkspaces, type Workspace } from '../api/workspaces';
+
+export function useWorkspaces() {
+  return useQuery<Workspace[]>({
+    queryKey: ['workspaces'],
+    queryFn: listWorkspaces,
+  });
+}
+```
+
+--- 4D: web/src/hooks/useSandboxes.ts ---
+
+Similar, pastreaza structura dar asigura-te ca tipurile sunt consistente:
+```typescript
+import { useQuery } from '@tanstack/react-query';
+import { listSandboxes, type Sandbox } from '../api/sandboxes';
+
+export function useSandboxes() {
+  return useQuery<Sandbox[]>({
+    queryKey: ['sandboxes'],
+    queryFn: listSandboxes,
+  });
+}
+```
+
+================================================================================
+FAZA 5: REFACTORIZARE PAGINI
+================================================================================
+
+ATENTIE: Pastreaza EXACT acelasi HTML/JSX si Tailwind classes. Doar muta logica, nu schimba UI-ul.
+
+--- 5A: web/src/pages/DashboardPage.tsx (700+ linii → sub 400) ---
+
+Modificari:
+1. Sterge mockApps (linii 12-59) si mockSandboxApps (linii 62-73)
+2. Sterge functia timeAgo (linii 597-608)
+3. Importa din core:
+```typescript
+import { mockApps, mockSandboxApps } from '../core/mocks/apps.mock';
+import { timeAgo } from '../core/utils/time-ago';
+import { filterApps, sortApps, SORT_LABELS, type AppFilter, type FilterType, type SortType } from '../core/use-cases';
+```
+4. In locul mock-urilor inline, foloseste `import { mockApps, mockSandboxApps }`
+5. In locul functiei timeAgo locala, foloseste `import { timeAgo }`
+6. In locul logicii de filtrare/sortare manuale, foloseste `filterApps()` si `sortApps()` din core/use-cases/
+7. Extrage componentele SearchFilterDropdown si SortDropdown in fisiere separate (vezi mai jos)
+
+Noul inceput al DashboardPage.tsx:
+```typescript
+import { useState, useMemo } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useApps } from '../hooks/useApps';
+import type { App } from '../api/apps';
+import { Cloud, XCircle, ScrollText } from 'lucide-react';
+import { mockApps, mockSandboxApps } from '../core/mocks/apps.mock';
+import { timeAgo } from '../core/utils/time-ago';
+import { filterApps, sortApps, SORT_LABELS } from '../core/use-cases';
+import type { AppFilter, FilterType, SortType } from '../core/use-cases/filter-apps.use-case';
+import { SearchFilterDropdown } from '../components/SearchFilterDropdown';
+import { SortDropdown } from '../components/SortDropdown';
+```
+
+Functia AppCard ramane in DashboardPage.tsx dar foloseste `timeAgo` importat.
+
+--- 5B: CREEAZA web/src/components/SearchFilterDropdown.tsx ---
+
+Extrage TOATA componenta SearchFilterDropdown din DashboardPage.tsx (linii 261-438) in acest fisier nou.
+Importurile necesare:
+```typescript
+import { useState } from 'react';
+import { Search, XCircle, ChevronDown, ChevronRight, Check, ArrowLeft } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import type { FilterType } from '../core/use-cases/filter-apps.use-case';
+```
+
+--- 5C: CREEAZA web/src/components/SortDropdown.tsx ---
+
+Extrage componenta SortDropdown din DashboardPage.tsx (linii 440-480) in acest fisier nou:
+```typescript
+import { Check, ChevronDown } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import { SORT_LABELS, type SortType } from '../core/use-cases/sort-apps.use-case';
+```
+
+--- 5D: web/src/pages/AppDetailPage.tsx (700+ linii → sub 500) ---
+
+Modificari:
+1. Sterge mockSandboxes (linii 26-31)
+2. Sterge functia timeAgo (linii 45-56)
+3. Importa din core:
+```typescript
+import { mockSandboxNames } from '../core/mocks/sandboxes.mock';
+import { timeAgo } from '../core/utils/time-ago';
+```
+4. Inlocuieste `const sandboxes = (app as any)?.sandboxes ?? mockSandboxes` cu `const sandboxes = (app as any)?.sandboxes ?? mockSandboxNames`
+5. Inlocuieste apelul local `timeAgo(...)` cu cel importat
+
+--- 5E: ALTE PAGINI ---
+
+Verifica si actualizeaza import-urile in:
+- web/src/pages/BillingPage.tsx
+- web/src/pages/SecretsPage.tsx
+- web/src/pages/ImagesPage.tsx
+- web/src/pages/VolumesPage.tsx
+- web/src/pages/StoragePage.tsx
+- web/src/pages/SchedulesPage.tsx
+- web/src/pages/WorkspacesPage.tsx
+- web/src/pages/WorkspaceDetailPage.tsx
+- web/src/pages/LogsPage.tsx
+
+Daca aceste pagini folosesc functii duplicate (ex: timeAgo, formatDate), inlocuieste-le cu import-uri din `../core/utils/`.
+
+================================================================================
+FAZA 6: VALIDARE FINALA
+================================================================================
+
+```bash
+# Build frontend
+cd /tmp/repo/web
+npm install
+npx tsc --noEmit
+npm run build
+
+# Test API (doar incarcare, fara erori de sintaxa)
+cd /tmp/repo/api
+npm install
+node -e "import('./src/index.js').then(() => { console.log('OK'); process.exit(0); }).catch(e => { console.error(e); process.exit(1); })"
+```
+
+Daca toate trec, fa commit final si push:
+```bash
+cd /tmp/repo
+git add -A
+git commit -m "refactor: clean architecture - core layer, BFF endpoint, extract business logic
+
+- Add web/src/core/ with models, mocks, utils, services, use-cases
+- Add BFF dashboard aggregate endpoint (api/src/routes/dashboard.js)
+- Extract timeAgo, filterApps, sortApps into reusable core utilities
+- Extract SearchFilterDropdown and SortDropdown into separate components
+- Remove inline mock data from pages and hooks
+- Clean up duplicate code
+
+Co-Authored-By: Oz <oz-agent@warp.dev>"
+
+git push origin boxty/web-refactor-v3
+```
+
+================================================================================
+REGULI ABSOLUTE
+================================================================================
+
+1. NU schimba HTML/JSX sau Tailwind classes — pastreaza UI-ul identic
+2. NU sterge functionalitate existenta — doar reorganizeaza codul
+3. Modelele folosesc camelCase cu mapper din snake_case API
+4. Toate serviciile si use-case-urile sunt functii pure (fara React, fara hooks)
+5. Fiecare fisier nou trebuie sa compileze cu tsc --noEmit
+6. Fa commit-uri atomice dupa fiecare faza (minim 4 commit-uri: models+mocks, use-cases+services, BFF+api, hooks+pages)
+7. Daca intampini erori de tip, rezolva-le inainte de a trece la faza urmatoare

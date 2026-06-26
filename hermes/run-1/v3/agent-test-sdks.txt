@@ -1,0 +1,93 @@
+TASK: Rulează unit tests pentru ambele SDK-uri și verifică API.
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul de lucru: `/tmp/repo`. Nu e nevoie de servicii pornite — testele sunt unitare (mock).
+
+=== STEP 1: Python SDK — install + test ===
+
+```bash
+cd /tmp/repo/sdk-py
+echo "--- Python SDK install ---"
+pip install -e . 2>&1 | tail -5
+if [ $? -ne 0 ]; then
+  echo "❌ SDK Python install eșuat"
+  exit 1
+fi
+echo "✅ SDK Python installed"
+
+echo ""
+echo "--- Python SDK unit tests ---"
+python3 -m pytest test/ -v 2>&1 || python3 -m unittest discover test/ -v 2>&1
+if [ $? -eq 0 ]; then
+  echo "✅ Python SDK tests PASSED"
+else
+  echo "❌ Python SDK tests FAILED"
+fi
+```
+
+=== STEP 2: JavaScript SDK — install + build + test ===
+
+```bash
+cd /tmp/repo/sdk-js
+echo "--- SDK JS install ---"
+npm install 2>&1 | tail -5
+echo "✅ SDK JS deps installed"
+
+echo ""
+echo "--- SDK JS build ---"
+npm run build 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ SDK JS build eșuat"
+  exit 1
+fi
+echo "✅ SDK JS compiles"
+
+echo ""
+echo "--- SDK JS unit tests (Node native) ---"
+# Node 20+ native test runner, tests compile via tsc into dist/
+node --test dist/test/*.test.js 2>&1
+JS_EXIT=$?
+if [ $JS_EXIT -eq 0 ]; then
+  echo "✅ JS SDK tests PASSED"
+else
+  echo "❌ JS SDK tests FAILED"
+fi
+
+# Verify exports
+node -e "import('./dist/index.js').then(m => { console.log('✅ Exports:', Object.keys(m)); })" 2>&1
+
+echo ""
+echo "--- SDK JS lint ---"
+npm run lint 2>&1 || echo "⚠️ Lint warnings"
+```
+
+=== STEP 3: API — install + lint ===
+
+```bash
+cd /tmp/repo/api
+echo "--- API install ---"
+npm install 2>&1 | tail -5
+echo "✅ API deps installed"
+
+echo ""
+echo "--- API lint ---"
+npm run lint 2>&1 || echo "⚠️ Lint warnings"
+
+# Import check: verifică că toate route files se pot parsa
+echo ""
+echo "--- API module check ---"
+node -e "
+import('./src/index.js').then(() => console.log('✅ API modules load')).catch(e => console.log('⚠️ API top-level load error (expected without DB):', e.message))
+" 2>&1 | head -10
+echo "✅ API module check done"
+```
+
+=== RAPORT ===
+
+Raportează ✅/❌:
+- Python SDK (install + tests)
+- JS SDK (install + build + tests + lint)
+- API (install + lint)
+
+Dacă ceva eșuează, arată eroarea exactă.

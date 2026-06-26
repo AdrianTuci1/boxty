@@ -1,0 +1,57 @@
+name: Deploy Control Plane Contabo
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: production
+      inventory_path:
+        description: Ansible inventory path
+        required: true
+        default: ansible/inventory.yml
+
+jobs:
+  deploy-control-plane:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Ansible
+        run: pip install ansible
+
+      - name: Write SSH key
+        env:
+          CONTROL_PLANE_SSH_KEY: ${{ secrets.CONTROL_PLANE_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$CONTROL_PLANE_SSH_KEY" > ~/.ssh/control_plane
+          chmod 600 ~/.ssh/control_plane
+
+      - name: Deploy control plane
+        env:
+          ANSIBLE_HOST_KEY_CHECKING: "false"
+          BOXTY_SECRET_ENCRYPTION_KEY: ${{ secrets.BOXTY_SECRET_ENCRYPTION_KEY }}
+          BOXTY_PROVIDER_SHARED_TOKEN: ${{ secrets.BOXTY_PROVIDER_SHARED_TOKEN }}
+          BOXTY_R2_ACCOUNT_ID: ${{ secrets.BOXTY_R2_ACCOUNT_ID }}
+          BOXTY_R2_BUCKET: ${{ secrets.BOXTY_R2_BUCKET }}
+          BOXTY_R2_ACCESS_KEY_ID: ${{ secrets.BOXTY_R2_ACCESS_KEY_ID }}
+          BOXTY_R2_SECRET_ACCESS_KEY: ${{ secrets.BOXTY_R2_SECRET_ACCESS_KEY }}
+          BOXTY_R2_PUBLIC_BASE_URL: ${{ secrets.BOXTY_R2_PUBLIC_BASE_URL }}
+          BOXTY_DYNAMODB_TABLE_NAME: ${{ secrets.BOXTY_DYNAMODB_TABLE_NAME }}
+          BOXTY_DYNAMODB_REGION: ${{ secrets.BOXTY_DYNAMODB_REGION || 'eu-central-1' }}
+          BOXTY_RUNPOD_API_KEY: ${{ secrets.BOXTY_RUNPOD_API_KEY }}
+          BOXTY_SMTP_HOST: ${{ secrets.BOXTY_SMTP_HOST }}
+          BOXTY_SMTP_PORT: ${{ secrets.BOXTY_SMTP_PORT || '587' }}
+          BOXTY_SMTP_USERNAME: ${{ secrets.BOXTY_SMTP_USERNAME }}
+          BOXTY_SMTP_PASSWORD: ${{ secrets.BOXTY_SMTP_PASSWORD }}
+          BOXTY_INVITE_EMAIL_FROM: ${{ secrets.BOXTY_INVITE_EMAIL_FROM }}
+        run: |
+          ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-control-plane.yml

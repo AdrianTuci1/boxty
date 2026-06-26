@@ -1,0 +1,98 @@
+---
+- name: Deploy Boxty Control Plane on Contabo
+  hosts: boxty_control_plane
+  become: true
+  vars:
+    boxty_control_plane_dir: "/opt/boxty-control-plane"
+    boxty_control_plane_user: "boxty"
+    boxty_control_plane_group: "boxty"
+    boxty_control_plane_service: "boxty-control-plane"
+    boxty_control_plane_version: "{{ lookup('env', 'BOXTY_CONTROL_PLANE_VERSION') | default('main', true) }}"
+
+  tasks:
+    - name: Ensure boxty user exists
+      ansible.builtin.user:
+        name: "{{ boxty_control_plane_user }}"
+        system: true
+        shell: /bin/false
+        home: "{{ boxty_control_plane_dir }}"
+        createhome: true
+
+    - name: Ensure control plane directory exists
+      ansible.builtin.file:
+        path: "{{ boxty_control_plane_dir }}"
+        state: directory
+        owner: "{{ boxty_control_plane_user }}"
+        group: "{{ boxty_control_plane_group }}"
+        mode: "0750"
+
+    - name: Install runtime dependencies
+      ansible.builtin.package:
+        name:
+          - git
+          - python3
+          - python3-venv
+        state: present
+
+    - name: Sync control plane source
+      ansible.builtin.copy:
+        src: "../control_plane/"
+        dest: "{{ boxty_control_plane_dir }}/app/"
+        owner: "{{ boxty_control_plane_user }}"
+        group: "{{ boxty_control_plane_group }}"
+        mode: "0750"
+      notify: Restart control plane
+
+    - name: Create Python virtual environment
+      ansible.builtin.command:
+        cmd: "python3 -m venv {{ boxty_control_plane_dir }}/.venv"
+        creates: "{{ boxty_control_plane_dir }}/.venv/bin/python"
+      become_user: "{{ boxty_control_plane_user }}"
+
+    - name: Ensure pip is up-to-date
+      ansible.builtin.command:
+        cmd: "{{ boxty_control_plane_dir }}/.venv/bin/python -m pip install --upgrade pip"
+      become_user: "{{ boxty_control_plane_user }}"
+
+    - name: Install control plane from pyproject.toml
+      ansible.builtin.command:
+        cmd: "{{ boxty_control_plane_dir }}/.venv/bin/pip install -e {{ boxty_control_plane_dir }}/app/"
+        creates: "{{ boxty_control_plane_dir }}/.venv/bin/boxty-control-plane"
+      become_user: "{{ boxty_control_plane_user }}"
+      notify: Restart control plane
+
+    - name: Deploy control plane env file
+      ansible.builtin.template:
+        src: templates/control-plane.env.j2
+        dest: "{{ boxty_control_plane_dir }}/control-plane.env"
+        owner: "{{ boxty_control_plane_user }}"
+        group: "{{ boxty_control_plane_group }}"
+        mode: "0600"
+      notify: Restart control plane
+      no_log: true
+
+    - name: Deploy control plane service
+      ansible.builtin.template:
+        src: templates/boxty-control-plane.service.j2
+        dest: "/etc/systemd/system/{{ boxty_control_plane_service }}.service"
+        mode: "0644"
+      notify:
+        - Reload systemd
+        - Restart control plane
+
+    - name: Enable and start control plane
+      ansible.builtin.systemd:
+        name: "{{ boxty_control_plane_service }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart control plane
+      ansible.builtin.systemd:
+        name: "{{ boxty_control_plane_service }}"
+        state: restarted

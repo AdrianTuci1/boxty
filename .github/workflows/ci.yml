@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  control-plane:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - run: pip install -e control_plane/
+      - run: python -c "import app; print('control-plane OK')"
+      - run: pip install ruff && ruff check control_plane/app/ || true
+
+  sdk-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install build
+      - run: python -m build sdk/python/
+      - run: pip install sdk/python/dist/*.whl
+      - run: python -c "import boxty; print(boxty.__version__)"
+
+  sdk-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+        working-directory: sdk/js
+      - run: npm run build
+        working-directory: sdk/js
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+
+  landing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm ci
+        working-directory: landing
+      - run: npm run build
+        working-directory: landing
+
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo check
+        working-directory: cli/sdk
+
+  ansible:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install ansible
+      - run: ansible-playbook ansible/deploy-workers.yml --syntax-check
+      - run: ansible-playbook ansible/deploy-control-plane.yml --syntax-check
+      - run: ansible-inventory -i ansible/inventory.yml --list

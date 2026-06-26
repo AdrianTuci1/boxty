@@ -1,0 +1,199 @@
+---
+# Ansible Playbook: Boxty Worker Fleet Deployment
+# Deploys boxty CLI as a worker service across multiple VPS nodes
+# Usage: ansible-playbook -i inventory.yml deploy-workers.yml
+
+- name: Deploy Boxty Worker Fleet
+  hosts: boxty_workers
+  become: true
+  vars:
+    boxty_version: "{{ lookup('env', 'BOXTY_VERSION') | default('latest', true) }}"
+    boxty_install_dir: "/opt/boxty"
+    boxty_bin_dir: "/usr/local/bin"
+    boxty_user: "boxty"
+    boxty_group: "boxty"
+    boxty_service_name: "boxty-worker"
+    cli_base_url: "https://cli.boxty.dev"
+
+  tasks:
+    # ═══════════════════════════════════════════════════════════
+    # 1. SYSTEM PREP
+    # ═══════════════════════════════════════════════════════════
+    - name: Ensure boxty user exists
+      ansible.builtin.user:
+        name: "{{ boxty_user }}"
+        system: true
+        shell: /bin/false
+        home: "{{ boxty_install_dir }}"
+        createhome: true
+
+    - name: Ensure install directory exists
+      ansible.builtin.file:
+        path: "{{ boxty_install_dir }}"
+        state: directory
+        owner: "{{ boxty_user }}"
+        group: "{{ boxty_group }}"
+        mode: '0750'
+
+    - name: Install dependencies
+      ansible.builtin.package:
+        name:
+          - curl
+          - jq
+          - docker.io
+        state: present
+
+    - name: Ensure docker service is running
+      ansible.builtin.systemd:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Add boxty user to docker group
+      ansible.builtin.user:
+        name: "{{ boxty_user }}"
+        groups: docker
+        append: true
+      notify: Restart boxty worker
+
+    # ═══════════════════════════════════════════════════════════
+    # 2. DOWNLOAD CLI BINARY
+    # ═══════════════════════════════════════════════════════════
+    - name: Detect platform
+      ansible.builtin.set_fact:
+        boxty_os: "{{ 'linux' if ansible_system == 'Linux' else 'macos' if ansible_system == 'Darwin' else 'unknown' }}"
+        boxty_arch: "{{ 'x64' if ansible_architecture == 'x86_64' else 'arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'unknown' }}"
+
+    - name: Validate platform support
+      ansible.builtin.fail:
+        msg: "Unsupported platform: {{ boxty_os }}-{{ boxty_arch }}"
+      when: boxty_os == 'unknown' or boxty_arch == 'unknown'
+
+    - name: Construct download URL
+      ansible.builtin.set_fact:
+        boxty_binary_name: "boxty-{{ boxty_os }}-{{ boxty_arch }}"
+        boxty_download_url: "{{ cli_base_url }}/{{ boxty_version }}/boxty-{{ boxty_os }}-{{ boxty_arch }}"
+
+    - name: Download boxty CLI binary
+      ansible.builtin.get_url:
+        url: "{{ boxty_download_url }}"
+        dest: "{{ boxty_install_dir }}/boxty"
+        mode: '0755'
+        owner: "{{ boxty_user }}"
+        group: "{{ boxty_group }}"
+      notify: Restart boxty worker
+
+    - name: Verify binary exists
+      ansible.builtin.stat:
+        path: "{{ boxty_install_dir }}/boxty"
+      register: boxty_binary_stat
+
+    - name: Fail if binary not found
+      ansible.builtin.fail:
+        msg: "Boxty binary not found at {{ boxty_install_dir }}/boxty"
+      when: not boxty_binary_stat.stat.exists
+
+    # ═══════════════════════════════════════════════════════════
+    # 3. VERIFY SIGNATURE (if cosign.pub exists)
+    # ═══════════════════════════════════════════════════════════
+    - name: Check for public key
+      ansible.builtin.stat:
+        path: "{{ boxty_install_dir }}/cosign.pub"
+      register: cosign_pub_stat
+
+    - name: Download signature
+      ansible.builtin.get_url:
+        url: "{{ boxty_download_url }}.sig"
+        dest: "{{ boxty_install_dir }}/boxty.sig"
+        mode: '0644'
+      when: cosign_pub_stat.stat.exists
+
+    - name: Verify binary signature
+      ansible.builtin.command:
+        cmd: "cosign verify-blob --key {{ boxty_install_dir }}/cosign.pub --signature {{ boxty_install_dir }}/boxty.sig {{ boxty_install_dir }}/boxty"
+      when: cosign_pub_stat.stat.exists
+      changed_when: false
+
+    # ═══════════════════════════════════════════════════════════
+    # 4. CONFIGURE WORKER
+    # ═══════════════════════════════════════════════════════════
+    - name: Create worker config directory
+      ansible.builtin.file:
+        path: "{{ boxty_install_dir }}/config"
+        state: directory
+        owner: "{{ boxty_user }}"
+        group: "{{ boxty_group }}"
+        mode: '0750'
+
+    - name: Deploy worker config
+      ansible.builtin.template:
+        src: worker-config.json.j2
+        dest: "{{ boxty_install_dir }}/config/worker.json"
+        owner: "{{ boxty_user }}"
+        group: "{{ boxty_group }}"
+        mode: '0640'
+      notify: Restart boxty worker
+
+    - name: Deploy secrets
+      ansible.builtin.template:
+        src: secrets.env.j2
+        dest: "{{ boxty_install_dir }}/config/secrets.env"
+        owner: "{{ boxty_user }}"
+        group: "{{ boxty_group }}"
+        mode: '0600'
+      notify: Restart boxty worker
+      no_log: true
+
+    # ═══════════════════════════════════════════════════════════
+    # 5. SYSTEMD SERVICE
+    # ═══════════════════════════════════════════════════════════
+    - name: Deploy systemd service
+      ansible.builtin.template:
+        src: boxty-worker.service.j2
+        dest: "/etc/systemd/system/{{ boxty_service_name }}.service"
+        mode: '0644'
+      notify:
+        - Reload systemd
+        - Restart boxty worker
+
+    - name: Enable and start service
+      ansible.builtin.systemd:
+        name: "{{ boxty_service_name }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+    # ═══════════════════════════════════════════════════════════
+    # 6. HEALTH CHECK & MONITORING
+    # ═══════════════════════════════════════════════════════════
+    - name: Wait for worker to register with control plane
+      ansible.builtin.uri:
+        url: "{{ boxty_control_plane_url }}/healthz"
+        method: GET
+        status_code: 200
+      register: health_check
+      until: health_check.status == 200
+      retries: 10
+      delay: 3
+      ignore_errors: true
+
+    - name: Check worker binary version
+      ansible.builtin.command:
+        cmd: "{{ boxty_install_dir }}/boxty --version"
+      register: boxty_version_check
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display status
+      ansible.builtin.debug:
+        msg: "Boxty worker on {{ inventory_hostname }}: binary={{ boxty_version_check.stdout | default('unknown') }}, control_plane={{ health_check.status | default('unreachable') }}"
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Restart boxty worker
+      ansible.builtin.systemd:
+        name: "{{ boxty_service_name }}"
+        state: restarted

@@ -1,0 +1,71 @@
+You are an elite, production-grade Frontend Engineer and UI/UX Architect. Your task is to implement a complete, multi-page, file-based cloud infrastructure dashboard (a pixel-perfect clone of Modal Labs). The application must use React, TypeScript, Tailwind CSS, Radix UI primitives, and Recharts.
+
+--- GLOBAL SYSTEM TOKENS & DESIGN RULES ---
+• Backgrounds: Deep Canvas = #111111 (bg-[#111111]), Cards & Surfaces & Drawers = #161616 (bg-[#161616]), Header & Row Hover = #1f1f1f (bg-[#1f1f1f]), App Bar = #1a1a1a
+• Borders: Solid 1px tokens = #262626 (border-[#262626])
+• Accents: Brand Mint Green = #34d399 (text-[#34d399] / bg-[#34d399]), Badge Purple = #e879f9 (text-[#e879f9] / bg-[#2e1c36])
+• Typography: Sans-serif UI face with tight letter-tracking. Code elements must use strict monospace font family (font-mono), tracking-tight, text-[13px].
+• Core Paradigm: This is NOT a client-side SPA. It utilizes multi-page file-based routing. All Right-Side Slid-Out Sheets (Drawers) must read/write state from URL Query Parameters (?drawer=... or ?sandboxId=...&tab=...).
+
+--- FILE-BASED DIRECTORY STRUCTURING & PIXEL-PERFECT COMPONENTS ---
+
+1. GLOBAL LAYOUT FRAMEWORK (app/layout.tsx)
+   • Top Fixed Navbar (h-14, bg-[#111111], border-b border-[#262626], px-4, flex items-center justify-between):
+     - Left Section (flex items-center gap-2):
+       * Abstract Logo: Three overlapping custom isometric green/mint vector cubes.
+       * Workspace Dropdown (Radix): Avatar bubble -> "adrian-tucicovenco" -> Badge (bg-[#2e1c36], text-[#e879f9], border border-[#4a285a], text-[11px], px-1.5, py-0.5, rounded font-mono, string "Starter") -> Chevron Down. Click reveals list with "staging-static", "Upgrade workspace", "Manage workspaces".
+       * Divider: Solid forward slash "/" text-gray-600 mx-2.
+       * Environment Dropdown (Radix): Text "main" in font-mono next to a chevron. Click reveals list ['main', 'staging', 'production'] and a bottom action entry with a plus icon: "Create environment".
+     - Right Section (flex items-center gap-4):
+       * Mock Search Trigger Bar: bg-[#161616] border border-[#262626] rounded px-3 py-1.5 width-[240px] text-gray-500 text-xs flex justify-between items-center content: "Search docs, apps..." followed by a border shortcut badge: "⌘K".
+       * Workspace Metrics Link Button: text-gray-400 text-xs font-medium hover:text-white transition-colors cursor-pointer element string "• Workspace metrics". Trigger behavior: appends `?drawer=workspace-metrics` to the current URL.
+       * Credits Pill: bg-[#1a1a1a] border border-[#262626] px-3 py-1 rounded-full text-xs text-gray-300 font-medium layout: "Credits $9.44 left".
+       * Far Right: Notification Bell icon button and a user profile circular avatar image.
+
+2. MAIN EXPLORER STRUCTURAL LAYOUT ((main-explorer)/layout.tsx)
+   • Sidebar Navigation Panel (w-60, border-r border-[#262626], bg-[#111111], p-3, flex flex-col gap-1):
+     - Sidebar links mapping paths: 'Apps', 'Logs', 'Secrets', 'Storage'. Active route gets bg-[#1f1f1f], text-white, rounded-md, p-2. Inactive links get text-gray-400 hover:text-white.
+   • Main Canvas Page Routing (/apps/page.tsx):
+     - Horizontal secondary view toggles represented by dense pill labels:
+       * Capsule 1: "Live" -> bg-[#142920] text-[#34d399] border border-[#1e3f31] px-3 py-1 rounded-full text-xs font-semibold.
+       * Capsule 2: "Stopped" -> bg-[#161616] text-gray-400 border border-[#262626] px-3 py-1 rounded-full text-xs font-medium.
+     - Application Stack List: Vertical array of nested application components (`space-y-3`). Each card uses bg-[#161616] border border-[#262626] rounded-xl. Header block shows the application title (e.g., "statsparrot-pne", "dental-tooth-segmentation") left in bold font-mono, and deployer telemetry right ("adrian-tucicovenco • about 1 month ago"). Inner function rows are indented, displaying endpoints like "fastapi_app" along with clear code tech capsules: "CPU", "Web Function", or "T4 GPU".
+
+3. PER-APP ANALYTICS STRUCTURAL INTERFACE ((main-explorer)/apps/[app_name]/layout.tsx)
+   • Nested Double-Sidebar Architecture:
+     - Leftmost panel is the main sidebar. Next to it, render a secondary 240px internal sub-sidebar. 
+     - Top of sub-sidebar holds a text input: bg-transparent border border-[#262626] rounded-md px-3 py-1.5 text-xs text-white placeholder-gray-600 value placeholder "Search functions".
+     - Bottom holds a stacked list of functional items (e.g., 'fastapi_app', 'api_predict'). The active item gets an identical deep emerald layout wrap (bg-[#142920]/40, border-l-2 border-[#34d399], text-[#34d399]).
+   • Content View Tab-Array Headers:
+     - Multi-page hard routing tabs stretching horizontally above the layout viewport: ['Overview', 'Deployment History', 'App Logs', 'Usage', 'Sandboxes'].
+
+4. SYSTEM SETTINGS DIRECTORY CANVAS ((settings)/layout.tsx)
+   • Profile Sidebar Configuration: Left control pane mapping options: ['Profile', 'Workspaces', 'Email Preferences', 'Usage & Billing', 'API Tokens'].
+   • Page Route (/settings/usage/page.tsx):
+     - Cost Summary Container Card: bg-[#161616] border border-[#262626] p-5 rounded-xl. Displays a left metadata column layout: Total Spend ($0.00), Total Usage ($22.00), Credits Applied ($-22.00). Right side shows a horizontal continuous loading bar track representing "Usage Breakdown: $22.00", fully shaded with a solid #34d399 layer over a sub-label reading "• Deployed Apps $22.00".
+     - Strategic Policy Box: Houses a Current Plan grid and Usage Limit list detailing pricing parameters, finalized with a flat dark push-button reading "Set a budget".
+   • Page Route (/settings/api-tokens/page.tsx):
+     - Secure Token Vault Grid Header: Displays an absolute item counter "API Tokens (4)" alongside a structural button block "New Token".
+     - Table Configuration: Rows map out key-identities. Left alignment tracks Token Name in font-bold (e.g., "hermes") and its cryptographically masked underlying string block down below in font-mono format ("ak-jllom3cesu0lxv4rvjzbkz"). Right alignment handles date flags ("June 1, 2026") and absolute real-time activity indicators ("Last used 25 minutes ago"). far right handles a triple-dot context element.
+
+5. SYSTEM DRAWERS LAYER (Slid-out sheets opening from the right edge, h-full, bg-[#161616], border-l border-[#262626], shadow-2xl, backdrop-blur overlay)
+
+   • DRAWER 1: WORKSPACE METRICS DRAWER (Width: w-[500px])
+     - Mount Criteria: Active when URL query contains `?drawer=workspace-metrics`.
+     - Top Matrix Cards: 4 borderless matrix blocks. Each container displays an infrastructure label, a large white count string ("0"), and an absolute ceiling boundary metric badge: "Limit: 100" (Total containers), "Limit: 10" (Total GPUs), "Live sandboxes", or "Pending sandboxes".
+     - Resource Utilization Area Chart: Custom Recharts Area Chart displaying system-wide container concurrency timelines. X-axis maps local time periods (`1d`, `EEST`). Legend pills match graph stroke colors to background running pipelines (mint green, amber, soft pink, light blue, gray).
+
+   • DRAWER 2: SANDBOX TELEMETRY & LIFECYCLE DRAWER (Width: w-[600px])
+     - Mount Criteria: Active on the `/sandboxes` page when URL query contains `?sandboxId=sb-jdG6afpmXe0ieEIN6iIiN6`.
+     - Header block: Displays Sandbox Unique ID with copy button, and a muted status badge reading "Terminated" (bg-[#222222], text-gray-500).
+     - Core Latency Gantt Tracer Component: Horizontal track tracing start-up delays across processing thresholds. Formatted as nodes connected by thin bars: Created -> [137ms grey bar] -> Scheduled -> [671ms grey bar] -> Started -> [4m 57s container bar] -> Terminated. Exact timestamp clocks are printed beneath nodes.
+     - Interior Segmented Navigation Tabs: Links switching view components via sub-query parameters (`&tab=logs`, `&tab=metrics`, `&tab=details`, `&tab=events`).
+       * Tab Component 'Logs': Monospace black code container tracking kernel sequences. Includes empty state fallback view with two sad isometric blocks, heading "No logs found", and text "There are no logs to display." when logs array is empty.
+       * Tab Component 'Metrics': Displays a synchronized layout of three metric line graphs:
+         1. CPU Cores Used: Smooth #34d399 green line charting active threads against a dashed baseline horizontal threshold labeled "Reserved".
+         2. Memory Footprint: Solid flat yellow line checking stable RAM allocation profiles relative to a high-density 10G capacity ceiling marker.
+         3. Network I/O Streams: Overlay chart tracking bidirectional packet streams (Egress uses a dark purple line path; Ingress maps incoming streams via light blue).
+       * Tab Component 'Details': Simple grid mapping key core execution properties (base engine images, container cloud targets, cluster tokens, environmental data maps).
+       * Tab Component 'Events': Vertical system-events timeline tracking explicit container runtime signals (e.g., ImagePulled, ContainerCreated, SIGTERM lifecycle changes).
+
+Maintain perfect pixel layouts, tight professional margins, crisp padding scaling configurations, and compile direct, clean React and Tailwind enterprise code blocks. No explanations outside the code block.

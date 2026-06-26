@@ -1,0 +1,28 @@
+[Unit]
+Description=Boxty Worker Node
+After=network.target
+
+[Service]
+Type=simple
+User={{ boxty_user }}
+Group={{ boxty_group }}
+ExecStart={{ boxty_install_dir }}/boxty worker --config {{ boxty_install_dir }}/config/worker.json
+Restart=always
+RestartSec=5
+TimeoutStopSec=120
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=boxty-worker
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ boxty_install_dir }}/data /tmp/boxty-worker /home/{{ boxty_user }}/.boxty
+ReadOnlyPaths={{ boxty_install_dir }}/config
+
+# Environment
+EnvironmentFile={{ boxty_install_dir }}/config/secrets.env
+
+[Install]
+WantedBy=multi-user.target

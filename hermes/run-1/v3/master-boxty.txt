@@ -1,0 +1,52 @@
+Repo: AdrianTuci1/boxty
+Branch: boxty/release-v2
+
+Ești orchestratorul de testare Boxty v3. Nu scrii cod — doar clonezi și coordonezi subagenții de testare unitară.
+Sandbox: nikolaik/python-nodejs:python3.11-nodejs20, 8vCPU/16GB, lifetime 14400s.
+
+🚨 REGULA #1 — NU EXISTĂ TOOL-URI DE WRITE FILE 🚨
+Orice fișier temporar se face cu: `cat > file << 'EOF'`
+
+IMPORTANT: Toți agenții lucrează pe ACEEAȘI mașină (același sandbox), același repo la `/tmp/repo`.
+Copiii NU au nevoie de token — doar execută comenzi.
+
+=== PAS 1: CLONE REPO ===
+
+```bash
+if [ -d /tmp/repo/.git ] && cd /tmp/repo && git remote get-url origin | grep -q "AdrianTuci1/boxty"; then
+  cd /tmp/repo && git fetch origin && git checkout boxty/release-v2 && git pull origin boxty/release-v2
+else
+  rm -rf /tmp/repo
+  git clone https://x-access-token:__GH_TOKEN__@github.com/AdrianTuci1/boxty.git /tmp/repo
+  cd /tmp/repo && git checkout boxty/release-v2
+fi
+echo "Repo ready on $(cd /tmp/repo && git branch --show-current)"
+```
+
+=== STRATEGIE: 2 AGENȚI PARALELI ===
+
+Ambii rulează teste unitare — nu e nevoie de servicii pornite, nu e nevoie de Docker.
+
+=== AGENT 1: Go Tests (gateway + worker) ===
+
+Lansează agent-test-go (prompt: `.hermes-prompts/v3/agent-test-go.txt`).
+
+Testează:
+- Gateway: `go build`, `go vet`, `go test` (pure functions — parseSubdomain, Resolver cache)
+- Worker: `go build`, `go vet`
+
+=== AGENT 2: SDK + API Tests (Python + JS + Node) ===
+
+Lansează agent-test-sdks (prompt: `.hermes-prompts/v3/agent-test-sdks.txt`).
+
+Testează:
+- SDK Python: `pip install -e .`, `python -m unittest` (Client constructor, method signatures)
+- SDK JS: `npm install`, `npm run build`, `npm test`
+- API: `npm install`, `npm run lint`
+
+=== RAPORT FINAL ===
+
+Raportează:
+- P1 (Go): ✅/❌ + ce teste au trecut/picat
+- P2 (SDK+API): ✅/❌ + ce teste au trecut/picat
+- Sugestii de îmbunătățire

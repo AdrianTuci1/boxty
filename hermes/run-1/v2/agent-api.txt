@@ -1,0 +1,56 @@
+TASK: Implementează API Server-ul Boxty (Node.js/Fastify + DynamoDB).
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul tău de lucru: `/tmp/repo/api/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_API.md` pentru specificația completă.
+
+Există schelet: `package.json`, `src/index.js`, `src/config.js`, `src/db/schema.js`, `src/middleware/auth.js`, `src/routes/sandboxes.js`, `src/routes/exec.js`. Completează-le și adaugă ce lipsește.
+
+Ce trebuie să implementezi COMPLET:
+
+**Rute (/tmp/repo/api/src/routes/):**
+- `sandboxes.js` — CRUD sandbox + snapshot/restore/forward + metrics GET
+- `exec.js` — POST exec în sandbox (forward la worker)
+- `billing.js` — GET balance, usage, POST credits (Stripe Checkout), POST stripe/webhook
+- `deployments.js` — CRUD deployment + invoke
+- `workers.js` — POST register, GET list, POST heartbeat
+- `secrets.js` — POST/GET/DELETE secrets, POST attach to sandbox
+- `images.js` — POST build, POST build-from-dockerfile, GET/DELETE
+- `volumes.js` — CRUD volume + POST mount/unmount
+- `workspaces.js` — CRUD workspace
+- `environments.js` — CRUD environment per workspace
+- `apps.js` — CRUD app + stop + sandboxes + deployments + metrics + usage + logs
+- `schedules.js` — CRUD schedule + POST trigger + POST logs (callback de la worker)
+- `admin.js` — GET health, stats, cron/status
+
+**Servicii (/tmp/repo/api/src/services/):**
+- `billing-engine.js` — per-second credit meter, scrie usage în DB
+- `scheduler.js` — worker selection (bin packing)
+- `capacity-manager.js` — auto-provisionare workers via cloud API
+- `cron-engine.js` — background service (60s interval): interoghează GSI SCHEDULE_NEXT_RUN, trimite la worker, loghează rezultatul, actualizează next_run
+- `image-builder.js` — orchestrează build pe worker port 9004 + status polling
+- `volume-manager.js` — S3 volume mount/unmount
+- `metrics-collector.js` — agreghează metrics per-sandbox, per-app (primește de la worker)
+- `cloud-provider.js` — abstract multi-cloud (AWS/GCP/Azure) pentru launch/terminate workers
+- `worker-pool.js` — HTTP client la workers (port 9001)
+
+**WebSocket (/tmp/repo/api/src/ws/):**
+- `sandbox-stream.js` — WebSocket proxy: client → API → worker 9002
+
+**DynamoDB Schema:**
+- PK patterns: USER#, SANDBOX#, WORKER#, DEPLOYMENT#, BILLING#, USAGE#, SECRET#, SCHEDULE#, SCHEDULE_LOG#, VOLUME#, IMAGE#
+- GSI1 (Status): PK=STATUS#running/stopped/SCHEDULE#active, SK=created_at
+- GSI2 (User listings): PK=USER_SANDBOXES#<user_id>, SK=created_at
+- GSI3 (Cron next-run): PK=SCHEDULE_NEXT_RUN, SK=next_run_timestamp (numeric)
+- GSI4 (App sandboxes): PK=APP_SANDBOXES#<app_id>, SK=created_at
+
+**Rute docs:**
+- `GET /docs` → servește `api/docs/index.html`
+- `GET /docs/openapi.yaml` → servește fișierul YAML
+
+Reguli:
+- ES modules (`import/export`)
+- toate serviciile decorate pe app (`app.decorate`)
+- .env.example actualizat cu toate variabilele
+- package.json complet (fastify, @aws-sdk/client-dynamodb, jsonwebtoken, ws, stripe, pino, @fastify/static, etc.)

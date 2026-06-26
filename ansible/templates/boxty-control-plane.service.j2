@@ -1,0 +1,23 @@
+[Unit]
+Description=Boxty Control Plane
+After=network.target
+
+[Service]
+Type=simple
+User={{ boxty_control_plane_user }}
+Group={{ boxty_control_plane_group }}
+WorkingDirectory={{ boxty_control_plane_dir }}/app
+EnvironmentFile={{ boxty_control_plane_dir }}/control-plane.env
+ExecStart={{ boxty_control_plane_dir }}/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=boxty-control-plane
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ boxty_control_plane_dir }}
+
+[Install]
+WantedBy=multi-user.target

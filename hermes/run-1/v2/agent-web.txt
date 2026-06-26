@@ -1,0 +1,49 @@
+TASK: Implementează Web UI-ul Boxty (React + Vite + TypeScript + Tailwind).
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul tău de lucru: `/tmp/repo/web/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_WEB.md` pentru specificația completă.
+
+**Setup:** Vite + React + TypeScript + Tailwind CSS + shadcn/ui (sau headless UI) + Recharts + @tanstack/react-query + React Router v6
+
+**Api client (/tmp/repo/web/src/api/):**
+- `client.ts` — fetch wrapper cu auth headers (Bearer JWT/API key)
+- `auth.ts` — login, register, api-keys
+- `sandboxes.ts` — CRUD + metrics
+- `workspaces.ts` — CRUD
+- `environments.ts` — CRUD
+- `apps.ts` — CRUD + stop/deploy/metrics/usage/logs
+- `billing.ts` — balance, usage, checkout
+- `secrets.ts` — CRUD
+- `images.ts` — build + list
+- `schedules.ts` — CRUD + trigger
+- `volumes.ts` — CRUD + mount/unmount
+
+**Hooks (/tmp/repo/web/src/hooks/):**
+- `useAuth.ts` — auth context hook
+- `useSandboxes.ts`, `useApps.ts`, `useWorkspaces.ts` — react-query hooks
+
+**Components (/tmp/repo/web/src/components/):**
+- `Layout.tsx` — sidebar + top bar + breadcrumbs
+- `Sidebar.tsx` — nav colapsabil (Dashboard, Workspaces, Apps, Sandboxes, Billing, Secrets, Images, Schedules, Volumes, Settings)
+- `StatusBadge.tsx`, `MetricsCard.tsx`, `ChartCard.tsx`, `SandboxTable.tsx`, `AppCard.tsx`, `Modal.tsx`
+
+**Pages (11 pagini):**
+1. `LoginPage.tsx` — form email + parolă
+2. `RegisterPage.tsx` — form register
+3. `DashboardPage.tsx` — carduri active sandbox-uri/app-uri/balance, mini chart, quick actions
+4. `WorkspacesPage.tsx` — listă workspace-uri
+5. `WorkspaceDetailPage.tsx` — environments tabs, apps list
+6. `AppDetailPage.tsx` — 6 tabs: Overview, Sandboxes, Deployments, Metrics, Usage, Logs
+7. `SandboxDetailPage.tsx` — header (ID, status, URL), metrics (CPU, mem, network, GPU), actions (Stop, Exec, Forward, Snapshot), live logs WebSocket
+8. `BillingPage.tsx` — balance, buy credits, usage history chart
+9. `SecretsPage.tsx` — listă, create modal (value masked), delete
+10. `ImagesPage.tsx` — listă, build modal
+11. `SchedulesPage.tsx` — listă, create/edit/delete, trigger
+12. `VolumesPage.tsx` — listă, create, mount/unmount
+13. `SettingsPage.tsx` — profile, API keys
+
+**Routing:** React Router v6, protected routes (redirect la /login dacă nu e autentificat)
+
+**Styling:** Tailwind CSS, responsive, dark mode support, loading states (skeleton), error states

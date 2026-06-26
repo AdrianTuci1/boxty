@@ -1,0 +1,58 @@
+TASK: Implementează documentația API Boxty (OpenAPI 3.1 + Scalar).
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul tău de lucru: `/tmp/repo/api/docs/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_DOCS.md` pentru specificația completă și `/tmp/repo/AGENT_API.md` pentru lista completă de endpoint-uri.
+
+**1. `api/docs/openapi.yaml`** — OpenAPI 3.1 spec COMPLETĂ:
+
+Info: title "Boxty API", version "1.0.0", description completă
+
+Servers: https://api.boxty.dev + http://localhost:3000 (development)
+
+Security schemes: BearerAuth (JWT), ApiKeyAuth (API key)
+
+Schemas (toate):
+- Error, Sandbox, ExecResult, Secret, ImageBuild, Volume, Schedule, Deployment
+- Workspace, Environment, App, AppMetrics, SandboxMetrics
+- UsageReport, BillingBalance
+
+Paths (TOATE — fiecare endpoint din AGENT_API.md):
+- Auth: POST /api/auth/register, POST /api/auth/login, POST /api/auth/api-keys
+- Sandboxes: POST/GET /api/sandboxes, GET/DELETE /api/sandboxes/{id}
+  POST /api/sandboxes/{id}/exec, POST /api/sandboxes/{id}/snapshot
+  POST /api/sandboxes/restore, POST /api/sandboxes/{id}/forward
+  POST /api/sandboxes/{id}/secrets, GET /api/sandboxes/{id}/metrics
+- Workers: POST /api/workers/register, GET /api/workers, POST /api/workers/{id}/heartbeat
+- Images: POST /api/images/build, POST /api/images/build-from-dockerfile
+  GET /api/images, GET /api/images/{id}, DELETE /api/images/{id}
+- Secrets: POST /api/secrets, GET /api/secrets, DELETE /api/secrets/{name}
+- Volumes: POST/GET /api/volumes, GET/DELETE /api/volumes/{id}
+  POST /api/volumes/{id}/mount, POST /api/volumes/{id}/unmount
+- Schedules: POST/GET /api/schedules, GET/PATCH/DELETE /api/schedules/{id}
+  POST /api/schedules/{id}/trigger
+- Deployments: POST/GET /api/deployments, GET/DELETE /api/deployments/{id}
+  POST /api/deployments/{id}/invoke
+- Billing: GET /api/billing/balance, GET /api/billing/usage, POST /api/billing/credits
+  POST /api/stripe/webhook
+- Admin: GET /api/admin/stats, GET /api/admin/cron/status
+- Health: GET /health
+- Workspaces: POST/GET /api/workspaces, GET/DELETE /api/workspaces/{id}
+- Environments: POST/GET /api/environments, DELETE /api/environments/{id}
+- Apps: POST/GET /api/apps, GET/DELETE /api/apps/{id}
+  POST /api/apps/{id}/stop, POST /api/apps/{id}/deploy
+  GET /api/apps/{id}/sandboxes, GET /api/apps/{id}/deployments
+  GET /api/apps/{id}/metrics, GET /api/apps/{id}/usage, GET /api/apps/{id}/logs
+
+Fiecare path: summary, tags, security (acolo unde e cazul), requestBody (POST/PUT/PATCH cu required + properties), responses (200/201 + 400/404/401)
+
+Tag-uri: Auth, Sandboxes, Workers, Images, Secrets, Volumes, Schedules, Deployments, Billing, Admin, Workspaces, Environments, Apps, System
+
+**2. `api/docs/index.html`** — Scalar API Reference page:
+- Fetch openapi.yaml din același director
+- CDN: @scalar/api-reference
+- Dark theme
+- Fallback la eroare de fetch
+
+**3. NOTĂ:** Nu modifica `api/src/index.js` — agentul API va adăuga rutele `/docs` și `/docs/openapi.yaml`. Tu doar creează fișierele statice.

@@ -1,0 +1,46 @@
+TASK: Implementează 7 GitHub Actions workflows pentru Boxty.
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul tău de lucru: `/tmp/repo/.github/workflows/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_CI.md` pentru specificația completă.
+
+**1. `ci.yml`** — Pull Request check:
+- Trigger: pull_request → main, push → develop
+- Jobs paralele:
+  - api: checkout, setup-node 20, npm ci, npm run lint, node --check src/index.js
+  - worker: checkout, setup-go 1.22, go mod tidy, go build ./..., go vet ./...
+  - sdk-py: checkout, setup-python 3.12, pip install -e ., python -c "import boxty", pip install ruff && ruff check src/
+  - sdk-js: checkout, setup-node 20, npm ci, npx tsc --noEmit, npx eslint src/
+  - web: checkout, setup-node 20, npm ci, npx tsc --noEmit
+  - infra-config: checkout, docker compose -f infra/docker/docker-compose.yml config
+
+**2. `deploy-api.yml`** — Push main → build + deploy API:
+- Trigger: push main, paths: api/**
+- Build Docker image, push la GHCR (ghcr.io/boxty/api:latest + :sha)
+- SSH deploy la server (docker pull, docker compose up)
+- GitHub Secrets: HETZNER_API_TOKEN, Variables: API_HOST
+
+**3. `deploy-worker.yml`** — Push main → build + deploy Worker:
+- Trigger: push main, paths: worker/**
+- Setup Go 1.22, build binary (GOOS=linux)
+- Build Docker image, push la GHCR
+
+**4. `publish-sdk-py.yml`** — Tag sdk-py-v* → PyPI:
+- Trigger: tags sdk-py-v*
+- Build with build, publish with pypa/gh-action-pypi-publish (trusted publishing)
+
+**5. `publish-sdk-js.yml`** — Tag sdk-js-v* → npm:
+- Trigger: tags sdk-js-v*
+- npm ci, npm run build, npm publish (NODE_AUTH_TOKEN=NPM_TOKEN)
+
+**6. `provision-workers.yml`** — Manual trigger → Terraform apply:
+- workflow_dispatch inputs: provider (aws/gcp/azure), count, region
+- Setup Terraform, init, apply -auto-approve
+- GitHub Secrets: WORKER_API_KEY, Variables: API_URL
+
+**7. `destroy-workers.yml`** — Manual trigger → Terraform destroy:
+- workflow_dispatch inputs: provider
+- Setup Terraform, init, destroy -auto-approve
+
+Fiecare workflow: name, on, jobs cu runs-on, steps, defaults (working-directory acolo unde e cazul)

@@ -1,0 +1,78 @@
+TASK: Implementează Worker Agent-ul Boxty (Go + gVisor) pe 4 porturi.
+
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+Directorul tău de lucru: `/tmp/repo/worker/`. Repo-ul e deja clonat la `/tmp/repo`.
+Citește `/tmp/repo/AGENT_WORKER.md` pentru specificația completă.
+
+Ce trebuie să implementezi COMPLET:
+
+**Entry point:** `cmd/worker/main.go`
+- Inițializează toate cele 4 servere (port 9001-9004)
+- Graceful shutdown (SIGTERM → snapshot sandbox-uri active)
+- Înregistrare la API (POST /api/workers/register)
+- Heartbeat loop la 5s
+
+**Port 9001 — REST API (internal/routes):**
+- `POST /sandboxes` — start sandbox
+- `DELETE /sandboxes/:id` — stop sandbox
+- `POST /sandboxes/:id/exec` — executa comandă (timeout configurabil)
+- `POST /sandboxes/:id/snapshot` — CRIU checkpoint → S3
+- `POST /sandboxes/restore` — restore din S3 snapshot
+- `GET /sandboxes/:id` — status sandbox
+- `GET /health` — uptime, nr sandbox-uri, capacitate
+
+**internal/sandbox/manager.go:**
+- gVisor lifecycle (runsc run -detach, kill, delete)
+- Sandbox config builder
+- Resurse: CPU, memory, GPU limits
+
+**internal/sandbox/config.go:**
+- Build config for runsc
+- Env vars + secrets injection
+
+**internal/tunnel/websocket.go:**
+- WebSocket handler pe port 9002
+- Stream stdout/stderr live
+- TCP tunnel pentru port forwarding
+
+**internal/tunnel/tcp_proxy.go:**
+- TCP reverse proxy pe port 9003
+- Subdomain-based forwarding (sandbox-abc.boxty.dev → sandbox-abc:8080)
+
+**internal/snapshot/criu.go:**
+- CRIU checkpoint + tar.gz + S3 upload
+- S3 download + tar xzf + runsc restore
+
+**internal/secrets/injector.go:**
+- Inject secrets as env vars before runsc run
+- Cleanup la exit (șterge fișierul .env)
+
+**internal/cronjob/runner.go:**
+- Rulează comanda programată, captează stdout/stderr/exitCode
+- Trimite raport la API: POST /api/schedules/:scheduleId/logs
+- Cleanup după execuție
+
+**internal/imagebuilder/builder.go:**
+- Server-side Docker build pe port 9004
+- POST /images/build — primește specificație, execută docker build
+- GET /images/:id/status — status build
+- docker push la registry
+
+**internal/scheduler/local.go:**
+- Track local capacity
+- Bin packing
+
+**internal/cloud/register.go:**
+- Registration + heartbeat la API
+
+**Metrics collection:**
+- La 30s per sandbox: cpu_pct, memory_mb, network_rx/tx, gpu_util/memory
+- POST /api/sandboxes/:id/metrics
+- La stop: raport final cu toate metrics (started_at, finished_at, boot_duration_ms, etc.)
+
+**Idle detector:**
+- Goroutine la 10s verifică sandbox-urile
+- 300s idle → snapshot automat + stop + notifică API
+
+Fișiere necesare: go.mod, go.sum, Dockerfile
