@@ -44,7 +44,7 @@ La final trebuie să avem tot codul care compilează structural.
 LIMITARE RESURSE: Maxim 3 agenți în paralel.
 
 CONTRACT: Cele 8 AGENT_*.md din rădăcina repo-ului definesc arhitectura exactă.
-Prompt-urile per-agent sunt în `.hermes-prompts/agent-*.txt` (tot în repo). Citește-le din `/tmp/repo/.hermes-prompts/`.
+Prompt-urile per-agent sunt în `hermes/run-1/agent-*.txt` (tot în repo). Citește-le din `/tmp/repo/hermes/run-1/`.
 
 === BATCH 1: CORE — API + WORKER + SDK-PY (3 agenți, paralel) ===
 
@@ -52,9 +52,9 @@ Lansează 3 agenți simultan. FIECARE agent primește instrucțiunea: "Creează 
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|
-| A1    | .hermes-prompts/agent-api.txt        | Fastify API (routes, servicii, DynamoDB)  |
-| A2    | .hermes-prompts/agent-worker.txt     | Go worker (gVisor, 4 porturi, cron, image)|
-| A3    | .hermes-prompts/agent-sdk-py.txt     | Python SDK + CLI (pip install boxty)       |
+| A1    | hermes/run-1/agent-api.txt        | Fastify API (routes, servicii, DynamoDB)  |
+| A2    | hermes/run-1/agent-worker.txt     | Go worker (gVisor, 4 porturi, cron, image)|
+| A3    | hermes/run-1/agent-sdk-py.txt     | Python SDK + CLI (pip install boxty)       |
 
 Așteaptă ca toți 3 să termine cu ✅. Dacă unul eșuează, raportează și NU continua.
 
@@ -62,9 +62,9 @@ Așteaptă ca toți 3 să termine cu ✅. Dacă unul eșuează, raportează și 
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|
-| A4    | .hermes-prompts/agent-sdk-js.txt     | Node.js SDK + CLI (npm install boxty)      |
-| A5    | .hermes-prompts/agent-infra.txt      | Docker Compose, Terraform, Packer         |
-| A6    | .hermes-prompts/agent-web.txt        | React dashboard (11 pagini, metrics)      |
+| A4    | hermes/run-1/agent-sdk-js.txt     | Node.js SDK + CLI (npm install boxty)      |
+| A5    | hermes/run-1/agent-infra.txt      | Docker Compose, Terraform, Packer         |
+| A6    | hermes/run-1/agent-web.txt        | React dashboard (11 pagini, metrics)      |
 
 Așteaptă ca toți 3 să termine cu ✅.
 
@@ -72,8 +72,8 @@ Așteaptă ca toți 3 să termine cu ✅.
 
 | Agent | Prompt file          | Task                                      |
 |-------|----------------------|-------------------------------------------|
-| A7    | .hermes-prompts/agent-docs.txt       | OpenAPI 3.1 + Scalar HTML page             |
-| A8    | .hermes-prompts/agent-ci.txt         | 7 GitHub Actions workflows                |
+| A7    | hermes/run-1/agent-docs.txt       | OpenAPI 3.1 + Scalar HTML page             |
+| A8    | hermes/run-1/agent-ci.txt         | 7 GitHub Actions workflows                |
 
 Așteaptă ca toți 2 să termine cu ✅.
 

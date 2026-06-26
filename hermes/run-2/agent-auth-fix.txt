@@ -1,0 +1,56 @@
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+TASK: Auth complet — register/login/JWT + API key management + repară middleware auth.js.
+
+Director: `/tmp/repo/`. Repo-ul are deja branch-ul `boxty/release`.
+
+BUG CRITIC ÎN AUTH MIDDLEWARE: `api/src/middleware/auth.js` are 2 blocuri `if (auth.startsWith('Bearer '))` identice — al doilea ar trebui să fie pentru API key (de obicei prefixat cu `sk-` sau `boxty_`). NICIODATĂ nu se va ajunge la al doilea bloc.
+
+1. **api/src/middleware/auth.js** — rescrie complet:
+   - `app.decorate('authenticate')`:
+     - Dacă header Authorization începe cu `Bearer `:
+       - Extrage token-ul, verifică cu `jwt.verify(token, config.jwtSecret)`
+       - Setează `request.user = decoded` (conține { id, email, role })
+     - Altfel dacă Authorization începe cu `Key `:
+       - Extrage key-ul, caută în DynamoDB: PK=`API_KEY#<key>`, SK=`META`
+       - Dacă găsit și `status === 'active'`, setează `request.user = { id: item.user_id, apiKey: true }`
+       - Dacă nu găsit: 401
+     - Altfel: 401 { error: 'Missing or invalid Authorization header' }
+   - `app.decorate('authenticateWorker')` — rămâne ca acum (X-API-Key header)
+
+2. **api/src/routes/auth.js** (fișier NOU):
+   - `POST /api/auth/register`:
+     - Validează email + password (min 8 caractere)
+     - Hash password cu bcrypt (10 rounds)
+     - Salvează în DB: PK=`USER#<id>`, SK=`PROFILE` cu email, password_hash, created_at, role='user'
+     - Inițializează BILLING#<id> cu balance=5.00 (5$ credit gratuit)
+     - Generează JWT (payload: { id, email, role }, expiresIn: '30d')
+     - Returnează { token, user: { id, email, role } }
+   - `POST /api/auth/login`:
+     - Găsește user după email (query PK=`USER#<id>` unde SK=`PROFILE`)
+     - Compară password cu bcrypt
+     - Generează JWT
+     - Returnează { token, user: { id, email, role } }
+   - `POST /api/auth/api-keys`:
+     - Autentificat — generează API key (prefix `boxty_` + 32 bytes hex)
+     - Salvează PK=`API_KEY#<key>`, SK=`META` cu user_id, created_at, status='active', name (optional)
+     - Returnează { key, name, created_at }
+   - `GET /api/auth/api-keys`:
+     - Query PK=`USER#<userId>` unde SK începe cu `API_KEY#`
+     - Returnează lista (fără key value în production — doar name, created_at, status)
+   - `DELETE /api/auth/api-keys/:key`:
+     - Setează status='revoked' pe PK=`API_KEY#<key>`
+
+3. **api/src/index.js** — adaugă înregistrarea rutei auth:
+   - `import authRoutes from './routes/auth.js';`
+   - `await app.register(authRoutes, { prefix: '/api/auth' });`
+
+4. **api/package.json** — adaugă dependențele:
+   - `bcrypt` (versiunea ^5)
+   - păstrează `jsonwebtoken` (există deja)
+
+5. **api/.env.example** — adaugă:
+   - JWT_SECRET
+   - JWT_EXPIRES_IN (default: 30d)
+
+IMPORTANT: După ce adaugi fișierul `api/src/routes/auth.js`, și middleware-ul e reparat, toate rutele existente care folosesc `req.user?.id` vor funcționa corect.

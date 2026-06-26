@@ -1,0 +1,48 @@
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+TASK: Implementare reală cloud provider — AWS/GCP/Azure SDK pentru launch/terminate workers.
+
+Director: `/tmp/repo/`. Repo-ul are deja branch-ul `boxty/release`.
+
+IMPLEMENTEAZĂ REAL (nu stub):
+
+1. **api/src/services/cloud-provider.js** — rescrie complet:
+   - Import AWS SDK (@aws-sdk/client-ec2) pentru launch/terminate EC2 spot instances
+   - Import Google Cloud SDK (@google-cloud/compute) pentru GCE preemptible VMs
+   - Import Azure SDK (@azure/arm-compute) pentru Azure spot VMs
+   - `launchWorker(provider, region, opts)`: pornește VM pe cloud-ul specificat, returnează { id, host, provider, region, instanceId }
+   - `terminateWorker(provider, instanceId)`: oprește VM-ul
+   - `getWorkerStatus(provider, instanceId)` — polling status
+   - Configurabil din env vars: AWS_REGION/AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, GCP_PROJECT/GCP_CREDENTIALS, AZURE_SUBSCRIPTION/AZURE_CLIENT_ID/etc.
+   - Launch template folosește user-data din `infra/packer/cloud-init.yml`
+   - Instance type din env: WORKER_INSTANCE_TYPE (default: c6a.2xlarge / n2-standard-8 / Standard_D8s_v3)
+   - Spot/preemptible pricing by default
+
+2. **api/src/services/capacity-manager.js** — rescrie complet:
+   - În loc de `selectWorker()`, apelează `cloudProvider.launchWorker()` când nu sunt workeri disponibili
+   - Cozi de așteptare FIFO pentru sandbox requests când capacitatea e plină
+   - Retry logic: dacă launch eșuează, încearcă alt provider/region
+   - `scaleDown()`: dacă un worker e idle >600s și sunt alți workeri activi, termină-l
+   - Background goroutine: verifică la 60s dacă e nevoie de scale up/down
+
+3. **api/src/services/scheduler.js** — îmbunătățește:
+   - `selectWorker(resources)`: în loc de simplu loop, folosește bin packing (first-fit decreasing)
+   - Track capacity per worker (cpu, memory, gpu, max_sandboxes)
+   - `allocate(id, cpu, mem, gpu)`, `release(id, cpu, mem, gpu)`
+   - Dacă niciun worker nu poate satisface cerințele, apelează capacityManager.provisionIfNeeded()
+
+4. **api/src/services/worker-pool.js** — îmbunătățește:
+   - `register(worker)`: validează worker, verifică duplicate, salvează în DynamoDB
+   - `heartbeat(id, data)`: actualizează capacity + lastSeen + metrics în memorie și periodic în DB
+   - `selectWorker(resources)`: delegă la scheduler
+   - Health check goroutine: la 30s verifică workerii — dacă n-au heartbeat de >120s, marchează unavailable și notifică capacityManager
+   - `getWorkers()` + `getWorker(id)` — cu status real
+
+5. **api/src/config.js** — adaugă variabilele noi:
+   - AWS_REGION, GCP_PROJECT, AZURE_SUBSCRIPTION_ID
+   - WORKER_INSTANCE_TYPE, WORKER_AMI_ID (override)
+   - SCALE_DOWN_IDLE_SECONDS (default 600)
+
+6. **api/.env.example** — actualizează cu toate variabilele cloud
+
+NU modifica alte fișiere. Toate modificările trebuie să fie compatibile cu API-ul existent.

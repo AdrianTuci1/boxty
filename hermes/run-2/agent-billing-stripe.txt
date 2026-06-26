@@ -1,0 +1,51 @@
+🚨 CREEZI FIȘIERE DOAR CU `cat > file << 'EOF'` — NU există write_file 🚨
+
+TASK: Implementare Stripe Checkout + webhook real + billing engine per-second.
+
+Director: `/tmp/repo/`. Repo-ul are deja branch-ul `boxty/release`.
+
+1. **api/src/services/billing-engine.js** — rescrie complet:
+   - `start()`: setează interval la 1000ms
+   - `tick()`: iterează toate sandbox-urile active (din DynamoDB GSI1 STATUS#running), pentru fiecare:
+     - Calculează cost pe secundă bazat pe cpu, memory, gpu (price list mai jos)
+     - Salvează un item USAGE#<user_id>#<timestamp> cu: sandbox_id, cpu, memory, gpu, cost_per_sec, credits_deducted
+     - Deduce din BILLING#<user_id> actualizând balance -= cost_per_sec
+     - Dacă balance < 0, stop sandbox (trimite DELETE la worker via workerPool) și setează status='paused_out_of_credits'
+   - `deduct(userId, amount)`: actualizează BILLING#<userId> balance -= amount
+   - `addCredits(userId, amount)`: actualizează BILLING#<userId> balance += amount
+   - PRICE_LIST (configurabil din env sau hardcodat):
+     - CPU: 0.0000111$/sec (0.04$/h)
+     - Memory: 0.00000139$/MB/sec (5$/GB/lună)
+     - GPU (T4): 0.0001$/sec (0.36$/h)
+     - GPU (A100): 0.0005$/sec (1.80$/h)
+     - Disk: 0.0000000278$/GB/sec (0.10$/GB/lună)
+   - `getBalance(userId)`: returnează balance din DB
+   - `getUsage(userId, from, to)`: query USAGE#<userId> items
+   - `resumeSandbox(sandboxId)`: dacă e paused_out_of_credits și acum are balance > 0.50$, reia sandbox-ul
+
+2. **api/src/routes/billing.js** — rescrie complet:
+   - `GET /balance`: apelează billingEngine.getBalance(userId)
+   - `GET /usage`: apelează billingEngine.getUsage(userId) cu query params from/to
+   - `POST /credits`: folosește Stripe SDK (stripe) să creeze o Checkout Session:
+     - amount: req.body.amount (USD cents)
+     - success_url: `${config.baseUrl}/billing/success?session_id={CHECKOUT_SESSION_ID}`
+     - cancel_url: `${config.baseUrl}/billing`
+     - metadata: { userId }
+     - returnează { checkout_url: session.url }
+   - `POST /stripe/webhook`: verifică semnătura Stripe (stripe.webhooks.constructEvent):
+     - Citește raw body din request.rawBody (necesită adăugat rawBody în Fastify config)
+     - Verifică cu STRIPE_WEBHOOK_SECRET din env
+     - La event 'checkout.session.completed': extrage userId din metadata, amount_total, apelează billingEngine.addCredits()
+     - Returnează { received: true }
+
+3. **api/src/config.js** — adaugă:
+   - STRIPE_SECRET_KEY
+   - STRIPE_WEBHOOK_SECRET
+   - BASE_URL (pentru success/cancel URLs)
+
+4. **api/src/index.js** — adaugă raw body parsing pentru webhook:
+   - La inițializare Fastify: adaugă config pentru raw body pe ruta /api/billing/stripe/webhook
+
+5. **api/.env.example** — adaugă STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BASE_URL
+
+6. **api/package.json** — adaugă dependența `stripe` (versiunea >=14)
