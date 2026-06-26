@@ -1,125 +1,291 @@
 import { useEffect, useState } from 'react'
+import { useParams } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import testMd from '../docs/test.md?raw'
 
-// Custom components for react-markdown
-const components = {
-  a({ node, ...props }: any) {
-    return (
-      <a
-        className="text-green-400 hover:underline transition-colors decoration-green-400/50 underline-offset-2"
-        {...props}
-      />
-    )
+const slugify = (text: string) => {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')
+    .replace(/\s+/g, '-')
+}
+
+// Vite glob import for all guide markdown files
+const guideModules = import.meta.glob('../docs/guide/*.md', { query: '?raw', import: 'default', eager: true })
+
+// Vite glob import for all reference markdown files
+const referenceModules = import.meta.glob('../docs/reference/*.md', { query: '?raw', import: 'default', eager: true })
+
+// Custom theme for syntax highlighting matching the screenshot colors
+const customPrismTheme: { [key: string]: any } = {
+  'code[class*="language-"]': {
+    color: '#e2e8f0',
+    background: 'none',
+    fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+    direction: 'ltr',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    lineHeight: '1.6',
+    tabSize: '4',
+    hyphens: 'none',
   },
-  code({ node, inline, className, children, ...props }: any) {
-    const match = /language-(\w+)/.exec(className || '')
-    if (!inline && match) {
-      return (
-        <div className="relative group my-4">
-          <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              onClick={() => navigator.clipboard.writeText(String(children).replace(/\n$/, ''))}
-              className="rounded bg-gray-700 px-2 py-1 text-xs text-gray-300 hover:bg-gray-600 transition-colors"
-            >
-              Copy
-            </button>
-          </div>
-          <SyntaxHighlighter
-            style={vscDarkPlus}
-            language={match[1]}
-            PreTag="div"
-            className="rounded-lg !bg-[#1e1e1e] !border !border-gray-800 !p-4 !m-0"
-            {...props}
-          >
-            {String(children).replace(/\n$/, '')}
-          </SyntaxHighlighter>
-        </div>
-      )
-    }
-    // Inline code — render as chip
-    return (
-      <code
-        className="inline-flex items-center rounded-md bg-gray-800 px-1.5 py-0.5 text-sm font-mono text-green-300 border border-gray-700"
-        {...props}
-      >
-        {children}
-      </code>
-    )
+  'pre[class*="language-"]': {
+    color: '#e2e8f0',
+    background: 'none',
+    fontFamily: '"JetBrains Mono", ui-monospace, monospace',
+    direction: 'ltr',
+    textAlign: 'left',
+    whiteSpace: 'pre',
+    wordSpacing: 'normal',
+    wordBreak: 'normal',
+    lineHeight: '1.6',
+    tabSize: '4',
+    hyphens: 'none',
   },
-  h1({ node, children, ...props }: any) {
-    return (
-      <h1 className="text-3xl font-bold text-white mb-6 mt-2" {...props}>
-        {children}
-      </h1>
-    )
-  },
-  h2({ node, children, ...props }: any) {
-    return (
-      <h2 className="text-2xl font-semibold text-white mt-10 mb-4 border-b border-gray-800 pb-2" {...props}>
-        {children}
-      </h2>
-    )
-  },
-  h3({ node, children, ...props }: any) {
-    return (
-      <h3 className="text-xl font-semibold text-white mt-8 mb-3" {...props}>
-        {children}
-      </h3>
-    )
-  },
-  p({ node, children, ...props }: any) {
-    return (
-      <p className="text-gray-300 leading-relaxed mb-4" {...props}>
-        {children}
-      </p>
-    )
-  },
-  ul({ node, children, ...props }: any) {
-    return (
-      <ul className="list-disc pl-5 text-gray-300 space-y-1 mb-4" {...props}>
-        {children}
-      </ul>
-    )
-  },
-  ol({ node, children, ...props }: any) {
-    return (
-      <ol className="list-decimal pl-5 text-gray-300 space-y-1 mb-4" {...props}>
-        {children}
-      </ol>
-    )
-  },
-  li({ node, children, ...props }: any) {
-    return (
-      <li className="leading-relaxed" {...props}>
-        {children}
-      </li>
-    )
-  },
-  pre({ children }: any) {
-    // react-syntax-highlighter already wraps in a div, so pre is handled by code
-    return <>{children}</>
-  },
+  'comment': { color: '#71717a', fontStyle: 'italic' },
+  'prolog': { color: '#71717a' },
+  'doctype': { color: '#71717a' },
+  'cdata': { color: '#71717a' },
+  'punctuation': { color: '#a1a1aa' },
+  'property': { color: '#60a5fa' },
+  'tag': { color: '#f472b6' },
+  'boolean': { color: '#e879f9' },
+  'number': { color: '#e879f9' },
+  'constant': { color: '#60a5fa' },
+  'symbol': { color: '#34d399' },
+  'deleted': { color: '#ef4444' },
+  'selector': { color: '#34d399' },
+  'attr-name': { color: '#34d399' },
+  'string': { color: '#fdba74' },
+  'char': { color: '#fdba74' },
+  'builtin': { color: '#60a5fa' },
+  'inserted': { color: '#10b981' },
+  'operator': { color: '#a1a1aa' },
+  'entity': { color: '#60a5fa', cursor: 'help' },
+  'url': { color: '#60a5fa' },
+  'variable': { color: '#e2e8f0' },
+  'keyword': { color: '#f472b6' },
+  'function': { color: '#60a5fa' },
+  'class-name': { color: '#60a5fa' },
+  'decorator': { color: '#34d399' },
+  'atrule': { color: '#f472b6' },
+  'attr-value': { color: '#fdba74' },
+  'regex': { color: '#fdba74' },
+  'important': { color: '#f472b6', fontWeight: 'bold' },
+  'bold': { fontWeight: 'bold' },
+  'italic': { fontStyle: 'italic' },
+}
+
+function CopyPageButton() {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900/80 px-3 py-1.5 text-xs text-zinc-300 transition-colors select-none"
+    >
+      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        {copied ? (
+          <path d="M20 6 9 17l-5-5" />
+        ) : (
+          <>
+            <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+            <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+          </>
+        )}
+      </svg>
+      <span>{copied ? 'Copied URL!' : 'Copy page'}</span>
+      <svg className="h-3 w-3 opacity-60 ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </button>
+  )
 }
 
 export default function DocsPage() {
+  const { slug = 'introduction' } = useParams()
   const [content, setContent] = useState('')
 
   useEffect(() => {
-    setContent(testMd)
-  }, [])
+    if (slug === 'introduction') {
+      setContent(testMd)
+      return
+    }
+    
+    // Try to load from guide markdown files
+    const modulePath = `../docs/guide/${slug}.md`
+    if (guideModules[modulePath]) {
+      setContent(guideModules[modulePath] as string)
+      return
+    }
+
+    // Try to load from reference markdown files
+    const referenceModulePath = `../docs/reference/${slug}.md`
+    if (referenceModules[referenceModulePath]) {
+      setContent(referenceModules[referenceModulePath] as string)
+    } else {
+      setContent(`# Not Found\n\nThis page doesn't exist yet.`)
+    }
+  }, [slug])
+
+  // Custom components for react-markdown
+  const components = {
+    a({ node, ...props }: any) {
+      return (
+        <a
+          className="text-[#34d399] hover:underline transition-colors decoration-[#34d399]/40 font-medium"
+          {...props}
+        />
+      )
+    },
+    code({ node, inline, className, children, ...props }: any) {
+      const match = /language-(\w+)/.exec(className || '')
+      if (!inline && match) {
+        return (
+          <div className="my-6 rounded-lg bg-[#131314] border border-zinc-800/80 overflow-hidden max-w-full">
+            <div className="overflow-x-auto p-5">
+              <SyntaxHighlighter
+                style={customPrismTheme}
+                language={match[1]}
+                PreTag="pre"
+                customStyle={{
+                  margin: 0,
+                  padding: 0,
+                  background: 'transparent',
+                  overflow: 'visible',
+                }}
+                className="font-mono text-[13.5px]"
+                {...props}
+              >
+                {String(children).replace(/\n$/, '')}
+              </SyntaxHighlighter>
+            </div>
+          </div>
+        )
+      }
+      return (
+        <code
+          className="inline-flex items-center rounded bg-zinc-900 px-1.5 py-0.5 text-[13px] font-mono text-[#34d399] border border-zinc-800/80"
+          {...props}
+        >
+          {children}
+        </code>
+      )
+    },
+    h1({ node, children, ...props }: any) {
+      return (
+        <div className="flex items-center justify-between mb-8 mt-2 pb-2">
+          <h1 className="text-3xl font-bold text-white tracking-tight" {...props}>
+            {children}
+          </h1>
+          <CopyPageButton />
+        </div>
+      )
+    },
+    h2({ node, children, ...props }: any) {
+      const text = String(children)
+      const id = slugify(text)
+      return (
+        <h2
+          id={id}
+          className="text-[20px] font-semibold text-white mt-12 mb-4 scroll-mt-20"
+          {...props}
+        >
+          {children}
+        </h2>
+      )
+    },
+    h3({ node, children, ...props }: any) {
+      const text = String(children)
+      const id = slugify(text)
+      return (
+        <h3
+          id={id}
+          className="text-[17px] font-semibold text-white mt-8 mb-3 scroll-mt-20"
+          {...props}
+        >
+          {children}
+        </h3>
+      )
+    },
+    p({ node, children, ...props }: any) {
+      return (
+        <p className="text-zinc-300 leading-relaxed mb-5 text-[15px]" {...props}>
+          {children}
+        </p>
+      )
+    },
+    ul({ node, children, ...props }: any) {
+      return (
+        <ul className="list-disc pl-5 text-zinc-300 space-y-2 mb-5 text-[15px]" {...props}>
+          {children}
+        </ul>
+      )
+    },
+    ol({ node, children, ...props }: any) {
+      return (
+        <ol className="list-decimal pl-5 text-zinc-300 space-y-2 mb-5 text-[15px]" {...props}>
+          {children}
+        </ol>
+      )
+    },
+    li({ node, children, ...props }: any) {
+      return (
+        <li className="leading-relaxed" {...props}>
+          {children}
+        </li>
+      )
+    },
+    pre({ children }: any) {
+      return <>{children}</>
+    },
+    table({ node, children, ...props }: any) {
+      return (
+        <div className="my-6 overflow-hidden rounded-lg border border-zinc-800/80 bg-zinc-900/10 w-full">
+          <table className="w-full border-collapse text-left text-[13.5px] font-sans" {...props}>
+            {children}
+          </table>
+        </div>
+      )
+    },
+    thead({ node, children, ...props }: any) {
+      return <thead className="hidden" {...props}>{children}</thead>
+    },
+    tbody({ node, children, ...props }: any) {
+      return <tbody {...props}>{children}</tbody>
+    },
+    tr({ node, children, ...props }: any) {
+      return (
+        <tr className="border-b border-zinc-800/85 last:border-b-0 hover:bg-zinc-900/20 transition-colors h-10" {...props}>
+          {children}
+        </tr>
+      )
+    },
+    td({ node, children, ...props }: any) {
+      return (
+        <td className="px-4 py-2.5 align-middle text-zinc-300 first:w-1/3" {...props}>
+          {children}
+        </td>
+      )
+    },
+  }
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-10">
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={components}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={components}
+    >
+      {content}
+    </ReactMarkdown>
   )
 }

@@ -35,9 +35,10 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
       <Route path="/docs" element={<Navigate to="/docs/guide/introduction" replace />} />
-      <Route path="/docs/guide/introduction" element={<DocsLayout><DocsPage /></DocsLayout>} />
+      <Route path="/docs/guide/:slug" element={<DocsLayout><DocsPage /></DocsLayout>} />
       <Route path="/docs/examples" element={<Navigate to="/docs/guide/introduction" replace />} />
-      <Route path="/docs/reference" element={<Navigate to="/docs/guide/introduction" replace />} />
+      <Route path="/docs/reference" element={<Navigate to="/docs/reference/reference" replace />} />
+      <Route path="/docs/reference/:slug" element={<DocsLayout><DocsPage /></DocsLayout>} />
       <Route path="/playground" element={<Navigate to="/docs/guide/introduction" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
