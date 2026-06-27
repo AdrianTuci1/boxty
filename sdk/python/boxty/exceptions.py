@@ -1,5 +1,7 @@
 """Custom exception hierarchy for the Boxty SDK."""
 
+from __future__ import annotations
+
 
 class BoxtyError(Exception):
     """Base exception for all Boxty SDK errors."""
@@ -25,21 +27,21 @@ class BoxtyNotFoundError(BoxtyError):
 
 
 class BoxtyValidationError(BoxtyError):
-    """Raised when request validation fails."""
+    """Raised when request parameters fail validation."""
 
     def __init__(self, message: str = "Validation error") -> None:
         super().__init__(message, status_code=422)
 
 
 class BoxtyConnectionError(BoxtyError):
-    """Raised when a connection to the Boxty server fails."""
+    """Raised when the SDK cannot reach the Boxty API."""
 
-    def __init__(self, message: str = "Connection failed") -> None:
-        super().__init__(message, status_code=None)
+    def __init__(self, message: str = "Connection error") -> None:
+        super().__init__(message, status_code=503)
 
 
 class BoxtyTimeoutError(BoxtyError):
-    """Raised when a request times out."""
+    """Raised when an API request exceeds the configured timeout."""
 
     def __init__(self, message: str = "Request timed out") -> None:
-        super().__init__(message, status_code=None)
+        super().__init__(message, status_code=504)
