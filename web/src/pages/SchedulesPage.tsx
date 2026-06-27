@@ -63,7 +63,7 @@ export default function SchedulesPage() {
   }
 
   const handleEdit = (s: Schedule) => {
-    setEditId(s.id)
+    setEditId(s.schedule_id)
     setForm({
       name: s.name,
       schedule_type: s.schedule_type,
@@ -118,7 +118,7 @@ export default function SchedulesPage() {
               <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No schedules yet.</td></tr>
             )}
             {data?.map((s) => (
-              <tr key={s.id} className="bg-[#161616]">
+              <tr key={s.schedule_id} className="bg-[#161616]">
                 <td className="px-4 py-3 text-white font-medium">{s.name}</td>
                 <td className="px-4 py-3 text-gray-300">{s.schedule_type}</td>
                 <td className="px-4 py-3 font-mono text-gray-300">{s.schedule_value}</td>
@@ -127,8 +127,8 @@ export default function SchedulesPage() {
                 <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
                 <td className="px-4 py-3 flex gap-2">
                   <button onClick={() => handleEdit(s)} className="text-xs text-mint hover:underline">Edit</button>
-                  <button onClick={() => handleTrigger(s.id)} className="text-xs text-mint hover:underline">Trigger</button>
-                  <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+                  <button onClick={() => handleTrigger(s.schedule_id)} className="text-xs text-mint hover:underline">Trigger</button>
+                  <button onClick={() => handleDelete(s.schedule_id)} className="text-xs text-red-400 hover:underline">Delete</button>
                 </td>
               </tr>
             ))}

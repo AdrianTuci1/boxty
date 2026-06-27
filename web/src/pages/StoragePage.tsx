@@ -35,7 +35,7 @@ export default function StoragePage() {
   const totalSize = (data || []).reduce((acc, v) => acc + v.size_gb, 0)
 
   const handleCreate = async () => {
-    await createVolume({ name: form.name, size_gb: Number(form.size_gb) })
+    await createVolume({ workspace_id: workspace || '', name: form.name, size_gb: Number(form.size_gb) })
     setForm({ name: '', size_gb: '' })
     setOpen(false)
     qc.invalidateQueries({ queryKey: ['volumes'] })
@@ -43,7 +43,7 @@ export default function StoragePage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete volume?')) return
-    await deleteVolume(id)
+    await deleteVolume(id, workspace || '')
     qc.invalidateQueries({ queryKey: ['volumes'] })
   }
 

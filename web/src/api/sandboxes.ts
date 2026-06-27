@@ -1,62 +1,64 @@
 import { apiFetch } from './client'
 
 export interface Sandbox {
-  id: string
-  app_id: string
-  status: 'running' | 'stopped' | 'snapshotted'
-  started_at?: string
-  finished_at?: string
-  boot_duration_ms?: number
-  url?: string
-  cpu_max_pct?: number
-  cpu_avg_pct?: number
-  memory_max_mb?: number
-  memory_avg_mb?: number
-  network_rx_bytes?: number
-  network_tx_bytes?: number
-  gpu_util_pct?: number
-  gpu_memory_mb?: number
+  workload_id: string
+  id: string // alias for workload_id
+  owner_id: string
+  workspace_id: string
+  environment_id: string
+  kind: 'sandbox'
+  status: string
+  image: string
+  command: string[]
+  env: Record<string, string>
+  region: string
+  pool: string
+  secret_names: string[]
+  volume_mounts: { locator: string; mount_path: string; read_only: boolean }[]
+  resources: { cpu_cores: number; memory_mb: number; disk_gb: number; gpu_count: number; gpu_type: string | null }
+  metadata: Record<string, any>
+  accrued_cost_usd: number
+  created_at: string
+  updated_at: string
 }
 
 export interface SandboxMetrics {
-  timestamps: string[]
-  cpu: number[]
-  memory: number[]
-  network_rx: number[]
-  network_tx: number[]
-  gpu_util?: number[]
+  workload_id: string
+  cpu_seconds: number
+  ram_gb_seconds: number
+  gpu_seconds: number
+  storage_gb_seconds: number
+  egress_gb: number
+  accrued_cost_usd: number
 }
 
-export function listSandboxes() {
-  return apiFetch<Sandbox[]>('/sandboxes')
+export function listSandboxes(workspaceId?: string, environmentId?: string) {
+  const params = new URLSearchParams()
+  if (workspaceId) params.set('workspace_id', workspaceId)
+  if (environmentId) params.set('environment_id', environmentId)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return apiFetch<Sandbox[]>(`/workloads${qs}`)
 }
 
-export function getSandbox(id: string) {
-  return apiFetch<Sandbox>(`/sandboxes/${id}`)
+export function getSandbox(workloadId: string) {
+  return apiFetch<Sandbox>(`/workloads/${workloadId}`)
 }
 
-export function stopSandbox(id: string) {
-  return apiFetch<void>(`/sandboxes/${id}`, { method: 'DELETE' })
-}
-
-export function execSandbox(id: string, command: string) {
-  return apiFetch<{ stdout: string; stderr: string }>(`/sandboxes/${id}/exec`, {
+export function stopSandbox(workloadId: string) {
+  return apiFetch<void>(`/workloads/${workloadId}/status`, {
     method: 'POST',
-    body: JSON.stringify({ command }),
+    body: JSON.stringify({ status: 'stopped' }),
   })
 }
 
-export function forwardPort(id: string, port: number) {
-  return apiFetch<{ url: string }>(`/sandboxes/${id}/forward`, {
-    method: 'POST',
-    body: JSON.stringify({ port }),
-  })
+export function deleteSandbox(workloadId: string) {
+  return apiFetch<void>(`/workloads/${workloadId}`, { method: 'DELETE' })
 }
 
-export function snapshotSandbox(id: string) {
-  return apiFetch<{ snapshot_id: string }>(`/sandboxes/${id}/snapshot`, { method: 'POST' })
+export function getSandboxMetrics(workloadId: string) {
+  return apiFetch<SandboxMetrics>(`/workloads/${workloadId}/metrics`)
 }
 
-export function getSandboxMetrics(id: string) {
-  return apiFetch<SandboxMetrics>(`/sandboxes/${id}/metrics`)
+export function getSandboxLogs(workloadId: string) {
+  return apiFetch<{ log_id: string; timestamp: string; level: string; message: string }[]>(`/workloads/${workloadId}/logs`)
 }

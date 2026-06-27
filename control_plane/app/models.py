@@ -478,3 +478,83 @@ class SingleTableItem(BaseModel):
     sk: str
     entity_type: str
     attributes: dict[str, Any]
+
+
+class LoginRequest(BaseModel):
+    external_user_id: str
+    email: str | None = None
+
+
+class LoginResponse(BaseModel):
+    user_id: str
+    token_type: str = "bearer"
+    access_token: str
+
+
+class BillingBalanceResponse(BaseModel):
+    user_id: str
+    balance_usd: float
+    credit_grants_usd: float
+    total_spend_usd: float
+
+
+class BillingUsageResponse(BaseModel):
+    user_id: str
+    total_spend_usd: float
+    period_start: datetime
+    period_end: datetime
+
+
+class BillingCreditsRequest(BaseModel):
+    user_id: str
+    amount_usd: float
+
+
+class BillingCreditsResponse(BaseModel):
+    user_id: str
+    amount_usd: float
+    new_balance_usd: float
+
+
+class UsageRecord(BaseModel):
+    usage_id: str = Field(default_factory=lambda: generated_id("usg"))
+    workload_id: str
+    owner_id: str
+    cpu_seconds: float
+    ram_gb_seconds: float
+    gpu_seconds: float
+    storage_gb_seconds: float
+    egress_gb: float
+    incremental_cost_usd: float
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class DashboardSummary(BaseModel):
+    workspace_id: str
+    environment_id: str
+    total_workloads: int
+    running_workloads: int
+    failed_workloads: int
+    total_routes: int
+    total_api_keys: int
+    total_secrets: int
+    total_volumes: int
+    balance_usd: float
+
+
+class WorkloadMetrics(BaseModel):
+    workload_id: str
+    cpu_seconds: float
+    ram_gb_seconds: float
+    gpu_seconds: float
+    storage_gb_seconds: float
+    egress_gb: float
+    accrued_cost_usd: float
+
+
+class WorkloadLogEntry(BaseModel):
+    log_id: str = Field(default_factory=lambda: generated_id("log"))
+    workload_id: str
+    timestamp: datetime = Field(default_factory=utc_now)
+    level: str = "info"
+    message: str

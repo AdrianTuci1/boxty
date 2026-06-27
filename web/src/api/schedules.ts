@@ -1,7 +1,7 @@
 import { apiFetch } from './client'
 
 export interface Schedule {
-  id: string
+  schedule_id: string
   name: string
   schedule_type: 'cron' | 'period'
   schedule_value: string
@@ -39,7 +39,7 @@ export function createSchedule(payload: {
 }
 
 export function updateSchedule(
-  id: string,
+  scheduleId: string,
   payload: {
     name?: string
     schedule_type?: 'cron' | 'period'
@@ -54,13 +54,13 @@ export function updateSchedule(
     status?: 'active' | 'paused'
   }
 ) {
-  return apiFetch<Schedule>(`/schedules/${id}`, { method: 'PATCH', body: JSON.stringify(payload) })
+  return apiFetch<Schedule>(`/schedules/${scheduleId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
-export function deleteSchedule(id: string) {
-  return apiFetch<void>(`/schedules/${id}`, { method: 'DELETE' })
+export function deleteSchedule(scheduleId: string) {
+  return apiFetch<void>(`/schedules/${scheduleId}`, { method: 'DELETE' })
 }
 
-export function triggerSchedule(id: string) {
-  return apiFetch<void>(`/schedules/${id}/trigger`, { method: 'POST' })
+export function triggerSchedule(scheduleId: string) {
+  return apiFetch<void>(`/schedules/${scheduleId}/trigger`, { method: 'POST' })
 }

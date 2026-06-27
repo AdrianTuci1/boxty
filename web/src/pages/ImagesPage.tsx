@@ -43,14 +43,14 @@ export default function ImagesPage() {
       )}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {data?.map((img) => (
-          <div key={img.id} className="rounded-xl border border-[#262626] bg-[#161616] p-4">
+          <div key={img.image_id} className="rounded-xl border border-[#262626] bg-[#161616] p-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-sm font-semibold text-white">{img.name}</h3>
               <StatusBadge status={img.status} />
             </div>
             <p className="text-xs text-gray-500 font-mono">{img.base_image}</p>
             <p className="mt-2 text-[11px] text-gray-600">{new Date(img.created_at).toLocaleString()}</p>
-            <button onClick={() => handleDelete(img.id)} className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>
+            <button onClick={() => handleDelete(img.image_id)} className="mt-2 text-xs text-red-400 hover:text-red-300 transition-colors">Delete</button>
           </div>
         ))}
       </div>

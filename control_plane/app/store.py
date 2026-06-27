@@ -41,9 +41,15 @@ from .models import (
     RouteRecord,
     SandboxSessionRecord,
     SandboxSessionRequest,
+    BillingBalanceResponse,
+    BillingCreditsResponse,
+    BillingUsageResponse,
+    DashboardSummary,
+    LoginResponse,
     SingleTableItem,
     UsageMeterRequest,
     UsageMeterResponse,
+    UsageRecord,
     UserRecord,
     WorkloadLaunchSpec,
     WorkloadCreateRequest,
@@ -58,6 +64,8 @@ from .models import (
     VolumeEntryRecord,
     VolumeMount,
     VolumeRecord,
+    WorkloadLogEntry,
+    WorkloadMetrics,
     generated_id,
     utc_now,
 )
@@ -79,6 +87,8 @@ class InMemoryStore:
     workloads: dict[str, WorkloadRecord] = field(default_factory=dict)
     routes: dict[str, RouteRecord] = field(default_factory=dict)
     sessions: dict[str, SandboxSessionRecord] = field(default_factory=dict)
+    usages: dict[str, UsageRecord] = field(default_factory=dict)
+    logs: dict[str, WorkloadLogEntry] = field(default_factory=dict)
 
     def _put_item(self, item: SingleTableItem) -> None:
         try:
@@ -754,6 +764,150 @@ class InMemoryStore:
         items.extend(workload_item(record) for record in self.workloads.values())
         items.extend(route_item(record) for record in self.routes.values())
         return items
+
+    def login(self, external_user_id: str, email: str | None = None) -> LoginResponse:
+        user = next((u for u in self.users.values() if u.external_user_id == external_user_id), None)
+        if not user:
+            raise KeyError("user not found")
+        return LoginResponse(user_id=user.user_id, access_token=issued_access_token(external_user_id))
+
+    def delete_api_key(self, api_key_id: str) -> bool:
+        if api_key_id not in self.api_keys:
+            return False
+        del self.api_keys[api_key_id]
+        self._delete_item(f"APIKEY#{api_key_id}", "PROFILE")
+        return True
+
+    def delete_workload(self, workload_id: str) -> bool:
+        if workload_id not in self.workloads:
+            return False
+        workload = self.workloads[workload_id]
+        if workload.assigned_provider_id and workload.assigned_provider_id in self.providers:
+            provider = self.providers[workload.assigned_provider_id]
+            provider.available_slots += 1
+            provider.running_workloads = max(0, provider.running_workloads - 1)
+            provider.updated_at = utc_now()
+            self.providers[provider.provider_id] = provider
+            self._put_item(provider_item(provider))
+        del self.workloads[workload_id]
+        self._delete_item(f"WORKLOAD#{workload_id}", "PROFILE")
+        return True
+
+    def list_routes(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[RouteRecord]:
+        items = list(self.routes.values())
+        if workspace_id or environment_id:
+            workload_ids = {w.workload_id for w in self.workloads.values() if (not workspace_id or w.workspace_id == workspace_id) and (not environment_id or w.environment_id == environment_id)}
+            items = [route for route in items if route.workload_id in workload_ids]
+        return items
+
+    def delete_route(self, route_id: str) -> bool:
+        if route_id not in self.routes:
+            return False
+        del self.routes[route_id]
+        self._delete_item(f"ROUTE#{route_id}", "PROFILE")
+        return True
+
+    def list_usage(self, workload_id: str | None = None, owner_id: str | None = None) -> list[UsageRecord]:
+        items = list(self.usages.values())
+        if workload_id:
+            items = [u for u in items if u.workload_id == workload_id]
+        if owner_id:
+            items = [u for u in items if u.owner_id == owner_id]
+        return items
+
+    def billing_balance(self, user_id: str) -> BillingBalanceResponse:
+        account = self.accounts[user_id]
+        return BillingBalanceResponse(
+            user_id=user_id,
+            balance_usd=account.balance_usd,
+            credit_grants_usd=account.credit_grants_usd,
+            total_spend_usd=account.total_spend_usd,
+        )
+
+    def billing_usage(self, user_id: str) -> BillingUsageResponse:
+        account = self.accounts[user_id]
+        now = utc_now()
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return BillingUsageResponse(
+            user_id=user_id,
+            total_spend_usd=account.total_spend_usd,
+            period_start=start,
+            period_end=now,
+        )
+
+    def add_credits(self, user_id: str, amount_usd: float) -> BillingCreditsResponse:
+        account = self.accounts[user_id]
+        account.balance_usd = round(account.balance_usd + amount_usd, 6)
+        account.credit_grants_usd = round(account.credit_grants_usd + amount_usd, 6)
+        account.updated_at = utc_now()
+        self.accounts[user_id] = account
+        self._put_item(account_item(account))
+        return BillingCreditsResponse(
+            user_id=user_id,
+            amount_usd=amount_usd,
+            new_balance_usd=account.balance_usd,
+        )
+
+    def list_workloads_filtered(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[WorkloadRecord]:
+        items = list(self.workloads.values())
+        if workspace_id:
+            items = [w for w in items if w.workspace_id == workspace_id]
+        if environment_id:
+            items = [w for w in items if w.environment_id == environment_id]
+        return items
+
+    def dashboard_summary(self, workspace_id: str, environment_id: str) -> DashboardSummary:
+        workloads = [w for w in self.workloads.values() if w.workspace_id == workspace_id and w.environment_id == environment_id]
+        running = sum(1 for w in workloads if w.status == WorkloadStatus.running)
+        failed = sum(1 for w in workloads if w.status == WorkloadStatus.failed)
+        routes = len(self.list_routes(workspace_id=workspace_id, environment_id=environment_id))
+        api_keys = len([k for k in self.api_keys.values() if k.workspace_id == workspace_id and k.environment_id == environment_id])
+        secrets = len([s for s in self.secrets.values() if s.workspace_id == workspace_id])
+        volumes = len([v for v in self.volumes.values() if v.workspace_id == workspace_id])
+        balance = 0.0
+        if workloads:
+            owner_id = workloads[0].owner_id
+            account = self.accounts.get(owner_id)
+            if account:
+                balance = account.balance_usd
+        return DashboardSummary(
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            total_workloads=len(workloads),
+            running_workloads=running,
+            failed_workloads=failed,
+            total_routes=routes,
+            total_api_keys=api_keys,
+            total_secrets=secrets,
+            total_volumes=volumes,
+            balance_usd=balance,
+        )
+
+    def workload_metrics(self, workload_id: str) -> WorkloadMetrics:
+        workload = self.workloads[workload_id]
+        usage_items = [u for u in self.usages.values() if u.workload_id == workload_id]
+        cpu_seconds = sum(u.cpu_seconds for u in usage_items)
+        ram_gb_seconds = sum(u.ram_gb_seconds for u in usage_items)
+        gpu_seconds = sum(u.gpu_seconds for u in usage_items)
+        storage_gb_seconds = sum(u.storage_gb_seconds for u in usage_items)
+        egress_gb = sum(u.egress_gb for u in usage_items)
+        return WorkloadMetrics(
+            workload_id=workload_id,
+            cpu_seconds=cpu_seconds,
+            ram_gb_seconds=ram_gb_seconds,
+            gpu_seconds=gpu_seconds,
+            storage_gb_seconds=storage_gb_seconds,
+            egress_gb=egress_gb,
+            accrued_cost_usd=workload.accrued_cost_usd,
+        )
+
+    def workload_logs(self, workload_id: str) -> list[WorkloadLogEntry]:
+        return [log for log in self.logs.values() if log.workload_id == workload_id]
+
+    def add_workload_log(self, workload_id: str, level: str, message: str) -> WorkloadLogEntry:
+        log = WorkloadLogEntry(workload_id=workload_id, level=level, message=message)
+        self.logs[log.log_id] = log
+        return log
 
 
 store = InMemoryStore()

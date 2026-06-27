@@ -3,8 +3,10 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Res
 from .config import settings
 from .models import (
     ApiKeyCreateRequest,
+    BillingCreditsRequest,
     EnvironmentCreateRequest,
     InviteCreateRequest,
+    LoginRequest,
     ProviderHeartbeatRequest,
     ProviderRegistrationRequest,
     RoutePublishRequest,
@@ -325,7 +327,9 @@ def claim_next_assignment(provider_id: str, auth_provider_id: str = Depends(requ
 
 
 @app.get(f"{settings.api_prefix}/workloads")
-def list_workloads() -> list[dict]:
+def list_workloads(workspace_id: str | None = None, environment_id: str | None = None) -> list[dict]:
+    if workspace_id or environment_id:
+        return [workload.model_dump(mode="json") for workload in store.list_workloads_filtered(workspace_id, environment_id)]
     return [workload.model_dump(mode="json") for workload in store.workloads.values()]
 
 
@@ -419,6 +423,102 @@ def meter_usage(request: UsageMeterRequest, _: str = Depends(require_provider_ru
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="workload or account not found") from exc
     return result.model_dump(mode="json")
+
+
+@app.post(f"{settings.api_prefix}/auth/login")
+def login(request: LoginRequest) -> dict:
+    try:
+        result = store.login(request.external_user_id, request.email)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="user not found") from exc
+    return result.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/api-keys/{{api_key_id}}")
+def delete_api_key(api_key_id: str) -> dict:
+    deleted = store.delete_api_key(api_key_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="api key not found")
+    return {"deleted": True}
+
+
+@app.delete(f"{settings.api_prefix}/workloads/{{workload_id}}")
+def delete_workload(workload_id: str) -> dict:
+    deleted = store.delete_workload(workload_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="workload not found")
+    return {"deleted": True}
+
+
+@app.get(f"{settings.api_prefix}/routes")
+def list_routes(workspace_id: str | None = None, environment_id: str | None = None) -> list[dict]:
+    return [route.model_dump(mode="json") for route in store.list_routes(workspace_id, environment_id)]
+
+
+@app.delete(f"{settings.api_prefix}/routes/{{route_id}}")
+def delete_route(route_id: str) -> dict:
+    deleted = store.delete_route(route_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="route not found")
+    return {"deleted": True}
+
+
+@app.get(f"{settings.api_prefix}/usage")
+def list_usage(workload_id: str | None = None, owner_id: str | None = None) -> list[dict]:
+    return [usage.model_dump(mode="json") for usage in store.list_usage(workload_id, owner_id)]
+
+
+@app.get(f"{settings.api_prefix}/billing/balance")
+def get_billing_balance(user_id: str) -> dict:
+    try:
+        result = store.billing_balance(user_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="account not found") from exc
+    return result.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/billing/usage")
+def get_billing_usage(user_id: str) -> dict:
+    try:
+        result = store.billing_usage(user_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="account not found") from exc
+    return result.model_dump(mode="json")
+
+
+@app.post(f"{settings.api_prefix}/billing/credits")
+def add_billing_credits(request: BillingCreditsRequest) -> dict:
+    try:
+        result = store.add_credits(request.user_id, request.amount_usd)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="account not found") from exc
+    return result.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/dashboard/{{workspace_id}}/{{environment_id}}")
+def get_dashboard(workspace_id: str, environment_id: str) -> dict:
+    return store.dashboard_summary(workspace_id, environment_id).model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/dashboard/{{workspace_id}}/{{environment_id}}/summary")
+def get_dashboard_summary(workspace_id: str, environment_id: str) -> dict:
+    return store.dashboard_summary(workspace_id, environment_id).model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/workloads/{{workload_id}}/metrics")
+def get_workload_metrics(workload_id: str) -> dict:
+    try:
+        result = store.workload_metrics(workload_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="workload not found") from exc
+    return result.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/workloads/{{workload_id}}/logs")
+def get_workload_logs(workload_id: str) -> list[dict]:
+    if workload_id not in store.workloads:
+        raise HTTPException(status_code=404, detail="workload not found")
+    return [log.model_dump(mode="json") for log in store.workload_logs(workload_id)]
 
 
 @app.get(f"{settings.api_prefix}/admin/dynamodb-items")

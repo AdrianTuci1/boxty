@@ -16,8 +16,8 @@ export interface EnvironmentModel {
 
 export function mapWorkspaceFromApi(raw: Record<string, any>): WorkspaceModel {
   return {
-    id: raw.id,
-    name: raw.name,
+    id: raw.workspace_id ?? raw.id ?? '',
+    name: raw.name ?? '',
     description: raw.description ?? '',
     createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
     environmentCount: raw.environment_count ?? raw.environmentCount ?? 0,
@@ -27,9 +27,9 @@ export function mapWorkspaceFromApi(raw: Record<string, any>): WorkspaceModel {
 
 export function mapEnvironmentFromApi(raw: Record<string, any>): EnvironmentModel {
   return {
-    id: raw.id,
+    id: raw.environment_id ?? raw.id ?? '',
     workspaceId: raw.workspace_id ?? raw.workspaceId ?? '',
-    name: raw.name,
+    name: raw.name ?? '',
     createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
   };
 }

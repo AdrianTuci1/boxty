@@ -5,13 +5,13 @@ import { Plus } from 'lucide-react'
 
 export default function SecretsPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
-  const { data, isLoading } = useQuery({ queryKey: ['secrets'], queryFn: listSecrets })
+  const { data, isLoading } = useQuery({ queryKey: ['secrets'], queryFn: () => listSecrets() })
   const navigate = useNavigate()
   const qc = useQueryClient()
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete secret?')) return
-    await deleteSecret(id)
+    await deleteSecret(id, 'default')
     qc.invalidateQueries({ queryKey: ['secrets'] })
   }
 
@@ -36,10 +36,10 @@ export default function SecretsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#262626]">
-            {data?.length === 0 && (
+            {data && data.length === 0 && (
               <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No secrets yet.</td></tr>
             )}
-            {data?.map((s) => (
+            {data && data.map((s: any) => (
               <tr key={s.name} className="bg-[#161616]">
                 <td className="px-4 py-3 text-white font-medium">{s.name}</td>
                 <td className="px-4 py-3 text-gray-500">{new Date(s.created_at).toLocaleString()}</td>

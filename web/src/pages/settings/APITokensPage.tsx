@@ -12,14 +12,14 @@ const exampleTokens = [
 ]
 
 export default function APITokensPage() {
-  const { data } = useQuery({ queryKey: ['api-keys'], queryFn: listApiKeys })
+  const { data } = useQuery({ queryKey: ['api-keys'], queryFn: () => listApiKeys('default') })
   const [keyName, setKeyName] = useState('')
   const [showNew, setShowNew] = useState(false)
   const qc = useQueryClient()
 
   const handleCreate = async () => {
     if (!keyName) return
-    await createApiKey(keyName)
+    await createApiKey({ owner_id: 'default', workspace_id: 'default', environment_id: 'default', name: keyName })
     setKeyName('')
     setShowNew(false)
     qc.invalidateQueries({ queryKey: ['api-keys'] })
@@ -30,7 +30,7 @@ export default function APITokensPage() {
     qc.invalidateQueries({ queryKey: ['api-keys'] })
   }
 
-  const tokens = data ?? []
+  const tokens = data || []
 
   return (
     <div>
@@ -64,12 +64,12 @@ export default function APITokensPage() {
         </div>
 
         {/* Rows */}
-        {tokens.length === 0 ? (
+        {tokens && tokens.length === 0 ? (
           exampleTokens.map((tok, i) => (
             <TokenRow key={i} token={tok} onDelete={() => {}} />
           ))
         ) : (
-          tokens.map((k, i) => (
+          tokens.map((k: any, i: number) => (
             <TokenRow
               key={k.id}
               token={{

@@ -34,7 +34,7 @@ export default function DashboardPage() {
 
   // Unique values for filter submenus
   const deployers = useMemo(
-    () => [...new Set(appsWithSandboxes.map((a) => a.deployer_name).filter(Boolean))] as string[],
+    () => [...new Set(appsWithSandboxes.map((a) => a.name).filter(Boolean))] as string[],
     [appsWithSandboxes]
   )
   const tags = useMemo(

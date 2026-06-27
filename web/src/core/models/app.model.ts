@@ -34,8 +34,8 @@ export interface InstanceConfigModel {
 
 export function mapAppFromApi(raw: Record<string, any>): AppModel {
   return {
-    id: raw.id,
-    name: raw.name,
+    id: raw.app_id ?? raw.id ?? '',
+    name: raw.name ?? '',
     workspaceId: raw.workspace_id ?? raw.workspaceId ?? '',
     environmentId: raw.environment_id ?? raw.environmentId ?? raw.env_id ?? '',
     status: (raw.status as AppStatus) ?? 'active',
@@ -58,9 +58,9 @@ export function mapAppFromApi(raw: Record<string, any>): AppModel {
 
 export function mapInstanceFromApi(raw: Record<string, any>): InstanceConfigModel {
   return {
-    id: raw.id,
+    id: raw.instance_id ?? raw.id ?? '',
     appId: raw.app_id ?? raw.appId ?? '',
-    name: raw.name,
+    name: raw.name ?? '',
     cpu: raw.cpu ?? 1,
     memory: raw.memory ?? 512,
     gpu: raw.gpu ?? null,

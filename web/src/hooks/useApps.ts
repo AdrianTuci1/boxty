@@ -10,40 +10,41 @@ import { mapAppFromApi } from '../core/models/app.model'
 
 function combineApps(apiApps: App[]): App[] {
   const combined = [...apiApps]
-  // Adauga mock-uri daca nu exista deja
   const mockAsApiApps = mockApps.map((m) => ({
     ...m,
+    workload_id: m.id,
     environment_id: m.environmentId,
     deployer_name: m.deployerName,
     created_at: m.createdAt.toISOString(),
     updated_at: m.updatedAt.toISOString(),
   })) as unknown as App[]
   for (const mock of mockAsApiApps) {
-    if (!combined.find((a) => a.id === mock.id)) {
+    if (!combined.find((a) => a.workload_id === mock.workload_id)) {
       combined.push(mock)
     }
   }
   return combined
 }
 
-export function useApps(envId?: string) {
+export function useApps(workspaceId?: string, envId?: string) {
   const { devMode } = useAuth()
   const useMocks = devMode || shouldUseMocks()
 
   return useQuery<App[]>({
-    queryKey: ['apps', envId],
+    queryKey: ['apps', workspaceId, envId],
     queryFn: async () => {
       if (useMocks) {
         const allMocks = [...mockApps, ...mockSandboxApps]
         return allMocks.map((m) => ({
           ...m,
+          workload_id: m.id,
           environment_id: m.environmentId,
           deployer_name: m.deployerName,
           created_at: m.createdAt.toISOString(),
           updated_at: m.updatedAt.toISOString(),
         })) as unknown as App[]
       }
-      const raw = await listApps(envId)
+      const raw = await listApps(workspaceId, envId)
       return combineApps(raw)
     },
     staleTime: useMocks ? Infinity : 30000,
@@ -64,6 +65,7 @@ export function useAppById(appId?: string) {
         if (found) {
           return {
             ...found,
+            workload_id: found.id,
             environment_id: found.environmentId,
             deployer_name: found.deployerName,
             created_at: found.createdAt.toISOString(),
@@ -80,7 +82,6 @@ export function useAppById(appId?: string) {
 }
 
 export function useFilteredApps(apps: App[] | undefined, filter: AppFilter, sort: SortType) {
-  // Aceasta e o functie utilitara apelata direct din pagini, nu un hook React Query
   if (!apps) return []
   const models = apps.map((a: any) => mapAppFromApi(a))
   return getFilteredAndSortedApps(models, filter, sort)
