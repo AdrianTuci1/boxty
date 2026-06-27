@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
@@ -24,6 +24,8 @@ import UsagePage from './pages/settings/UsagePage'
 import APITokensPage from './pages/settings/APITokensPage'
 import DocsLayout from './components/DocsLayout'
 import DocsPage from './pages/DocsPage'
+import LandingPageWrapper from './landing/LandingPageWrapper'
+import PricingPage from './pages/PricingPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, devMode } = useAuth()
@@ -31,9 +33,13 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  const location = useLocation()
+  console.log('AppRoutes matching pathname:', location.pathname)
+
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
+      <Route path="/" element={<LandingPageWrapper />} />
+      <Route path="/pricing" element={<PricingPage />} />
       <Route path="/docs" element={<Navigate to="/docs/guide/introduction" replace />} />
       <Route path="/docs/guide/:slug" element={<DocsLayout><DocsPage /></DocsLayout>} />
       <Route path="/docs/examples" element={<Navigate to="/docs/guide/introduction" replace />} />
@@ -57,7 +63,6 @@ function AppRoutes() {
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/images/:workspace/:environment" element={<ImagesPage />} />
         <Route path="/schedules/:workspace/:environment" element={<SchedulesPage />} />
-        <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
       </Route>
       <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/settings/profile" replace />} />

@@ -365,10 +365,7 @@ export default function DocsLayout({ children }: DocsLayoutProps) {
         <div className="flex items-center gap-12">
           {/* Logo and Brand */}
           <Link to="/" className="flex items-center select-none">
-            <svg className="h-[20px] w-[20px]" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 8.2L11 3.5v12.3L3 20.5V8.2z" fill="#10B981" />
-              <path d="M13 3.5l8 4.7v12.3l-8-4.7V3.5z" fill="#059669" />
-            </svg>
+            <img src="/boxty.svg" className="h-[20px] w-[20px]" alt="boxty" />
             <span className="text-[16px] font-bold text-white tracking-tight ml-2">
               Boxty<span className="text-[#34d399] ml-1">Docs</span>
             </span>

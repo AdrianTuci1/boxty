@@ -1,0 +1,94 @@
+.vs-cta-grid-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.vs-cta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 64px);
+  grid-template-rows: repeat(4, 64px);
+  gap: 28px;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.vs-cta-grid-box {
+  width: 64px;
+  height: 64px;
+  background-color: #0c0c0e;
+  border: 1.2px solid var(--vs-border);
+  border-radius: 6px;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  animation: cta-box-pulse 6s infinite ease-in-out;
+}
+
+.vs-cta-box-inner {
+  position: absolute;
+  inset: 6px;
+  border: 1.2px solid rgba(113, 113, 122, 0.15);
+  border-radius: 4px;
+  pointer-events: none;
+  animation: cta-inner-pulse 6s infinite ease-in-out;
+}
+
+.vs-cta-box-star {
+  width: 24px;
+  height: 24px;
+  color: var(--vs-muted-light);
+  /* Spin continually, pulse green in waves */
+  animation: cta-star-spin 10s linear infinite, cta-star-pulse 6s infinite ease-in-out;
+}
+
+/* Keyframes for CSS Wave Pulse Animations */
+@keyframes cta-box-pulse {
+  0%, 100% {
+    border-color: var(--vs-border);
+  }
+  20%, 45% {
+    border-color: rgba(0, 255, 102, 0.25);
+  }
+  65% {
+    border-color: var(--vs-border);
+  }
+}
+
+@keyframes cta-inner-pulse {
+  0%, 100% {
+    border-color: rgba(113, 113, 122, 0.15);
+  }
+  20%, 45% {
+    border-color: rgba(0, 255, 102, 0.15);
+  }
+  65% {
+    border-color: rgba(113, 113, 122, 0.15);
+  }
+}
+
+@keyframes cta-star-pulse {
+  0%, 100% {
+    color: var(--vs-muted-light);
+    filter: none;
+  }
+  20%, 45% {
+    color: var(--vs-accent);
+    filter: drop-shadow(0 0 4px var(--vs-accent-glow));
+  }
+  65% {
+    color: var(--vs-muted-light);
+    filter: none;
+  }
+}
+
+@keyframes cta-star-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

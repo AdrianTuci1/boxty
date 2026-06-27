@@ -1,0 +1,423 @@
+/* Pricing Page Styles - Clean, precise developer-focused design */
+
+.vs-pricing-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 60px 0 40px 0;
+}
+
+.vs-pricing-title {
+  font-family: var(--vs-font-sans);
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--vs-fg);
+  margin: 0 0 12px 0;
+  line-height: 1.2;
+}
+
+.vs-pricing-subtitle {
+  font-family: var(--vs-font-sans);
+  font-size: 15px;
+  color: var(--vs-muted);
+  max-width: 650px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Calculator Section - Flat Layout (No Container) */
+.vs-calculator-section {
+  margin-bottom: 60px;
+  padding: 0;
+}
+
+.vs-section-header-compact {
+  margin-bottom: 24px;
+}
+
+.vs-calc-section-title {
+  font-family: var(--vs-font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--vs-fg);
+  margin: 0 0 6px 0;
+}
+
+.vs-calc-section-desc {
+  font-family: var(--vs-font-sans);
+  font-size: 13px;
+  color: var(--vs-muted-light);
+  margin: 0;
+}
+
+.vs-calculator-layout {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 40px;
+}
+
+.vs-calculator-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.vs-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vs-input-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--vs-font-sans);
+  font-size: 13px;
+  color: var(--vs-fg);
+}
+
+.vs-input-val {
+  font-family: var(--vs-font-mono);
+  color: var(--vs-accent);
+}
+
+.vs-preset-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.vs-preset-btn {
+  background-color: #121217;
+  border: 1px solid var(--vs-border);
+  color: var(--vs-muted);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-family: var(--vs-font-mono);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vs-preset-btn:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--vs-fg);
+}
+
+.vs-preset-btn.active {
+  background-color: rgba(0, 255, 102, 0.1);
+  border-color: var(--vs-accent);
+  color: var(--vs-accent);
+}
+
+/* Custom Range Slider */
+.vs-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--vs-border);
+  outline: none;
+}
+
+.vs-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--vs-accent);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+.vs-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Outputs & Telemetry terminal */
+.vs-calculator-outputs {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.vs-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.vs-metric-box {
+  background-color: #121217;
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vs-metric-label {
+  font-family: var(--vs-font-sans);
+  font-size: 11px;
+  color: var(--vs-muted-light);
+  text-transform: lowercase;
+}
+
+.vs-metric-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--vs-fg);
+}
+
+/* Telemetry terminal styles */
+.vs-terminal-sim {
+  background-color: #07070a;
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+.vs-terminal-header {
+  background-color: #0e0e12;
+  border-bottom: 1px solid var(--vs-border);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vs-terminal-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.vs-terminal-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.vs-terminal-dots .dot.red { background-color: #ef4444; }
+.vs-terminal-dots .dot.yellow { background-color: #f59e0b; }
+.vs-terminal-dots .dot.green { background-color: #10b981; }
+
+.vs-terminal-title {
+  color: var(--vs-muted-light);
+  font-size: 11px;
+  font-family: var(--vs-font-mono);
+}
+
+.vs-terminal-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.monospace {
+  font-family: var(--vs-font-mono) !important;
+}
+
+.vs-term-line {
+  line-height: 1.4;
+  color: var(--vs-fg);
+}
+
+.text-dim { color: #52525b; }
+.text-muted { color: var(--vs-muted-light); }
+.text-green { color: var(--vs-accent); }
+.text-yellow { color: #ffcc00; }
+
+.vs-term-divider {
+  height: 1px;
+  background-color: rgba(255, 255, 255, 0.05);
+  margin: 4px 0;
+}
+
+.vs-accumulated-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.vs-live-price {
+  font-weight: 600;
+  text-shadow: 0 0 8px rgba(0, 255, 102, 0.2);
+}
+
+/* Detailed Tables Section */
+.vs-tables-section {
+  margin-bottom: 60px;
+}
+
+.vs-table-container {
+  overflow-x: auto;
+  border: 1px solid var(--vs-border);
+  border-radius: 8px;
+  background-color: #0b0b0f;
+}
+
+.vs-pricing-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-family: var(--vs-font-sans);
+  font-size: 13px;
+}
+
+.vs-pricing-table th {
+  background-color: #0e0e12;
+  border-bottom: 1px solid var(--vs-border);
+  color: var(--vs-muted);
+  font-weight: 500;
+  padding: 12px 16px;
+}
+
+.vs-pricing-table td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  padding: 12px 16px;
+  color: var(--vs-muted);
+}
+
+.vs-pricing-table tr:last-child td {
+  border-bottom: none;
+}
+
+.vs-table-highlight {
+  color: var(--vs-fg);
+  font-weight: 500;
+}
+
+.vs-table-footer-info {
+  margin-top: 12px;
+  font-family: var(--vs-font-sans);
+  font-size: 11px;
+  color: var(--vs-muted-light);
+  line-height: 1.4;
+}
+
+/* CTA Section - Matches Landing Page Exactly */
+.vs-cta-section {
+  padding: 100px 0;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 64px;
+  align-items: center;
+  width: 100%;
+  animation: fade-in 0.8s ease-out;
+}
+
+@media (max-width: 992px) {
+  .vs-cta-section {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 60px 0;
+  }
+}
+
+.vs-cta-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  gap: 20px;
+}
+
+.vs-cta-title {
+  font-size: clamp(26px, 3.5vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  font-family: var(--vs-font-sans);
+}
+
+.vs-cta-desc {
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--vs-muted);
+  font-family: var(--vs-font-sans);
+}
+
+.vs-cta-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+@media (max-width: 480px) {
+  .vs-cta-actions {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+  }
+}
+
+.vs-btn-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background-color: var(--vs-accent);
+  color: #09090b;
+  border: none;
+  font-family: var(--vs-font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 12px 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.vs-btn-cta:hover {
+  background-color: #12ff70;
+}
+
+.vs-btn-cta:active {
+  background-color: #05ff50;
+}
+
+.vs-cta-hint {
+  font-size: 11px;
+  color: var(--vs-muted-light);
+  font-family: var(--vs-font-mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.vs-cta-right {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+.vs-dot-grid-bg {
+  position: relative;
+  z-index: 1;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 1024px) {
+  .vs-calculator-layout {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+}
+
+@media (max-width: 768px) {
+  .vs-pricing-title {
+    font-size: 26px;
+  }
+}

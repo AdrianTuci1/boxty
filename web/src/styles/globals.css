@@ -1,5 +1,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
+@import '../landing/index.css';
+@import '../landing/App.css';
+@import '../landing/components/LandingPage.css';
+@import '../landing/components/SandboxEditor.css';
+@import '../landing/components/SshVisualizer.css';
+@import '../landing/components/GpuVisualizer.css';
+@import '../landing/components/UseCasesCarousel.css';
+@import '../landing/components/CtaGrid.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

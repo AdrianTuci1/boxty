@@ -30,11 +30,7 @@ export default function Navbar() {
       <div className="flex items-center gap-2">
         {/* Logo */}
         <div className="flex items-center">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <path d="M8 4L18 4L22 10L14 18L6 10L8 4Z" fill="#34d399" fillOpacity="0.8" />
-            <path d="M6 10L14 18L10 24L2 18L6 10Z" fill="#34d399" fillOpacity="0.6" />
-            <path d="M14 18L22 10L24 16L18 24L14 18Z" fill="#34d399" fillOpacity="0.5" />
-          </svg>
+          <img src="/boxty.svg" width="28" height="28" alt="boxty" />
         </div>
 
         {/* Workspace dropdown */}
@@ -183,12 +179,18 @@ export default function Navbar() {
 
               <DropdownMenu.Separator className="mx-2 h-px bg-[#262626]" />
 
-              <div className="p-1">
+              <div className="p-1 flex flex-col gap-0.5">
                 <DropdownMenu.Item
                   onClick={() => navigate('/billing')}
                   className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-gray-300 outline-none hover:bg-[#1f1f1f] hover:text-white"
                 >
                   View billing
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  onClick={() => navigate('/pricing')}
+                  className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-gray-300 outline-none hover:bg-[#1f1f1f] hover:text-white"
+                >
+                  View pricing
                 </DropdownMenu.Item>
               </div>
             </DropdownMenu.Content>
@@ -218,6 +220,12 @@ export default function Navbar() {
                 className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-gray-300 outline-none hover:bg-[#1f1f1f] hover:text-white"
               >
                 Settings
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onClick={() => navigate('/pricing')}
+                className="flex cursor-pointer items-center rounded-md px-3 py-2 text-sm text-gray-300 outline-none hover:bg-[#1f1f1f] hover:text-white"
+              >
+                Pricing Plans
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="mx-2 my-1 h-px bg-[#262626]" />
               <DropdownMenu.Item
