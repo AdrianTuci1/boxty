@@ -1,8 +1,15 @@
 [package]
-name = "boxty"
+name = "boxty-worker"
 version = "1.0.0"
 edition = "2021"
 authors = ["Adrian Tucicovenco"]
+description = "Boxty Worker CLI - Decentralized P2P compute node"
+license = "MIT"
+repository = "https://github.com/AdrianTuci1/boxty"
+
+[[bin]]
+name = "boxty-worker"
+path = "src/main.rs"
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }

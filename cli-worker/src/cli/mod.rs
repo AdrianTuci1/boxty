@@ -247,7 +247,7 @@ pub enum Commands {
     },
     /// Display version information
     Version,
-    /// Login to the Boxty control plane
+    /// Login to the Boxty control plane (DEPRECATED: use boxty CLI instead)
     Login {
         /// External user ID (e.g., wallet address)
         #[arg(long)]
@@ -256,46 +256,46 @@ pub enum Commands {
         #[arg(long)]
         email: Option<String>,
     },
-    /// Logout from the Boxty control plane
+    /// Logout from the Boxty control plane (DEPRECATED: use boxty CLI instead)
     Logout,
-    /// Show current user info
+    /// Show current user info (DEPRECATED: use boxty CLI instead)
     Whoami,
-    /// Manage workspaces
+    /// Manage workspaces (DEPRECATED: use boxty CLI instead)
     Workspace {
         #[command(subcommand)]
         workspace_command: WorkspaceCommands,
     },
-    /// Manage environments
+    /// Manage environments (DEPRECATED: use boxty CLI instead)
     Env {
         #[command(subcommand)]
         env_command: EnvCommands,
     },
-    /// Manage applications / workloads
+    /// Manage applications / workloads (DEPRECATED: use boxty CLI instead)
     AppCtl {
         #[command(subcommand)]
         appctl_command: AppCtlCommands,
     },
-    /// Manage routes / endpoints
+    /// Manage routes / endpoints (DEPRECATED: use boxty CLI instead)
     Route {
         #[command(subcommand)]
         route_command: RouteCommands,
     },
-    /// Manage schedules / cron jobs
+    /// Manage schedules / cron jobs (DEPRECATED: use boxty CLI instead)
     Schedule {
         #[command(subcommand)]
         schedule_command: ScheduleCommands,
     },
-    /// Manage images
+    /// Manage images (DEPRECATED: use boxty CLI instead)
     Image {
         #[command(subcommand)]
         image_command: ImageCommands,
     },
-    /// Billing and usage
+    /// Billing and usage (DEPRECATED: use boxty CLI instead)
     Billing {
         #[command(subcommand)]
         billing_command: BillingCommands,
     },
-    /// Dashboard status
+    /// Dashboard status (DEPRECATED: use boxty CLI instead)
     Status {
         /// Watch mode - refresh every 5 seconds
         #[arg(long, default_value_t = false)]
