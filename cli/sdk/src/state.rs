@@ -118,6 +118,10 @@ pub fn provider_path() -> PathBuf {
     ensure_state_dir().join("provider.json")
 }
 
+pub fn config_path() -> PathBuf {
+    ensure_state_dir().join("config.json")
+}
+
 pub fn write_json<T: Serialize>(path: &PathBuf, value: &T) {
     if let Ok(json) = serde_json::to_string_pretty(value) {
         let _ = std::fs::write(path, json);

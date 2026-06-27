@@ -353,6 +353,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     std::env::consts::ARCH
                 );
             }
+            cli::Commands::Login { external_user_id, email } => {
+                cli::client::handle_login(external_user_id, email.as_deref()).await?;
+            }
+            cli::Commands::Logout => {
+                cli::client::handle_logout().await?;
+            }
+            cli::Commands::Whoami => {
+                cli::client::handle_whoami().await?;
+            }
+            cli::Commands::Workspace { workspace_command } => {
+                cli::client::handle_workspace(workspace_command).await?;
+            }
+            cli::Commands::Env { env_command } => {
+                cli::client::handle_env(env_command).await?;
+            }
+            cli::Commands::AppCtl { appctl_command } => {
+                cli::client::handle_appctl(appctl_command).await?;
+            }
+            cli::Commands::Route { route_command } => {
+                cli::client::handle_route(route_command).await?;
+            }
+            cli::Commands::Schedule { schedule_command } => {
+                cli::client::handle_schedule(schedule_command).await?;
+            }
+            cli::Commands::Image { image_command } => {
+                cli::client::handle_image(image_command).await?;
+            }
+            cli::Commands::Billing { billing_command } => {
+                cli::client::handle_billing(billing_command).await?;
+            }
+            cli::Commands::Status { watch } => {
+                cli::client::handle_status(watch).await?;
+            }
         },
         None => {
             let banner = cli::get_welcome_banner();

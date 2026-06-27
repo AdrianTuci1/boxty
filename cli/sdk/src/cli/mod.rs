@@ -247,6 +247,60 @@ pub enum Commands {
     },
     /// Display version information
     Version,
+    /// Login to the Boxty control plane
+    Login {
+        /// External user ID (e.g., wallet address)
+        #[arg(long)]
+        external_user_id: String,
+        /// Email address (optional)
+        #[arg(long)]
+        email: Option<String>,
+    },
+    /// Logout from the Boxty control plane
+    Logout,
+    /// Show current user info
+    Whoami,
+    /// Manage workspaces
+    Workspace {
+        #[command(subcommand)]
+        workspace_command: WorkspaceCommands,
+    },
+    /// Manage environments
+    Env {
+        #[command(subcommand)]
+        env_command: EnvCommands,
+    },
+    /// Manage applications / workloads
+    AppCtl {
+        #[command(subcommand)]
+        appctl_command: AppCtlCommands,
+    },
+    /// Manage routes / endpoints
+    Route {
+        #[command(subcommand)]
+        route_command: RouteCommands,
+    },
+    /// Manage schedules / cron jobs
+    Schedule {
+        #[command(subcommand)]
+        schedule_command: ScheduleCommands,
+    },
+    /// Manage images
+    Image {
+        #[command(subcommand)]
+        image_command: ImageCommands,
+    },
+    /// Billing and usage
+    Billing {
+        #[command(subcommand)]
+        billing_command: BillingCommands,
+    },
+    /// Dashboard status
+    Status {
+        /// Watch mode - refresh every 5 seconds
+        #[arg(long, default_value_t = false)]
+        watch: bool,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -258,6 +312,202 @@ pub enum AppCommands {
         /// The application/task ID to stop
         app_id: u64,
     },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum WorkspaceCommands {
+    /// List workspaces
+    List,
+    /// Create a workspace
+    Create {
+        /// Workspace name
+        #[arg(long)]
+        name: String,
+    },
+    /// Delete a workspace
+    Delete {
+        /// Workspace ID
+        workspace_id: String,
+    },
+    /// Show workspace details
+    Show {
+        /// Workspace ID
+        workspace_id: String,
+    },
+    /// Switch active workspace
+    Switch {
+        /// Workspace ID
+        workspace_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum EnvCommands {
+    /// List environments
+    List {
+        /// Workspace ID
+        #[arg(long)]
+        workspace_id: String,
+    },
+    /// Create an environment
+    Create {
+        /// Workspace ID
+        #[arg(long)]
+        workspace_id: String,
+        /// Environment name
+        #[arg(long)]
+        name: String,
+    },
+    /// Delete an environment
+    Delete {
+        /// Environment ID
+        environment_id: String,
+    },
+    /// Show environment details
+    Show {
+        /// Environment ID
+        environment_id: String,
+    },
+    /// Switch active environment
+    Switch {
+        /// Environment ID
+        environment_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum AppCtlCommands {
+    /// List workloads
+    List,
+    /// Deploy a workload
+    Deploy {
+        /// Workload name
+        #[arg(long)]
+        name: String,
+        /// Workload kind (sandbox, function, endpoint, build)
+        #[arg(long, default_value = "sandbox")]
+        kind: String,
+        /// Docker image
+        #[arg(long)]
+        image: String,
+        /// Workspace ID
+        #[arg(long)]
+        workspace_id: String,
+        /// Environment ID
+        #[arg(long)]
+        environment_id: String,
+    },
+    /// Stop a workload
+    Stop {
+        /// Workload ID
+        workload_id: String,
+    },
+    /// Show workload details
+    Show {
+        /// Workload ID
+        workload_id: String,
+    },
+    /// Get workload logs
+    Logs {
+        /// Workload ID
+        workload_id: String,
+    },
+    /// Get workload metrics
+    Metrics {
+        /// Workload ID
+        workload_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum RouteCommands {
+    /// List routes
+    List,
+    /// Create a route
+    Create {
+        /// Workload ID
+        #[arg(long)]
+        workload_id: String,
+        /// Endpoint name
+        #[arg(long)]
+        endpoint_name: String,
+    },
+    /// Delete a route
+    Delete {
+        /// Route ID
+        route_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ScheduleCommands {
+    /// List schedules
+    List,
+    /// Create a schedule
+    Create {
+        /// Schedule name
+        #[arg(long)]
+        name: String,
+        /// Schedule type (cron, interval)
+        #[arg(long)]
+        schedule_type: String,
+        /// Schedule value (e.g., "0 * * * *" for cron)
+        #[arg(long)]
+        schedule_value: String,
+        /// Function name to run
+        #[arg(long)]
+        function_name: String,
+        /// Workspace ID
+        #[arg(long)]
+        workspace_id: String,
+        /// Environment ID
+        #[arg(long)]
+        environment_id: String,
+    },
+    /// Delete a schedule
+    Delete {
+        /// Schedule ID
+        schedule_id: String,
+    },
+    /// Trigger a schedule
+    Trigger {
+        /// Schedule ID
+        schedule_id: String,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ImageCommands {
+    /// List images
+    List,
+    /// Build an image
+    Build {
+        /// Image name
+        #[arg(long)]
+        name: String,
+        /// Path to Dockerfile
+        #[arg(long)]
+        dockerfile: Option<String>,
+        /// Base image
+        #[arg(long)]
+        base_image: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum BillingCommands {
+    /// Show account balance
+    Balance,
+    /// Show usage
+    Usage,
+    /// Add credits
+    AddCredits {
+        /// Amount in USD
+        #[arg(long)]
+        amount: f64,
+    },
+    /// Show pricing
+    Pricing,
 }
 
 #[derive(Subcommand, Debug)]

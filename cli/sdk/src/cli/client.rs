@@ -1497,3 +1497,595 @@ pub async fn handle_update(force: bool) -> Result<(), Box<dyn std::error::Error>
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Control Plane API Handlers
+// ---------------------------------------------------------------------------
+
+fn get_control_plane_url() -> String {
+    std::env::var("BOXTY_CONTROL_PLANE_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:8080".to_string())
+}
+
+fn get_auth_token() -> Option<String> {
+    let config_path = crate::state::config_path();
+    if let Ok(data) = std::fs::read_to_string(&config_path) {
+        if let Ok(config) = serde_json::from_str::<serde_json::Value>(&data) {
+            return config.get("token")?.as_str().map(|s| s.to_string());
+        }
+    }
+    None
+}
+
+fn save_auth_token(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = crate::state::config_path();
+    let mut config = if let Ok(data) = std::fs::read_to_string(&config_path) {
+        serde_json::from_str::<serde_json::Value>(&data).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    config["token"] = serde_json::Value::String(token.to_string());
+    std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+    Ok(())
+}
+
+fn clear_auth_token() -> Result<(), Box<dyn std::error::Error>> {
+    let config_path = crate::state::config_path();
+    let mut config = if let Ok(data) = std::fs::read_to_string(&config_path) {
+        serde_json::from_str::<serde_json::Value>(&data).unwrap_or_else(|_| serde_json::json!({}))
+    } else {
+        serde_json::json!({})
+    };
+    config.as_object_mut().map(|obj| obj.remove("token"));
+    std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+    Ok(())
+}
+
+fn make_http_client() -> reqwest::Client {
+    reqwest::Client::new()
+}
+
+pub async fn handle_login(external_user_id: String, email: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    let url = format!("{}/v1/auth/login", get_control_plane_url());
+    let client = make_http_client();
+    let mut payload = serde_json::json!({
+        "external_user_id": external_user_id,
+    });
+    if let Some(e) = email {
+        payload["email"] = serde_json::Value::String(e.to_string());
+    }
+
+    let resp = client.post(&url).json(&payload).send().await?;
+    if resp.status().is_success() {
+        let data: serde_json::Value = resp.json().await?;
+        if let Some(token) = data.get("access_token").and_then(|t| t.as_str()) {
+            save_auth_token(token)?;
+            println!("Login successful! Token saved to ~/.boxty/config.json");
+            if let Some(user_id) = data.get("user_id").and_then(|u| u.as_str()) {
+                println!("User ID: {}", user_id);
+            }
+        } else {
+            println!("Login response: {}", serde_json::to_string_pretty(&data)?);
+        }
+    } else {
+        let err = resp.text().await?;
+        println!("Login failed: {}", err);
+    }
+    Ok(())
+}
+
+pub async fn handle_logout() -> Result<(), Box<dyn std::error::Error>> {
+    clear_auth_token()?;
+    println!("Logged out. Token removed.");
+    Ok(())
+}
+
+pub async fn handle_whoami() -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login --external-user-id <id>'");
+            return Ok(());
+        }
+    };
+    let url = format!("{}/v1/auth/me", get_control_plane_url());
+    let client = make_http_client();
+    let resp = client.get(&url).bearer_auth(&token).send().await?;
+    if resp.status().is_success() {
+        let data: serde_json::Value = resp.json().await?;
+        println!("{}", serde_json::to_string_pretty(&data)?);
+    } else {
+        println!("Failed to get user info: {}", resp.status());
+    }
+    Ok(())
+}
+
+pub async fn handle_workspace(command: super::WorkspaceCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::WorkspaceCommands::List => {
+            let resp = client.get(format!("{}/v1/workspaces", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                if let Some(arr) = data.as_array() {
+                    if arr.is_empty() {
+                        println!("No workspaces found.");
+                    } else {
+                        println!("{:<20} {:<30} {:<20}", "ID", "Name", "Created");
+                        for ws in arr {
+                            let id = ws.get("workspace_id").and_then(|v| v.as_str()).unwrap_or("-");
+                            let name = ws.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+                            let created = ws.get("created_at").and_then(|v| v.as_str()).unwrap_or("-");
+                            println!("{:<20} {:<30} {:<20}", id, name, created);
+                        }
+                    }
+                }
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::WorkspaceCommands::Create { name } => {
+            let resp = client.post(format!("{}/v1/workspaces", base))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "name": name }))
+                .send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("Created workspace: {}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::WorkspaceCommands::Delete { workspace_id } => {
+            let resp = client.delete(format!("{}/v1/workspaces/{}", base, workspace_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                println!("Deleted workspace '{}'.", workspace_id);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::WorkspaceCommands::Show { workspace_id } => {
+            let resp = client.get(format!("{}/v1/workspaces/{}", base, workspace_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::WorkspaceCommands::Switch { workspace_id } => {
+            let config_path = crate::state::config_path();
+            let mut config = if let Ok(data) = std::fs::read_to_string(&config_path) {
+                serde_json::from_str::<serde_json::Value>(&data).unwrap_or_else(|_| serde_json::json!({}))
+            } else {
+                serde_json::json!({})
+            };
+            config["active_workspace_id"] = serde_json::Value::String(workspace_id.clone());
+            std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+            println!("Switched to workspace '{}'.", workspace_id);
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_env(command: super::EnvCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::EnvCommands::List { workspace_id } => {
+            let resp = client.get(format!("{}/v1/workspaces/{}/environments", base, workspace_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::EnvCommands::Create { workspace_id, name } => {
+            let resp = client.post(format!("{}/v1/environments", base))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "workspace_id": workspace_id, "name": name }))
+                .send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("Created environment: {}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::EnvCommands::Delete { environment_id } => {
+            let resp = client.delete(format!("{}/v1/environments/{}", base, environment_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                println!("Deleted environment '{}'.", environment_id);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::EnvCommands::Show { environment_id } => {
+            let resp = client.get(format!("{}/v1/environments/{}", base, environment_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::EnvCommands::Switch { environment_id } => {
+            let config_path = crate::state::config_path();
+            let mut config = if let Ok(data) = std::fs::read_to_string(&config_path) {
+                serde_json::from_str::<serde_json::Value>(&data).unwrap_or_else(|_| serde_json::json!({}))
+            } else {
+                serde_json::json!({})
+            };
+            config["active_environment_id"] = serde_json::Value::String(environment_id.clone());
+            std::fs::write(&config_path, serde_json::to_string_pretty(&config)?)?;
+            println!("Switched to environment '{}'.", environment_id);
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_appctl(command: super::AppCtlCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::AppCtlCommands::List => {
+            let resp = client.get(format!("{}/v1/workloads", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                if let Some(arr) = data.as_array() {
+                    if arr.is_empty() {
+                        println!("No workloads found.");
+                    } else {
+                        println!("{:<20} {:<15} {:<15} {:<10}", "ID", "Name", "Kind", "Status");
+                        for wl in arr {
+                            let id = wl.get("workload_id").and_then(|v| v.as_str()).unwrap_or("-");
+                            let name = wl.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+                            let kind = wl.get("kind").and_then(|v| v.as_str()).unwrap_or("-");
+                            let status = wl.get("status").and_then(|v| v.as_str()).unwrap_or("-");
+                            println!("{:<20} {:<15} {:<15} {:<10}", id, name, kind, status);
+                        }
+                    }
+                }
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::AppCtlCommands::Deploy { name, kind, image, workspace_id, environment_id } => {
+            let resp = client.post(format!("{}/v1/workloads", base))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({
+                    "name": name,
+                    "kind": kind,
+                    "image": image,
+                    "workspace_id": workspace_id,
+                    "environment_id": environment_id,
+                    "command": [],
+                }))
+                .send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("Deployed workload: {}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::AppCtlCommands::Stop { workload_id } => {
+            let resp = client.delete(format!("{}/v1/workloads/{}", base, workload_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                println!("Stopped workload '{}'.", workload_id);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::AppCtlCommands::Show { workload_id } => {
+            let resp = client.get(format!("{}/v1/workloads/{}", base, workload_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::AppCtlCommands::Logs { workload_id } => {
+            let resp = client.get(format!("{}/v1/workloads/{}/logs", base, workload_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::AppCtlCommands::Metrics { workload_id } => {
+            let resp = client.get(format!("{}/v1/workloads/{}/metrics", base, workload_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_route(command: super::RouteCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::RouteCommands::List => {
+            let resp = client.get(format!("{}/v1/routes", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::RouteCommands::Create { workload_id, endpoint_name } => {
+            let resp = client.post(format!("{}/v1/routes", base))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "workload_id": workload_id, "endpoint_name": endpoint_name }))
+                .send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("Created route: {}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::RouteCommands::Delete { route_id } => {
+            let resp = client.delete(format!("{}/v1/routes/{}", base, route_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                println!("Deleted route '{}'.", route_id);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_schedule(command: super::ScheduleCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::ScheduleCommands::List => {
+            let resp = client.get(format!("{}/v1/schedules", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::ScheduleCommands::Create { name, schedule_type, schedule_value, function_name, workspace_id, environment_id } => {
+            let resp = client.post(format!("{}/v1/schedules", base))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({
+                    "name": name,
+                    "schedule_type": schedule_type,
+                    "schedule_value": schedule_value,
+                    "function_name": function_name,
+                    "workspace_id": workspace_id,
+                    "environment_id": environment_id,
+                }))
+                .send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("Created schedule: {}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::ScheduleCommands::Delete { schedule_id } => {
+            let resp = client.delete(format!("{}/v1/schedules/{}", base, schedule_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                println!("Deleted schedule '{}'.", schedule_id);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::ScheduleCommands::Trigger { schedule_id } => {
+            let resp = client.post(format!("{}/v1/schedules/{}/trigger", base, schedule_id))
+                .bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                println!("Triggered schedule '{}'.", schedule_id);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_image(command: super::ImageCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::ImageCommands::List => {
+            let resp = client.get(format!("{}/v1/images", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::ImageCommands::Build { name, dockerfile, base_image } => {
+            let mut payload = serde_json::json!({ "name": name });
+            if let Some(df) = dockerfile {
+                payload["dockerfile"] = serde_json::Value::String(df);
+            }
+            if let Some(bi) = base_image {
+                payload["base_image"] = serde_json::Value::String(bi);
+            }
+            let resp = client.post(format!("{}/v1/images/build", base))
+                .bearer_auth(&token)
+                .json(&payload)
+                .send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("Build started: {}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_billing(command: super::BillingCommands) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    match command {
+        super::BillingCommands::Balance => {
+            let resp = client.get(format!("{}/v1/billing/balance", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::BillingCommands::Usage => {
+            let resp = client.get(format!("{}/v1/billing/usage", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::BillingCommands::AddCredits { amount } => {
+            let resp = client.post(format!("{}/v1/billing/credits", base))
+                .bearer_auth(&token)
+                .json(&serde_json::json!({ "amount_usd": amount }))
+                .send().await?;
+            if resp.status().is_success() {
+                println!("Added ${} credits.", amount);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+        super::BillingCommands::Pricing => {
+            let resp = client.get(format!("{}/v1/pricing", base)).bearer_auth(&token).send().await?;
+            if resp.status().is_success() {
+                let data: serde_json::Value = resp.json().await?;
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            } else {
+                println!("Error: {}", resp.text().await?);
+            }
+        }
+    }
+    Ok(())
+}
+
+pub async fn handle_status(watch: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let token = match get_auth_token() {
+        Some(t) => t,
+        None => {
+            println!("Not logged in. Run 'boxty login' first.");
+            return Ok(());
+        }
+    };
+    let base = get_control_plane_url();
+    let client = make_http_client();
+
+    loop {
+        let resp = client.get(format!("{}/v1/workloads", base))
+            .bearer_auth(&token).send().await?;
+        if resp.status().is_success() {
+            let data: serde_json::Value = resp.json().await?;
+            if let Some(arr) = data.as_array() {
+                let running = arr.iter().filter(|w| w.get("status").and_then(|s| s.as_str()) == Some("running")).count();
+                let total = arr.len();
+                println!("Workloads: {} running / {} total", running, total);
+            }
+        }
+
+        let resp = client.get(format!("{}/v1/billing/balance", base))
+            .bearer_auth(&token).send().await?;
+        if resp.status().is_success() {
+            let data: serde_json::Value = resp.json().await?;
+            if let Some(balance) = data.get("balance_usd").and_then(|b| b.as_f64()) {
+                println!("Balance: ${:.2}", balance);
+            }
+        }
+
+        if !watch {
+            break;
+        }
+        tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+        println!();
+    }
+    Ok(())
+}
