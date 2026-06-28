@@ -248,11 +248,12 @@ fn build_app_metrics(app_id: &str) -> Result<(String, String, Vec<u8>), String> 
 
     let (avg_response_ms, error_rate_pct, total_invocations) = if let Some(ref app) = app {
         // Derive metrics from app state deterministically
+        let app_id_num = app.id.parse::<u64>().unwrap_or(0);
         let base_ms = 80u64;
-        let jitter = app.id % 100;
+        let jitter = app_id_num % 100;
         let avg_response_ms = base_ms + jitter;
-        let error_rate_pct = ((app.id % 50) as f64) / 10.0; // 0.0% - 4.9%
-        let total_invocations = app.id * 10 + 50;
+        let error_rate_pct = ((app_id_num % 50) as f64) / 10.0; // 0.0% - 4.9%
+        let total_invocations = app_id_num * 10 + 50;
         (avg_response_ms, error_rate_pct, total_invocations)
     } else {
         (0u64, 0.0, 0u64)

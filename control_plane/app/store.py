@@ -108,6 +108,54 @@ class InMemoryStore:
         except Exception as exc:  # pragma: no cover - external integration
             print(f"[DynamoMirror] delete failed: {exc}")
 
+    def load_from_dynamodb(self) -> None:
+        """Load all items from DynamoDB into the in-memory store."""
+        try:
+            raw_items = dynamo_mirror.scan_all()
+        except Exception as exc:  # pragma: no cover - external integration
+            print(f"[DynamoMirror] scan failed: {exc}")
+            return
+
+        for raw in raw_items:
+            entity_type = raw.get("entity_type")
+            attrs = {k: v for k, v in raw.items() if k not in ("pk", "sk", "entity_type")}
+            try:
+                if entity_type == "User":
+                    record = UserRecord(**attrs)
+                    self.users[record.user_id] = record
+                elif entity_type == "Account":
+                    record = AccountRecord(**attrs)
+                    self.accounts[record.user_id] = record
+                elif entity_type == "Workspace":
+                    record = WorkspaceRecord(**attrs)
+                    self.workspaces[record.workspace_id] = record
+                elif entity_type == "Environment":
+                    record = EnvironmentRecord(**attrs)
+                    self.environments[record.environment_id] = record
+                elif entity_type == "ApiKey":
+                    record = ApiKeyRecord(**attrs)
+                    self.api_keys[record.api_key_id] = record
+                elif entity_type == "Secret":
+                    record = SecretRecord(**attrs)
+                    self.secrets[record.secret_id] = record
+                elif entity_type == "Invite":
+                    record = InviteRecord(**attrs)
+                    self.invites[record.invite_id] = record
+                elif entity_type == "Provider":
+                    record = ProviderRecord(**attrs)
+                    self.providers[record.provider_id] = record
+                elif entity_type == "Volume":
+                    record = VolumeRecord(**attrs)
+                    self.volumes[record.volume_id] = record
+                elif entity_type == "Workload":
+                    record = WorkloadRecord(**attrs)
+                    self.workloads[record.workload_id] = record
+                elif entity_type == "Route":
+                    record = RouteRecord(**attrs)
+                    self.routes[record.route_id] = record
+            except Exception as exc:  # pragma: no cover - data migration edge cases
+                print(f"[DynamoMirror] load failed for {entity_type}: {exc}")
+
     def _provider_is_stale(self, provider: ProviderRecord) -> bool:
         age = utc_now() - provider.updated_at
         return age.total_seconds() > settings.provider_heartbeat_ttl_seconds
@@ -989,10 +1037,60 @@ class InMemoryStore:
         return False
 
     def build_image(self, image_id: str) -> ImageRecord:
+        import subprocess
+        import tempfile
+        import os
+        
         image = self.images[image_id]
         image.status = "building"
-        image.build_log = "Building image..."
         image.updated_at = utc_now()
+        
+        # Create temp directory for build context
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Write Dockerfile
+            dockerfile_path = os.path.join(tmpdir, "Dockerfile")
+            dockerfile_content = image.dockerfile or f"FROM {image.base_image or 'alpine:latest'}\n"
+            with open(dockerfile_path, "w") as f:
+                f.write(dockerfile_content)
+            
+            # Build args
+            build_args = image.build_args or {}
+            args_list = []
+            for key, value in build_args.items():
+                args_list.extend(["--build-arg", f"{key}={value}"])
+            
+            # Tag
+            tag = f"boxty/{image.workspace_id}/{image.name}:latest"
+            
+            try:
+                # Run docker build
+                result = subprocess.run(
+                    ["docker", "build", "-t", tag, "."] + args_list,
+                    cwd=tmpdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 5 minute timeout
+                )
+                
+                image.build_log = result.stdout + result.stderr
+                
+                if result.returncode == 0:
+                    image.status = "ready"
+                    image.image_ref = tag
+                else:
+                    image.status = "failed"
+                    
+            except subprocess.TimeoutExpired:
+                image.status = "failed"
+                image.build_log = "Build timed out after 5 minutes"
+            except FileNotFoundError:
+                image.status = "failed"
+                image.build_log = "Docker not found. Please install Docker."
+            except Exception as e:
+                image.status = "failed"
+                image.build_log = f"Build error: {str(e)}"
+        
+        self.images[image_id] = image
         return image
 
 

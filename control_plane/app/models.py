@@ -607,6 +607,7 @@ class ImageRecord(BaseModel):
     build_args: dict[str, str] = Field(default_factory=dict)
     status: str = "pending"
     build_log: str = ""
+    image_ref: str = ""
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     built_at: datetime | None = None

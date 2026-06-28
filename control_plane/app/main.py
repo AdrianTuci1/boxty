@@ -32,8 +32,19 @@ from typing import Any
 import uuid
 
 from .store import issued_access_token, store
+from .scheduler import start_scheduler, stop_scheduler
 
 app = FastAPI(title=settings.app_name)
+
+
+@app.on_event("startup")
+async def startup_event():
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    stop_scheduler()
 
 
 def provider_public_dict(provider) -> dict:

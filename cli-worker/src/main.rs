@@ -84,7 +84,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
             }
             cli::Commands::Attach { task_id } => {
-                cli::client::handle_attach(task_id, &args.signaling).await?;
+                cli::client::handle_attach(&task_id.to_string(), &args.signaling).await?;
             }
             cli::Commands::App { app_command } => {
                 cli::client::handle_app(app_command).await?;

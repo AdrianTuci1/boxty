@@ -4,7 +4,7 @@ import mimetypes
 from pathlib import Path
 import smtplib
 from email.message import EmailMessage
-from typing import Iterable
+from typing import Any, Iterable
 
 from .config import settings
 from .models import InviteRecord, SingleTableItem
@@ -58,6 +58,18 @@ class DynamoSingleTableMirror:
         if table is None:
             return
         table.delete_item(Key={"pk": pk, "sk": sk})
+
+    def scan_all(self) -> list[dict[str, Any]]:
+        table = self._table()
+        if table is None:
+            return []
+        items: list[dict[str, Any]] = []
+        response = table.scan()
+        items.extend(response.get("Items", []))
+        while "LastEvaluatedKey" in response:
+            response = table.scan(ExclusiveStartKey=response["LastEvaluatedKey"])
+            items.extend(response.get("Items", []))
+        return items
 
 
 class InviteEmailSender:
