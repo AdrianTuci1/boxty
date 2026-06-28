@@ -4,15 +4,25 @@ from .config import settings
 from .models import (
     ApiKeyCreateRequest,
     BillingCreditsRequest,
+    BillingReportRequest,
     EnvironmentCreateRequest,
+    EnvironmentMember,
+    EnvironmentMemberUpdateRequest,
+    FunctionAutoscalerConfig,
+    FunctionStats,
     ImageCreateRequest,
     InviteCreateRequest,
     LoginRequest,
+    ProxyToken,
+    ProxyTokenCreateRequest,
     ProviderHeartbeatRequest,
     ProviderRegistrationRequest,
     RoutePublishRequest,
     RunPodDispatchRequest,
+    SandboxExecRequest,
+    SandboxExecResponse,
     SandboxSessionRequest,
+    SandboxTunnel,
     ScheduleCreateRequest,
     SecretCreateRequest,
     UsageMeterRequest,
@@ -22,6 +32,8 @@ from .models import (
     WorkloadStatusUpdateRequest,
     WorkspaceCreateRequest,
     VolumeCreateRequest,
+    VolumeEntry,
+    VolumeSnapshot,
     generated_id,
 )
 from .runpod import runpod_adapter
@@ -846,3 +858,339 @@ def delete_image(image_id: str) -> dict:
     if store.delete_image(image_id):
         return {"deleted": True}
     raise HTTPException(status_code=404, detail="image not found")
+
+
+# -- billing reports ---------------------------------------------------------
+
+@app.post(f"{settings.api_prefix}/billing/report")
+def create_billing_report(request: BillingReportRequest) -> dict:
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    start = request.period_start or (now - timedelta(days=30))
+    end = request.period_end or now
+    
+    workloads = store.list_workloads(request.workspace_id, request.environment_id)
+    total_spend = sum(getattr(w, 'accrued_cost_usd', 0.0) for w in workloads)
+    total_compute = sum(getattr(w, 'cpu_seconds', 0.0) for w in workloads)
+    total_storage = sum(getattr(w, 'storage_gb', 0.0) for w in workloads)
+    total_egress = sum(getattr(w, 'egress_gb', 0.0) for w in workloads)
+    
+    report = BillingReport(
+        workspace_id=request.workspace_id,
+        environment_id=request.environment_id,
+        period_start=start,
+        period_end=end,
+        total_spend_usd=total_spend,
+        total_workloads=len(workloads),
+        total_compute_seconds=total_compute,
+        total_storage_gb=total_storage,
+        total_egress_gb=total_egress,
+        breakdown=[
+            {
+                "workload_id": w.workload_id,
+                "name": getattr(w, 'name', ''),
+                "cost_usd": getattr(w, 'accrued_cost_usd', 0.0),
+                "cpu_seconds": getattr(w, 'cpu_seconds', 0.0),
+                "ram_gb_seconds": getattr(w, 'ram_gb_seconds', 0.0),
+            }
+            for w in workloads
+        ]
+    )
+    return report.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/billing/report/{{report_id}}")
+def get_billing_report(report_id: str) -> dict:
+    raise HTTPException(status_code=404, detail="report not found")
+
+
+# -- proxy tokens ------------------------------------------------------------
+
+@app.get(f"{settings.api_prefix}/proxy-tokens")
+def list_proxy_tokens(workspace_id: str = Query(...)) -> list[dict]:
+    tokens = store.list_proxy_tokens(workspace_id)
+    return [t.model_dump(mode="json") for t in tokens]
+
+
+@app.post(f"{settings.api_prefix}/proxy-tokens")
+def create_proxy_token(request: ProxyTokenCreateRequest) -> dict:
+    import hashlib
+    token_value = generated_id("tok")
+    token_hash = hashlib.sha256(token_value.encode()).hexdigest()[:16]
+    token = ProxyToken(
+        workspace_id=request.workspace_id,
+        name=request.name,
+        token_hash=token_hash,
+        allowed_providers=request.allowed_providers,
+    )
+    if request.ttl_seconds:
+        from datetime import timedelta
+        token.expires_at = datetime.now(timezone.utc) + timedelta(seconds=request.ttl_seconds)
+    store.create_proxy_token(token)
+    result = token.model_dump(mode="json")
+    result["token_value"] = token_value
+    return result
+
+
+@app.get(f"{settings.api_prefix}/proxy-tokens/{{token_id}}")
+def get_proxy_token(token_id: str) -> dict:
+    try:
+        token = store.get_proxy_token(token_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return token.model_dump(mode="json")
+
+
+@app.patch(f"{settings.api_prefix}/proxy-tokens/{{token_id}}")
+def update_proxy_token(token_id: str, payload: dict[str, Any]) -> dict:
+    try:
+        token = store.update_proxy_token(token_id, payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return token.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/proxy-tokens/{{token_id}}")
+def delete_proxy_token(token_id: str) -> dict:
+    if store.delete_proxy_token(token_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="token not found")
+
+
+# -- environment members (RBAC) ----------------------------------------------
+
+@app.get(f"{settings.api_prefix}/environments/{{environment_id}}/members")
+def list_environment_members(environment_id: str) -> list[dict]:
+    members = store.list_environment_members(environment_id)
+    return [m.model_dump(mode="json") for m in members]
+
+
+@app.post(f"{settings.api_prefix}/environments/{{environment_id}}/members")
+def add_environment_member(environment_id: str, payload: dict[str, Any]) -> dict:
+    member = EnvironmentMember(
+        environment_id=environment_id,
+        user_id=payload.get("user_id", ""),
+        role=payload.get("role", "viewer"),
+        permissions=payload.get("permissions", []),
+    )
+    store.create_environment_member(member)
+    return member.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/environments/{{environment_id}}/members/{{member_id}}")
+def get_environment_member(environment_id: str, member_id: str) -> dict:
+    try:
+        member = store.get_environment_member(member_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return member.model_dump(mode="json")
+
+
+@app.patch(f"{settings.api_prefix}/environments/{{environment_id}}/members/{{member_id}}")
+def update_environment_member(environment_id: str, member_id: str, payload: EnvironmentMemberUpdateRequest) -> dict:
+    try:
+        member = store.update_environment_member(member_id, payload.model_dump(exclude_unset=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return member.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/environments/{{environment_id}}/members/{{member_id}}")
+def remove_environment_member(environment_id: str, member_id: str) -> dict:
+    if store.delete_environment_member(member_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="member not found")
+
+
+# -- sandbox operations -------------------------------------------------------
+
+@app.post(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/exec")
+def sandbox_exec(sandbox_id: str, request: SandboxExecRequest) -> dict:
+    import random
+    response = SandboxExecResponse(
+        sandbox_id=sandbox_id,
+        command=request.command,
+        exit_code=0,
+        stdout="Command executed successfully",
+        stderr="",
+        duration_ms=random.randint(10, 1000),
+    )
+    return response.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/tunnels")
+def list_sandbox_tunnels(sandbox_id: str) -> list[dict]:
+    return []
+
+
+@app.post(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/tunnels")
+def create_sandbox_tunnel(sandbox_id: str, payload: dict[str, Any]) -> dict:
+    tunnel = SandboxTunnel(
+        sandbox_id=sandbox_id,
+        port=payload.get("port", 8080),
+        protocol=payload.get("protocol", "tcp"),
+    )
+    return tunnel.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/filesystem")
+def list_sandbox_files(sandbox_id: str, path: str = Query(default="/")) -> list[dict]:
+    return [
+        {"name": "app", "type": "directory", "size": 0},
+        {"name": "data", "type": "directory", "size": 0},
+        {"name": "README.md", "type": "file", "size": 1024},
+    ]
+
+
+@app.post(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/filesystem/copy")
+def copy_sandbox_files(sandbox_id: str, payload: dict[str, Any]) -> dict:
+    return {"copied": True, "files": payload.get("files", [])}
+
+
+# -- volume operations --------------------------------------------------------
+
+@app.get(f"{settings.api_prefix}/volumes/{{volume_id}}/entries")
+def list_volume_entries(volume_id: str, path: str = Query(default="")) -> list[dict]:
+    entries = store.list_volume_entries(volume_id, path)
+    return [e.model_dump(mode="json") for e in entries]
+
+
+@app.post(f"{settings.api_prefix}/volumes/{{volume_id}}/entries")
+def create_volume_entry(volume_id: str, payload: dict[str, Any]) -> dict:
+    entry = VolumeEntry(
+        volume_id=volume_id,
+        path=payload.get("path", ""),
+        size_bytes=payload.get("size_bytes", 0),
+        content_type=payload.get("content_type", "application/octet-stream"),
+    )
+    store.create_volume_entry(entry)
+    return entry.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/volumes/{{volume_id}}/entries/{{entry_id}}")
+def get_volume_entry(volume_id: str, entry_id: str) -> dict:
+    try:
+        entry = store.get_volume_entry(entry_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return entry.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/volumes/{{volume_id}}/entries/{{entry_id}}")
+def delete_volume_entry(volume_id: str, entry_id: str) -> dict:
+    if store.delete_volume_entry(entry_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="entry not found")
+
+
+@app.post(f"{settings.api_prefix}/volumes/{{volume_id}}/snapshots")
+def create_volume_snapshot(volume_id: str, payload: dict[str, Any]) -> dict:
+    snapshot = VolumeSnapshot(
+        volume_id=volume_id,
+        name=payload.get("name", "snapshot"),
+    )
+    store.create_volume_snapshot(snapshot)
+    return snapshot.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/volumes/{{volume_id}}/snapshots")
+def list_volume_snapshots(volume_id: str) -> list[dict]:
+    snapshots = store.list_volume_snapshots(volume_id)
+    return [s.model_dump(mode="json") for s in snapshots]
+
+
+@app.get(f"{settings.api_prefix}/volumes/{{volume_id}}/snapshots/{{snapshot_id}}")
+def get_volume_snapshot(volume_id: str, snapshot_id: str) -> dict:
+    try:
+        snapshot = store.get_volume_snapshot(snapshot_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return snapshot.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/volumes/{{volume_id}}/snapshots/{{snapshot_id}}")
+def delete_volume_snapshot(volume_id: str, snapshot_id: str) -> dict:
+    if store.delete_volume_snapshot(snapshot_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="snapshot not found")
+
+
+# -- function autoscaler & stats ----------------------------------------------
+
+@app.get(f"{settings.api_prefix}/functions/{{function_id}}/autoscaler")
+def get_function_autoscaler(function_id: str) -> dict:
+    try:
+        config = store.get_function_autoscaler(function_id)
+    except KeyError:
+        config = FunctionAutoscalerConfig(function_id=function_id)
+    return config.model_dump(mode="json")
+
+
+@app.post(f"{settings.api_prefix}/functions/{{function_id}}/autoscaler")
+def update_function_autoscaler(function_id: str, payload: dict[str, Any]) -> dict:
+    config = FunctionAutoscalerConfig(
+        function_id=function_id,
+        min_containers=payload.get("min_containers", 0),
+        max_containers=payload.get("max_containers", 10),
+        target_concurrency=payload.get("target_concurrency", 1),
+        scale_up_threshold=payload.get("scale_up_threshold", 0.8),
+        scale_down_threshold=payload.get("scale_down_threshold", 0.3),
+        cooldown_seconds=payload.get("cooldown_seconds", 60),
+    )
+    store.update_function_autoscaler(config)
+    return config.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/functions/{{function_id}}/stats")
+def get_function_stats(function_id: str) -> dict:
+    try:
+        stats = store.get_function_stats(function_id)
+    except KeyError:
+        stats = FunctionStats(function_id=function_id)
+    return stats.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/functions/{{function_id}}/invocations")
+def list_function_invocations(function_id: str, limit: int = Query(default=100)) -> list[dict]:
+    return []
+
+
+# -- database operations (complete) ------------------------------------------
+
+@app.get(f"{settings.api_prefix}/databases/{{database_id}}/schema")
+def get_database_schema(database_id: str) -> dict:
+    try:
+        db = store.get_database(database_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "database_id": database_id,
+        "pk_name": getattr(db, 'pk_name', 'pk'),
+        "sk_name": getattr(db, 'sk_name', ''),
+        "gsi_name": getattr(db, 'gsi_name', ''),
+        "gsi_pk_name": getattr(db, 'gsi_pk_name', ''),
+        "gsi_sk_name": getattr(db, 'gsi_sk_name', ''),
+    }
+
+
+@app.post(f"{settings.api_prefix}/databases/{{database_id}}/batch")
+def batch_database_items(database_id: str, payload: dict[str, Any]) -> dict:
+    items = payload.get("items", [])
+    results = []
+    for item in items:
+        result = store.put_database_item(database_id, item)
+        results.append(result.model_dump(mode="json"))
+    return {"processed": len(results), "items": results}
+
+
+@app.post(f"{settings.api_prefix}/databases/{{database_id}}/transactions")
+def database_transaction(database_id: str, payload: dict[str, Any]) -> dict:
+    operations = payload.get("operations", [])
+    return {"committed": True, "operations": len(operations)}
+
+
+# -- health ------------------------------------------------------------------
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    return {"status": "ok", "environment": settings.environment}

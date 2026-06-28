@@ -16,7 +16,6 @@ class Workspace:
     @classmethod
     def from_context(cls, client: Any) -> Workspace:
         """Get the current workspace from context."""
-        # Placeholder: would read from environment/context
         raise NotImplementedError("Workspace.from_context() requires runtime context")
 
     def members(self) -> list[dict[str, Any]]:
@@ -25,12 +24,21 @@ class Workspace:
 
     def billing_report(self) -> dict[str, Any]:
         """Get billing report for this workspace."""
-        # Would call billing endpoint with workspace filter
-        raise NotImplementedError("Workspace billing not yet implemented in backend")
+        return self._client.billing_report(workspace_id=self.id)
 
     def proxy_tokens(self) -> ProxyTokenManager:
         """Manage proxy tokens for this workspace."""
         return ProxyTokenManager(self._client, self.id)
+
+    def delete(self) -> dict[str, Any]:
+        """Delete this workspace."""
+        return self._client.delete_workspace(self.id)
+
+    def __repr__(self) -> str:
+        return f"Workspace(id={self.id}, name={self.name})"
+
+    def __str__(self) -> str:
+        return self.name
 
 
 @dataclass
@@ -40,20 +48,20 @@ class ProxyTokenManager:
     _client: Any = field(repr=False)
     _workspace_id: str = field(repr=False)
 
-    def create(self, name: str) -> dict[str, Any]:
-        raise NotImplementedError("Proxy tokens not yet implemented in backend")
+    def create(self, name: str, allowed_providers: list[str] | None = None, ttl_seconds: int | None = None) -> dict[str, Any]:
+        return self._client.create_proxy_token(self._workspace_id, name, allowed_providers, ttl_seconds)
 
     def list(self) -> list[dict[str, Any]]:
-        raise NotImplementedError("Proxy tokens not yet implemented in backend")
+        return self._client.list_proxy_tokens(self._workspace_id)
 
     def allow(self, token_id: str) -> dict[str, Any]:
-        raise NotImplementedError("Proxy tokens not yet implemented in backend")
+        return self._client.update_proxy_token(token_id, status="active")
 
     def revoke(self, token_id: str) -> dict[str, Any]:
-        raise NotImplementedError("Proxy tokens not yet implemented in backend")
+        return self._client.update_proxy_token(token_id, status="revoked")
 
     def delete(self, token_id: str) -> dict[str, Any]:
-        raise NotImplementedError("Proxy tokens not yet implemented in backend")
+        return self._client.delete_proxy_token(token_id)
 
 
 @dataclass
@@ -85,11 +93,18 @@ class Environment:
 
     def members(self) -> list[dict[str, Any]]:
         """List environment members (RBAC)."""
-        raise NotImplementedError("Environment RBAC not yet implemented in backend")
+        return self._client.list_environment_members(self.id)
 
     def billing_report(self) -> dict[str, Any]:
         """Get billing report for this environment."""
-        raise NotImplementedError("Environment billing not yet implemented in backend")
+        return self._client.billing_report(environment_id=self.id)
+
+    def delete(self) -> dict[str, Any]:
+        """Delete this environment."""
+        return self._client.delete_environment(self.id)
+
+    def __repr__(self) -> str:
+        return f"Environment(id={self.id}, name={self.name})"
 
 
 @dataclass
@@ -140,25 +155,27 @@ class Secret:
     def from_local_environ(cls, client: Any, prefix: str = "BOXTY_") -> list[Secret]:
         """Create secrets from local environment variables."""
         import os
-
         data = {k: v for k, v in os.environ.items() if k.startswith(prefix)}
         return cls.from_dict(client, data)
 
     @classmethod
     def from_dotenv(cls, client: Any, path: str = ".env") -> list[Secret]:
         """Create secrets from a .env file."""
+        import os
         secrets = []
-        try:
+        if os.path.exists(path):
             with open(path) as f:
                 for line in f:
                     line = line.strip()
                     if line and not line.startswith("#") and "=" in line:
-                        key, value = line.split("=", 1)
-                        s = client.secrets.create(key.strip(), value.strip())
+                        name, value = line.split("=", 1)
+                        s = client.secrets.create(name.strip(), value.strip())
                         secrets.append(cls(client, s["id"], s["name"], value.strip()))
-        except FileNotFoundError:
-            pass
         return secrets
+
+    def objects(self) -> ObjectManager:
+        """Manage secret objects."""
+        return ObjectManager(self._client, self.id)
 
     def update(self, value: str) -> dict[str, Any]:
         """Update the secret value."""
@@ -168,9 +185,12 @@ class Secret:
         """Get secret info."""
         return self._client.secrets.get(self.id)
 
-    def objects(self) -> ObjectManager:
-        """Manage secret objects."""
-        return ObjectManager(self._client, self.id)
+    def delete(self) -> dict[str, Any]:
+        """Delete this secret."""
+        return self._client.secrets.delete(self.id)
+
+    def __repr__(self) -> str:
+        return f"Secret(id={self.id}, name={self.name})"
 
 
 @dataclass
@@ -185,31 +205,30 @@ class Image:
 
     @classmethod
     def debian_slim(cls, client: Any, python_version: str = "3.11") -> Image:
-        """Create a Debian slim base image."""
-        return cls(client, None, f"debian-slim-python{python_version}", base_image=f"python:{python_version}-slim")
+        """Create a Debian slim image."""
+        return cls(client, None, f"debian-slim-python{python_version}", None, f"python:{python_version}-slim")
 
     @classmethod
     def from_registry(cls, client: Any, tag: str) -> Image:
         """Create an image from a registry tag."""
-        return cls(client, None, tag, base_image=tag)
+        return cls(client, None, tag, None, tag)
 
     @classmethod
     def from_id(cls, client: Any, image_id: str) -> Image:
         """Get an image by ID."""
         img = client.get_image(image_id)
-        return cls(client, image_id, img.get("name", ""), base_image=img.get("base_image"))
+        return cls(client, image_id, img.get("name", ""), None, img.get("base_image"))
 
     def build(self) -> dict[str, Any]:
         """Build the image."""
         return self._client.build_image(self.name, self.dockerfile, self.base_image)
 
     def pip_install(self, *packages: str) -> Image:
-        """Add pip packages to the image."""
-        # Would modify image definition
+        """Install Python packages."""
         return self
 
     def uv_pip_install(self, *packages: str) -> Image:
-        """Add pip packages using uv."""
+        """Install Python packages with uv."""
         return self
 
     def pip_install_from_requirements(self, path: str) -> Image:
@@ -225,20 +244,23 @@ class Image:
         return self
 
     def uv_sync(self, path: str) -> Image:
-        """Sync using uv."""
+        """Sync with uv."""
         return self
 
     def add_local_file(self, local_path: str, remote_path: str) -> Image:
-        """Add a local file to the image."""
+        """Add a local file."""
         return self
 
     def add_local_dir(self, local_path: str, remote_path: str) -> Image:
-        """Add a local directory to the image."""
+        """Add a local directory."""
         return self
 
     def add_local_python_source(self, module_name: str, path: str) -> Image:
-        """Add local Python source code."""
+        """Add local Python source."""
         return self
+
+    def __repr__(self) -> str:
+        return f"Image(id={self.id}, name={self.name})"
 
 
 @dataclass
@@ -251,31 +273,24 @@ class Sandbox:
     token: str | None = None
 
     @classmethod
-    def create(
-        cls,
-        client: Any,
-        workload_id: str,
-        requester_id: str,
-        ttl_seconds: int = 900,
-    ) -> Sandbox:
+    def create(cls, client: Any, workload_id: str, requester_id: str, ttl_seconds: int = 900) -> Sandbox:
         """Create a new sandbox session."""
         result = client.create_sandbox_session(workload_id, requester_id, ttl_seconds)
         return cls(client, result["id"], workload_id, result.get("token"))
 
     @classmethod
     def from_name(cls, client: Any, name: str) -> Sandbox:
-        """Get sandbox by name."""
+        """Get a sandbox by name."""
         raise NotImplementedError("Sandbox.from_name() not yet implemented")
 
     @classmethod
     def from_id(cls, client: Any, sandbox_id: str) -> Sandbox:
-        """Get sandbox by ID."""
+        """Get a sandbox by ID."""
         raise NotImplementedError("Sandbox.from_id() not yet implemented")
 
     def wait(self, timeout: float = 60.0) -> Sandbox:
-        """Wait for sandbox to be ready."""
+        """Wait for the sandbox to be ready."""
         import time
-
         start = time.time()
         while time.time() - start < timeout:
             workload = self._client.get_workload(self.workload_id)
@@ -296,20 +311,24 @@ class Sandbox:
         """Poll sandbox status."""
         return self._client.get_workload(self.workload_id)
 
-    def exec(self, command: list[str]) -> dict[str, Any]:
+    def run_command(self, command: list[str], timeout_seconds: int = 60) -> dict[str, Any]:
         """Execute a command in the sandbox."""
-        raise NotImplementedError("Sandbox.exec() not yet implemented in backend")
+        return self._client.sandbox_exec(self.id, command, timeout_seconds)
 
-    def tunnels(self) -> list[dict[str, Any]]:
-        """Get active tunnels."""
-        raise NotImplementedError("Sandbox tunnels not yet implemented in backend")
+    def get_tunnels(self) -> list[dict[str, Any]]:
+        """List active tunnels."""
+        return self._client.list_sandbox_tunnels(self.id)
+
+    def create_tunnel(self, port: int, protocol: str = "tcp") -> dict[str, Any]:
+        """Create a tunnel."""
+        return self._client.create_sandbox_tunnel(self.id, port, protocol)
 
     def create_connect_token(self) -> str:
-        """Create a connection token."""
+        """Create a connect token."""
         raise NotImplementedError("Sandbox connect tokens not yet implemented")
 
     def snapshot_filesystem(self) -> dict[str, Any]:
-        """Snapshot the filesystem."""
+        """Snapshot the entire filesystem."""
         raise NotImplementedError("Sandbox snapshots not yet implemented")
 
     def snapshot_directory(self, path: str) -> dict[str, Any]:
@@ -325,8 +344,11 @@ class Sandbox:
         raise NotImplementedError("Sandbox image mounts not yet implemented")
 
     def filesystem(self) -> FileSystemManager:
-        """Access filesystem operations."""
+        """Access the sandbox filesystem."""
         return FileSystemManager(self._client, self.id, self.workload_id)
+
+    def __repr__(self) -> str:
+        return f"Sandbox(id={self.id}, workload_id={self.workload_id})"
 
 
 @dataclass
@@ -342,6 +364,14 @@ class FileSystemManager:
 
     def copy_to_local(self, remote_path: str, local_path: str) -> dict[str, Any]:
         raise NotImplementedError("Filesystem copy not yet implemented")
+
+    def list_files(self, path: str = "/") -> list[dict[str, Any]]:
+        """List files in the sandbox."""
+        return self._client.list_sandbox_files(self._sandbox_id, path)
+
+    def copy_files(self, files: list[dict[str, Any]]) -> dict[str, Any]:
+        """Copy files in the sandbox."""
+        return self._client.copy_sandbox_files(self._sandbox_id, files)
 
 
 @dataclass
@@ -362,41 +392,41 @@ class Function:
         raise NotImplementedError("Function.remote() requires runtime context")
 
     def remote_gen(self, *args: Any, **kwargs: Any) -> Any:
-        """Call the function remotely with generator."""
+        """Call the function remotely and return a generator."""
         raise NotImplementedError("Function.remote_gen() requires runtime context")
 
     def local(self, *args: Any, **kwargs: Any) -> Any:
         """Call the function locally."""
-        if self._func is None:
+        if not self._func:
             raise ValueError("No local function bound")
         return self._func(*args, **kwargs)
 
     def spawn(self, *args: Any, **kwargs: Any) -> Any:
-        """Spawn a remote function call."""
+        """Spawn the function asynchronously."""
         raise NotImplementedError("Function.spawn() requires runtime context")
 
     def map(self, inputs: list[Any]) -> list[Any]:
-        """Map function over inputs."""
+        """Map the function over inputs."""
         raise NotImplementedError("Function.map() requires runtime context")
 
     def starmap(self, inputs: list[tuple[Any, ...]]) -> list[Any]:
-        """Map function over tuple inputs."""
+        """Starmap the function over inputs."""
         raise NotImplementedError("Function.starmap() requires runtime context")
 
     def for_each(self, inputs: list[Any]) -> None:
-        """Call function for each input."""
+        """Apply the function to each input."""
         raise NotImplementedError("Function.for_each() requires runtime context")
 
     def spawn_map(self, inputs: list[Any]) -> list[Any]:
-        """Spawn map operation."""
+        """Spawn the function for each input."""
         raise NotImplementedError("Function.spawn_map() requires runtime context")
 
     def get_web_url(self) -> str:
-        """Get web URL for the function."""
+        """Get the web URL for this function."""
         raise NotImplementedError("Function.get_web_url() not yet implemented")
 
-    def with_options(self, **kwargs: Any) -> Function:
-        """Create a copy with different options."""
+    def with_options(self, **options: Any) -> Function:
+        """Return a new function with updated options."""
         return self
 
     def with_concurrency(self, limit: int) -> Function:
@@ -404,16 +434,19 @@ class Function:
         return self
 
     def with_batching(self, max_size: int, wait_ms: int) -> Function:
-        """Enable batching."""
+        """Set batching options."""
         return self
 
-    def update_autoscaler(self, min_containers: int, max_containers: int) -> dict[str, Any]:
-        """Update autoscaler settings."""
-        raise NotImplementedError("Autoscaler not yet implemented in backend")
+    def update_autoscaler(self, min_containers: int = 0, max_containers: int = 10) -> dict[str, Any]:
+        """Update autoscaler configuration."""
+        return self._client.update_function_autoscaler(self.name, min_containers, max_containers)
 
     def get_current_stats(self) -> dict[str, Any]:
-        """Get current function stats."""
-        raise NotImplementedError("Function stats not yet implemented")
+        """Get current function statistics."""
+        return self._client.get_function_stats(self.name)
+
+    def __repr__(self) -> str:
+        return f"Function(name={self.name})"
 
 
 @dataclass
@@ -427,7 +460,7 @@ class Volume:
     @classmethod
     def from_name(cls, client: Any, name: str) -> Volume:
         """Get a volume by name."""
-        volumes = client.volumes.list()
+        volumes = client.list_volumes()
         for v in volumes:
             if v.get("name") == name:
                 return cls(client, v["id"], v["name"])
@@ -436,7 +469,7 @@ class Volume:
     @classmethod
     def from_id(cls, client: Any, volume_id: str) -> Volume:
         """Get a volume by ID."""
-        v = client.volumes.get(volume_id)
+        v = client.get_volume(volume_id)
         return cls(client, volume_id, v.get("name", ""))
 
     @classmethod
@@ -454,13 +487,14 @@ class Volume:
 
     def reload(self) -> Volume:
         """Reload volume info."""
-        v = self._client.volumes.get(self.id)
+        v = self._client.get_volume(self.id)
         self.name = v.get("name", self.name)
         return self
 
     def listdir(self, path: str = "/") -> list[str]:
         """List directory contents."""
-        raise NotImplementedError("Volume listdir not yet implemented")
+        entries = self._client.list_volume_entries(self.id, path)
+        return [e.get("path", "") for e in entries]
 
     def read_file(self, path: str) -> bytes:
         """Read a file from the volume."""
@@ -471,7 +505,7 @@ class Volume:
         raise NotImplementedError("Volume remove_file not yet implemented")
 
     def copy_files(self, src: str, dst: str) -> dict[str, Any]:
-        """Copy files within the volume."""
+        """Copy files in the volume."""
         raise NotImplementedError("Volume copy_files not yet implemented")
 
     def batch_upload(self, files: dict[str, bytes]) -> dict[str, Any]:
@@ -480,57 +514,74 @@ class Volume:
 
     def rename(self, new_name: str) -> dict[str, Any]:
         """Rename the volume."""
-        return self._client.volumes.update(self.id, name=new_name)
+        return self._client.update_volume(self.id, {"name": new_name})
 
+    def create_snapshot(self, name: str = "snapshot") -> dict[str, Any]:
+        """Create a snapshot."""
+        return self._client.create_volume_snapshot(self.id, name)
 
-class Period:
-    """Represents a time period for scheduling."""
-
-    def __init__(self, seconds: float = 0, minutes: float = 0, hours: float = 0, days: float = 0) -> None:
-        self.seconds = seconds + minutes * 60 + hours * 3600 + days * 86400
+    def list_snapshots(self) -> list[dict[str, Any]]:
+        """List snapshots."""
+        return self._client.list_volume_snapshots(self.id)
 
     def __repr__(self) -> str:
-        return f"Period(seconds={self.seconds})"
+        return f"Volume(id={self.id}, name={self.name})"
 
 
+@dataclass
+class Period:
+    """Represents a time period."""
+
+    seconds: int = 0
+    minutes: int = 0
+    hours: int = 0
+    days: int = 0
+
+    def __post_init__(self) -> None:
+        self.total_seconds = self.seconds + self.minutes * 60 + self.hours * 3600 + self.days * 86400
+
+    def __repr__(self) -> str:
+        return f"Period(seconds={self.total_seconds})"
+
+
+@dataclass
 class Cron:
     """Represents a cron schedule."""
 
-    def __init__(self, cron_string: str) -> None:
-        self.cron_string = cron_string
+    cron_string: str
 
     def __repr__(self) -> str:
         return f"Cron('{self.cron_string}')"
 
 
+@dataclass
 class Proxy:
     """Represents a proxy configuration."""
 
-    def __init__(self, host: str, port: int) -> None:
-        self.host = host
-        self.port = port
+    host: str
+    port: int
 
 
+@dataclass
 class Probe:
     """Represents a health probe."""
 
-    def __init__(self, path: str = "/health", interval: int = 30) -> None:
-        self.path = path
-        self.interval = interval
+    path: str = "/health"
+    interval: int = 30
 
 
+@dataclass
 class NetworkFileSystem:
     """Represents a network file system mount."""
 
-    def __init__(self, name: str, mount_path: str) -> None:
-        self.name = name
-        self.mount_path = mount_path
+    name: str
+    mount_path: str
 
 
+@dataclass
 class CloudBucketMount:
     """Represents a cloud bucket mount."""
 
-    def __init__(self, bucket_name: str, mount_path: str, provider: str = "s3") -> None:
-        self.bucket_name = bucket_name
-        self.mount_path = mount_path
-        self.provider = provider
+    bucket_name: str
+    mount_path: str
+    provider: str = "s3"

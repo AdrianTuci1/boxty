@@ -737,17 +737,170 @@ export class BoxtyClient {
   }
 
   async providerHeartbeat(providerId: string, availableSlots = 0, runningWorkloads = 0, status = "online"): Promise<ProviderInfo> {
-    return request<ProviderInfo>(this.url(`/v1/providers/${encodeURIComponent(providerId)}/heartbeat`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ available_slots: availableSlots, running_workloads: runningWorkloads, status }),
-    });
+      return request<ProviderInfo>(this.url(`/v1/providers/${encodeURIComponent(providerId)}/heartbeat`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ available_slots: availableSlots, running_workloads: runningWorkloads, status }),
+      });
   }
 
   async claimNextAssignment(providerId: string): Promise<Record<string, unknown> | null> {
-    return request<Record<string, unknown> | null>(this.url(`/v1/providers/${encodeURIComponent(providerId)}/assignments/next`), {
-      method: "POST",
-    });
+      return request<Record<string, unknown> | null>(this.url(`/v1/providers/${encodeURIComponent(providerId)}/assignments/next`), {
+          method: "POST",
+      });
+  }
+
+  // -- proxy tokens ----------------------------------------------------------
+
+  async listProxyTokens(workspaceId: string): Promise<Record<string, unknown>[]> {
+      return request<Record<string, unknown>[]>(this.url(`/v1/proxy-tokens?workspace_id=${encodeURIComponent(workspaceId)}`));
+  }
+
+  async createProxyToken(workspaceId: string, name: string, allowedProviders?: string[], ttlSeconds?: number): Promise<Record<string, unknown>> {
+      const payload: Record<string, unknown> = { workspace_id: workspaceId, name };
+      if (allowedProviders) payload.allowed_providers = allowedProviders;
+      if (ttlSeconds) payload.ttl_seconds = ttlSeconds;
+      return request<Record<string, unknown>>(this.url("/v1/proxy-tokens"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+      });
+  }
+
+  async getProxyToken(tokenId: string): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/proxy-tokens/${encodeURIComponent(tokenId)}`));
+  }
+
+  async updateProxyToken(tokenId: string, status?: string, allowedProviders?: string[]): Promise<Record<string, unknown>> {
+      const payload: Record<string, unknown> = {};
+      if (status) payload.status = status;
+      if (allowedProviders) payload.allowed_providers = allowedProviders;
+      return request<Record<string, unknown>>(this.url(`/v1/proxy-tokens/${encodeURIComponent(tokenId)}`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+      });
+  }
+
+  async deleteProxyToken(tokenId: string): Promise<{ deleted: boolean }> {
+      return request<{ deleted: boolean }>(this.url(`/v1/proxy-tokens/${encodeURIComponent(tokenId)}`), {
+          method: "DELETE",
+      });
+  }
+
+  // -- environment members (RBAC) --------------------------------------------
+
+  async listEnvironmentMembers(environmentId: string): Promise<Record<string, unknown>[]> {
+      return request<Record<string, unknown>[]>(this.url(`/v1/environments/${encodeURIComponent(environmentId)}/members`));
+  }
+
+  async addEnvironmentMember(environmentId: string, userId: string, role = "viewer", permissions?: string[]): Promise<Record<string, unknown>> {
+      const payload: Record<string, unknown> = { user_id: userId, role };
+      if (permissions) payload.permissions = permissions;
+      return request<Record<string, unknown>>(this.url(`/v1/environments/${encodeURIComponent(environmentId)}/members`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+      });
+  }
+
+  async getEnvironmentMember(environmentId: string, memberId: string): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/environments/${encodeURIComponent(environmentId)}/members/${encodeURIComponent(memberId)}`));
+  }
+
+  async updateEnvironmentMember(environmentId: string, memberId: string, role?: string, permissions?: string[]): Promise<Record<string, unknown>> {
+      const payload: Record<string, unknown> = {};
+      if (role) payload.role = role;
+      if (permissions) payload.permissions = permissions;
+      return request<Record<string, unknown>>(this.url(`/v1/environments/${encodeURIComponent(environmentId)}/members/${encodeURIComponent(memberId)}`), {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+      });
+  }
+
+  async removeEnvironmentMember(environmentId: string, memberId: string): Promise<{ deleted: boolean }> {
+      return request<{ deleted: boolean }>(this.url(`/v1/environments/${encodeURIComponent(environmentId)}/members/${encodeURIComponent(memberId)}`), {
+          method: "DELETE",
+      });
+  }
+
+  // -- sandbox operations ----------------------------------------------------
+
+  async sandboxExec(sandboxId: string, command: string[], timeoutSeconds = 60): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/sandbox-sessions/${encodeURIComponent(sandboxId)}/exec`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sandbox_id: sandboxId, command, timeout_seconds: timeoutSeconds }),
+      });
+  }
+
+  async listSandboxTunnels(sandboxId: string): Promise<Record<string, unknown>[]> {
+      return request<Record<string, unknown>[]>(this.url(`/v1/sandbox-sessions/${encodeURIComponent(sandboxId)}/tunnels`));
+  }
+
+  async createSandboxTunnel(sandboxId: string, port: number, protocol = "tcp"): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/sandbox-sessions/${encodeURIComponent(sandboxId)}/tunnels`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ port, protocol }),
+      });
+  }
+
+  async listSandboxFiles(sandboxId: string, path = "/"): Promise<Record<string, unknown>[]> {
+      return request<Record<string, unknown>[]>(this.url(`/v1/sandbox-sessions/${encodeURIComponent(sandboxId)}/filesystem${this.params({ path })}`));
+  }
+
+  async copySandboxFiles(sandboxId: string, files: Record<string, unknown>[]): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/sandbox-sessions/${encodeURIComponent(sandboxId)}/filesystem/copy`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ files }),
+      });
+  }
+
+  // -- function autoscaler & stats -------------------------------------------
+
+  async getFunctionAutoscaler(functionId: string): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/functions/${encodeURIComponent(functionId)}/autoscaler`));
+  }
+
+  async updateFunctionAutoscaler(functionId: string, minContainers = 0, maxContainers = 10, targetConcurrency = 1, scaleUpThreshold = 0.8, scaleDownThreshold = 0.3, cooldownSeconds = 60): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/functions/${encodeURIComponent(functionId)}/autoscaler`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ min_containers: minContainers, max_containers: maxContainers, target_concurrency: targetConcurrency, scale_up_threshold: scaleUpThreshold, scale_down_threshold: scaleDownThreshold, cooldown_seconds: cooldownSeconds }),
+      });
+  }
+
+  async getFunctionStats(functionId: string): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/functions/${encodeURIComponent(functionId)}/stats`));
+  }
+
+  async listFunctionInvocations(functionId: string, limit = 100): Promise<Record<string, unknown>[]> {
+      return request<Record<string, unknown>[]>(this.url(`/v1/functions/${encodeURIComponent(functionId)}/invocations${this.params({ limit })}`));
+  }
+
+  // -- database operations (complete) ----------------------------------------
+
+  async getDatabaseSchema(databaseId: string): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/databases/${encodeURIComponent(databaseId)}/schema`));
+  }
+
+  async batchDatabaseItems(databaseId: string, items: Record<string, unknown>[]): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/databases/${encodeURIComponent(databaseId)}/batch`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items }),
+      });
+  }
+
+  async databaseTransaction(databaseId: string, operations: Record<string, unknown>[]): Promise<Record<string, unknown>> {
+      return request<Record<string, unknown>>(this.url(`/v1/databases/${encodeURIComponent(databaseId)}/transactions`), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ operations }),
+      });
   }
 
   // -- sandbox sessions ------------------------------------------------------

@@ -634,3 +634,129 @@ class ImageRecord(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     built_at: datetime | None = None
+
+
+class BillingReportRequest(BaseModel):
+    workspace_id: str | None = None
+    environment_id: str | None = None
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+
+
+class BillingReport(BaseModel):
+    report_id: str = Field(default_factory=lambda: generated_id("rpt"))
+    workspace_id: str | None = None
+    environment_id: str | None = None
+    period_start: datetime
+    period_end: datetime
+    total_spend_usd: float
+    total_workloads: int
+    total_compute_seconds: float
+    total_storage_gb: float
+    total_egress_gb: float
+    breakdown: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ProxyToken(BaseModel):
+    token_id: str = Field(default_factory=lambda: generated_id("pxy"))
+    workspace_id: str
+    name: str
+    token_hash: str
+    status: str = "active"
+    allowed_providers: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime | None = None
+
+
+class ProxyTokenCreateRequest(BaseModel):
+    workspace_id: str
+    name: str
+    allowed_providers: list[str] = Field(default_factory=list)
+    ttl_seconds: int | None = None
+
+
+class EnvironmentMember(BaseModel):
+    member_id: str = Field(default_factory=lambda: generated_id("mbr"))
+    environment_id: str
+    user_id: str
+    role: str = "viewer"
+    permissions: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class EnvironmentMemberUpdateRequest(BaseModel):
+    role: str | None = None
+    permissions: list[str] | None = None
+
+
+class SandboxExecRequest(BaseModel):
+    sandbox_id: str
+    command: list[str]
+    timeout_seconds: int = 60
+
+
+class SandboxExecResponse(BaseModel):
+    exec_id: str = Field(default_factory=lambda: generated_id("exc"))
+    sandbox_id: str
+    command: list[str]
+    exit_code: int
+    stdout: str
+    stderr: str
+    duration_ms: int
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class SandboxTunnel(BaseModel):
+    tunnel_id: str = Field(default_factory=lambda: generated_id("tun"))
+    sandbox_id: str
+    port: int
+    protocol: str = "tcp"
+    url: str | None = None
+    status: str = "active"
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class VolumeEntry(BaseModel):
+    entry_id: str = Field(default_factory=lambda: generated_id("ent"))
+    volume_id: str
+    path: str
+    size_bytes: int = 0
+    content_type: str = "application/octet-stream"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class VolumeSnapshot(BaseModel):
+    snapshot_id: str = Field(default_factory=lambda: generated_id("snp"))
+    volume_id: str
+    name: str
+    size_bytes: int = 0
+    status: str = "pending"
+    created_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+
+
+class FunctionAutoscalerConfig(BaseModel):
+    function_id: str
+    min_containers: int = 0
+    max_containers: int = 10
+    target_concurrency: int = 1
+    scale_up_threshold: float = 0.8
+    scale_down_threshold: float = 0.3
+    cooldown_seconds: int = 60
+
+
+class FunctionStats(BaseModel):
+    function_id: str
+    total_invocations: int = 0
+    total_errors: int = 0
+    avg_latency_ms: float = 0.0
+    p95_latency_ms: float = 0.0
+    p99_latency_ms: float = 0.0
+    current_containers: int = 0
+    pending_invocations: int = 0
+    period_start: datetime = Field(default_factory=utc_now)
+    period_end: datetime = Field(default_factory=utc_now)

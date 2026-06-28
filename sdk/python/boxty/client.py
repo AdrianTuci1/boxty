@@ -424,6 +424,32 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def billing_report(
+        self,
+        workspace_id: str | None = None,
+        environment_id: str | None = None,
+        period_start: str | None = None,
+        period_end: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if workspace_id:
+            payload["workspace_id"] = workspace_id
+        if environment_id:
+            payload["environment_id"] = environment_id
+        if period_start:
+            payload["period_start"] = period_start
+        if period_end:
+            payload["period_end"] = period_end
+        r = self._http.post("/v1/billing/report", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def workspace_billing_report(self, workspace_id: str) -> dict[str, Any]:
+        return self.billing_report(workspace_id=workspace_id)
+
+    def environment_billing_report(self, environment_id: str) -> dict[str, Any]:
+        return self.billing_report(environment_id=environment_id)
+
     def add_credits(self, user_id: str, amount_usd: float) -> dict[str, Any]:
         r = self._http.post("/v1/billing/credits", json={"user_id": user_id, "amount_usd": amount_usd})
         r.raise_for_status()
@@ -534,8 +560,193 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def claim_next_assignment(self, provider_id: str) -> dict[str, Any] | None:
+        r = self._http.post(f"/v1/providers/{provider_id}/assignments/next")
+        r.raise_for_status()
+        return r.json()
+
     def provider_heartbeat(self, provider_id: str, available_slots: int = 0, running_workloads: int = 0, status: str = "online") -> dict[str, Any]:
         r = self._http.post(f"/v1/providers/{provider_id}/heartbeat", json={"available_slots": available_slots, "running_workloads": running_workloads, "status": status})
+        r.raise_for_status()
+        return r.json()
+
+    # -- proxy tokens ----------------------------------------------------------
+
+    def list_proxy_tokens(self, workspace_id: str) -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/proxy-tokens?workspace_id={workspace_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def create_proxy_token(self, workspace_id: str, name: str, allowed_providers: list[str] | None = None, ttl_seconds: int | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"workspace_id": workspace_id, "name": name}
+        if allowed_providers:
+            payload["allowed_providers"] = allowed_providers
+        if ttl_seconds:
+            payload["ttl_seconds"] = ttl_seconds
+        r = self._http.post("/v1/proxy-tokens", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def get_proxy_token(self, token_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/proxy-tokens/{token_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def update_proxy_token(self, token_id: str, status: str | None = None, allowed_providers: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if status:
+            payload["status"] = status
+        if allowed_providers:
+            payload["allowed_providers"] = allowed_providers
+        r = self._http.patch(f"/v1/proxy-tokens/{token_id}", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def delete_proxy_token(self, token_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/proxy-tokens/{token_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- environment members (RBAC) --------------------------------------------
+
+    def list_environment_members(self, environment_id: str) -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/environments/{environment_id}/members")
+        r.raise_for_status()
+        return r.json()
+
+    def add_environment_member(self, environment_id: str, user_id: str, role: str = "viewer", permissions: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"user_id": user_id, "role": role}
+        if permissions:
+            payload["permissions"] = permissions
+        r = self._http.post(f"/v1/environments/{environment_id}/members", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def get_environment_member(self, environment_id: str, member_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/environments/{environment_id}/members/{member_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def update_environment_member(self, environment_id: str, member_id: str, role: str | None = None, permissions: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if role:
+            payload["role"] = role
+        if permissions:
+            payload["permissions"] = permissions
+        r = self._http.patch(f"/v1/environments/{environment_id}/members/{member_id}", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def remove_environment_member(self, environment_id: str, member_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/environments/{environment_id}/members/{member_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- sandbox operations ----------------------------------------------------
+
+    def sandbox_exec(self, sandbox_id: str, command: list[str], timeout_seconds: int = 60) -> dict[str, Any]:
+        r = self._http.post(f"/v1/sandbox-sessions/{sandbox_id}/exec", json={"sandbox_id": sandbox_id, "command": command, "timeout_seconds": timeout_seconds})
+        r.raise_for_status()
+        return r.json()
+
+    def list_sandbox_tunnels(self, sandbox_id: str) -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/sandbox-sessions/{sandbox_id}/tunnels")
+        r.raise_for_status()
+        return r.json()
+
+    def create_sandbox_tunnel(self, sandbox_id: str, port: int, protocol: str = "tcp") -> dict[str, Any]:
+        r = self._http.post(f"/v1/sandbox-sessions/{sandbox_id}/tunnels", json={"port": port, "protocol": protocol})
+        r.raise_for_status()
+        return r.json()
+
+    def list_sandbox_files(self, sandbox_id: str, path: str = "/") -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/sandbox-sessions/{sandbox_id}/filesystem?path={path}")
+        r.raise_for_status()
+        return r.json()
+
+    def copy_sandbox_files(self, sandbox_id: str, files: list[dict[str, Any]]) -> dict[str, Any]:
+        r = self._http.post(f"/v1/sandbox-sessions/{sandbox_id}/filesystem/copy", json={"files": files})
+        r.raise_for_status()
+        return r.json()
+
+    # -- volume operations -----------------------------------------------------
+
+    def list_volume_entries(self, volume_id: str, path: str = "") -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/volumes/{volume_id}/entries?path={path}")
+        r.raise_for_status()
+        return r.json()
+
+    def create_volume_entry(self, volume_id: str, path: str, size_bytes: int = 0, content_type: str = "application/octet-stream") -> dict[str, Any]:
+        r = self._http.post(f"/v1/volumes/{volume_id}/entries", json={"path": path, "size_bytes": size_bytes, "content_type": content_type})
+        r.raise_for_status()
+        return r.json()
+
+    def get_volume_entry(self, volume_id: str, entry_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/volumes/{volume_id}/entries/{entry_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def delete_volume_entry(self, volume_id: str, entry_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/volumes/{volume_id}/entries/{entry_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def create_volume_snapshot(self, volume_id: str, name: str = "snapshot") -> dict[str, Any]:
+        r = self._http.post(f"/v1/volumes/{volume_id}/snapshots", json={"name": name})
+        r.raise_for_status()
+        return r.json()
+
+    def list_volume_snapshots(self, volume_id: str) -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/volumes/{volume_id}/snapshots")
+        r.raise_for_status()
+        return r.json()
+
+    def get_volume_snapshot(self, volume_id: str, snapshot_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/volumes/{volume_id}/snapshots/{snapshot_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def delete_volume_snapshot(self, volume_id: str, snapshot_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/volumes/{volume_id}/snapshots/{snapshot_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- function autoscaler & stats -------------------------------------------
+
+    def get_function_autoscaler(self, function_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/functions/{function_id}/autoscaler")
+        r.raise_for_status()
+        return r.json()
+
+    def update_function_autoscaler(self, function_id: str, min_containers: int = 0, max_containers: int = 10, target_concurrency: int = 1, scale_up_threshold: float = 0.8, scale_down_threshold: float = 0.3, cooldown_seconds: int = 60) -> dict[str, Any]:
+        r = self._http.post(f"/v1/functions/{function_id}/autoscaler", json={"min_containers": min_containers, "max_containers": max_containers, "target_concurrency": target_concurrency, "scale_up_threshold": scale_up_threshold, "scale_down_threshold": scale_down_threshold, "cooldown_seconds": cooldown_seconds})
+        r.raise_for_status()
+        return r.json()
+
+    def get_function_stats(self, function_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/functions/{function_id}/stats")
+        r.raise_for_status()
+        return r.json()
+
+    def list_function_invocations(self, function_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/functions/{function_id}/invocations?limit={limit}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- database operations (complete) ----------------------------------------
+
+    def get_database_schema(self, database_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/databases/{database_id}/schema")
+        r.raise_for_status()
+        return r.json()
+
+    def batch_database_items(self, database_id: str, items: list[dict[str, Any]]) -> dict[str, Any]:
+        r = self._http.post(f"/v1/databases/{database_id}/batch", json={"items": items})
+        r.raise_for_status()
+        return r.json()
+
+    def database_transaction(self, database_id: str, operations: list[dict[str, Any]]) -> dict[str, Any]:
+        r = self._http.post(f"/v1/databases/{database_id}/transactions", json={"operations": operations})
         r.raise_for_status()
         return r.json()
 

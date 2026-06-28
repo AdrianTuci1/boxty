@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import hashlib
 import secrets as secrets_lib
+from typing import Any
 
 from .config import settings
 from .dynamo import (
@@ -32,8 +33,11 @@ from .models import (
     BillingUsageResponse,
     DashboardSummary,
     EnvironmentCreateRequest,
+    EnvironmentMember,
     EnvironmentRecord,
     ExecutionBackend,
+    FunctionAutoscalerConfig,
+    FunctionStats,
     ImageCreateRequest,
     ImageRecord,
     InviteCreateRequest,
@@ -46,6 +50,7 @@ from .models import (
     ProviderRegistrationRequest,
     ProviderRegistrationResponse,
     ProviderStatus,
+    ProxyToken,
     RoutePublishRequest,
     RouteRecord,
     SandboxSessionRecord,
@@ -60,9 +65,11 @@ from .models import (
     UsageRecord,
     UserRecord,
     VolumeCreateRequest,
+    VolumeEntry,
     VolumeEntryRecord,
     VolumeMount,
     VolumeRecord,
+    VolumeSnapshot,
     WorkloadCreateRequest,
     WorkloadKind,
     WorkloadLaunchSpec,
@@ -98,6 +105,12 @@ class InMemoryStore:
     routes: dict[str, RouteRecord] = field(default_factory=dict)
     sessions: dict[str, SandboxSessionRecord] = field(default_factory=dict)
     usages: dict[str, UsageRecord] = field(default_factory=dict)
+    proxy_tokens: dict[str, Any] = field(default_factory=dict)
+    environment_members: dict[str, Any] = field(default_factory=dict)
+    volume_entries: dict[str, Any] = field(default_factory=dict)
+    volume_snapshots: dict[str, Any] = field(default_factory=dict)
+    function_autoscalers: dict[str, Any] = field(default_factory=dict)
+    function_stats: dict[str, Any] = field(default_factory=dict)
     logs: dict[str, WorkloadLogEntry] = field(default_factory=dict)
     payments: dict[str, PaymentRecord] = field(default_factory=dict)
     billing_history: dict[str, BillingHistoryRecord] = field(default_factory=dict)
@@ -1170,6 +1183,115 @@ class InMemoryStore:
         
         self.images[image_id] = image
         return image
+
+    # -- proxy tokens ----------------------------------------------------------
+
+    def create_proxy_token(self, token: ProxyToken) -> ProxyToken:
+        self.proxy_tokens[token.token_id] = token
+        return token
+
+    def list_proxy_tokens(self, workspace_id: str) -> list[ProxyToken]:
+        return [t for t in self.proxy_tokens.values() if t.workspace_id == workspace_id]
+
+    def get_proxy_token(self, token_id: str) -> ProxyToken:
+        return self.proxy_tokens[token_id]
+
+    def update_proxy_token(self, token_id: str, payload: dict[str, Any]) -> ProxyToken:
+        token = self.proxy_tokens[token_id]
+        if "status" in payload:
+            token.status = payload["status"]
+        if "allowed_providers" in payload:
+            token.allowed_providers = payload["allowed_providers"]
+        token.updated_at = utc_now()
+        return token
+
+    def delete_proxy_token(self, token_id: str) -> bool:
+        if token_id in self.proxy_tokens:
+            del self.proxy_tokens[token_id]
+            return True
+        return False
+
+    # -- environment members (RBAC) --------------------------------------------
+
+    def create_environment_member(self, member: EnvironmentMember) -> EnvironmentMember:
+        self.environment_members[member.member_id] = member
+        return member
+
+    def list_environment_members(self, environment_id: str) -> list[EnvironmentMember]:
+        return [m for m in self.environment_members.values() if m.environment_id == environment_id]
+
+    def get_environment_member(self, member_id: str) -> EnvironmentMember:
+        return self.environment_members[member_id]
+
+    def update_environment_member(self, member_id: str, payload: dict[str, Any]) -> EnvironmentMember:
+        member = self.environment_members[member_id]
+        if "role" in payload:
+            member.role = payload["role"]
+        if "permissions" in payload:
+            member.permissions = payload["permissions"]
+        member.updated_at = utc_now()
+        return member
+
+    def delete_environment_member(self, member_id: str) -> bool:
+        if member_id in self.environment_members:
+            del self.environment_members[member_id]
+            return True
+        return False
+
+    # -- volume entries --------------------------------------------------------
+
+    def create_volume_entry(self, entry: VolumeEntry) -> VolumeEntry:
+        self.volume_entries[entry.entry_id] = entry
+        return entry
+
+    def list_volume_entries(self, volume_id: str, path: str = "") -> list[VolumeEntry]:
+        entries = [e for e in self.volume_entries.values() if e.volume_id == volume_id]
+        if path:
+            entries = [e for e in entries if e.path.startswith(path)]
+        return entries
+
+    def get_volume_entry(self, entry_id: str) -> VolumeEntry:
+        return self.volume_entries[entry_id]
+
+    def delete_volume_entry(self, entry_id: str) -> bool:
+        if entry_id in self.volume_entries:
+            del self.volume_entries[entry_id]
+            return True
+        return False
+
+    # -- volume snapshots ------------------------------------------------------
+
+    def create_volume_snapshot(self, snapshot: VolumeSnapshot) -> VolumeSnapshot:
+        self.volume_snapshots[snapshot.snapshot_id] = snapshot
+        return snapshot
+
+    def list_volume_snapshots(self, volume_id: str) -> list[VolumeSnapshot]:
+        return [s for s in self.volume_snapshots.values() if s.volume_id == volume_id]
+
+    def get_volume_snapshot(self, snapshot_id: str) -> VolumeSnapshot:
+        return self.volume_snapshots[snapshot_id]
+
+    def delete_volume_snapshot(self, snapshot_id: str) -> bool:
+        if snapshot_id in self.volume_snapshots:
+            del self.volume_snapshots[snapshot_id]
+            return True
+        return False
+
+    # -- function autoscaler & stats -------------------------------------------
+
+    def update_function_autoscaler(self, config: FunctionAutoscalerConfig) -> FunctionAutoscalerConfig:
+        self.function_autoscalers[config.function_id] = config
+        return config
+
+    def get_function_autoscaler(self, function_id: str) -> FunctionAutoscalerConfig:
+        return self.function_autoscalers[function_id]
+
+    def get_function_stats(self, function_id: str) -> FunctionStats:
+        return self.function_stats.get(function_id, FunctionStats(function_id=function_id))
+
+    def update_function_stats(self, function_id: str, stats: FunctionStats) -> FunctionStats:
+        self.function_stats[function_id] = stats
+        return stats
 
 
 store = InMemoryStore()
