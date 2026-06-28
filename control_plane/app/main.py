@@ -530,6 +530,127 @@ def add_billing_credits(request: BillingCreditsRequest) -> dict:
     return result.model_dump(mode="json")
 
 
+@app.post(f"{settings.api_prefix}/billing/checkout")
+def create_checkout(request: BillingCreditsRequest) -> dict:
+    """Create a Stripe checkout session for credit purchase."""
+    from .container import container
+    
+    try:
+        account = store.get_account(request.user_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="account not found") from exc
+    
+    if not container.is_enabled("stripe"):
+        # Fallback: add credits directly (for testing/development)
+        result = store.add_credits(request.user_id, request.amount_usd)
+        return {
+            "checkout_url": None,
+            "session_id": None,
+            "status": "direct_credit",
+            "result": result.model_dump(mode="json"),
+        }
+    
+    try:
+        stripe_service = container.get("stripe")
+        
+        # Create/get Stripe customer
+        if not account.stripe_customer_id:
+            customer = stripe_service.create_customer(
+                email=account.email,
+                name=account.name,
+            )
+            store.update_account_stripe_customer(request.user_id, customer["stripe_customer_id"])
+            stripe_customer_id = customer["stripe_customer_id"]
+        else:
+            stripe_customer_id = account.stripe_customer_id
+        
+        # Create checkout session
+        checkout = stripe_service.create_checkout_session(
+            customer_id=stripe_customer_id,
+            amount_usd=request.amount_usd,
+            success_url=f"{request.success_url or 'https://boxty.dev/billing/success'}?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=request.cancel_url or "https://boxty.dev/billing/cancel",
+        )
+        
+        # Record pending payment
+        store.create_pending_payment(
+            user_id=request.user_id,
+            stripe_session_id=checkout["session_id"],
+            amount_usd=request.amount_usd,
+        )
+        
+        return checkout
+        
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Stripe error: {exc}") from exc
+
+
+@app.post(f"{settings.api_prefix}/billing/webhook")
+async def stripe_webhook(request: Request) -> dict:
+    """Handle Stripe webhook for payment confirmation."""
+    from .container import container
+    
+    if not container.is_enabled("stripe"):
+        raise HTTPException(status_code=503, detail="Stripe not enabled")
+    
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    
+    if not signature:
+        raise HTTPException(status_code=400, detail="Missing stripe-signature header")
+    
+    try:
+        stripe_service = container.get("stripe")
+        event = stripe_service.verify_webhook(payload, signature)
+        
+        if event["type"] == "checkout.session.completed":
+            payment = stripe_service.handle_payment_success(event)
+            
+            # Find and fulfill pending payment
+            pending = store.get_pending_payment_by_session(payment["stripe_session_id"])
+            if pending:
+                store.add_credits(pending.user_id, payment["amount_usd"])
+                store.mark_payment_completed(
+                    payment_id=pending.payment_id,
+                    stripe_payment_intent_id=payment["payment_intent_id"],
+                )
+        
+        return {"received": True, "type": event["type"]}
+        
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Webhook error: {exc}") from exc
+
+
+@app.get(f"{settings.api_prefix}/billing/history")
+def get_billing_history(user_id: str) -> list[dict]:
+    """Get billing history for a user."""
+    try:
+        history = store.get_billing_history(user_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="account not found") from exc
+    return [h.model_dump(mode="json") for h in history]
+
+
+@app.get(f"{settings.api_prefix}/billing/invoices")
+def get_invoices(user_id: str) -> list[dict]:
+    """Get Stripe invoices for a user."""
+    from .container import container
+    
+    try:
+        account = store.get_account(user_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="account not found") from exc
+    
+    if not container.is_enabled("stripe") or not account.stripe_customer_id:
+        return []
+    
+    try:
+        stripe_service = container.get("stripe")
+        return stripe_service.get_customer_invoices(account.stripe_customer_id)
+    except Exception:
+        return []
+
+
 @app.get(f"{settings.api_prefix}/dashboard/{{workspace_id}}/{{environment_id}}")
 def get_dashboard(workspace_id: str, environment_id: str) -> dict:
     return store.dashboard_summary(workspace_id, environment_id).model_dump(mode="json")

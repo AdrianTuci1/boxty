@@ -3,8 +3,10 @@ from __future__ import annotations
 from .models import (
     AccountRecord,
     ApiKeyRecord,
+    BillingHistoryRecord,
     EnvironmentRecord,
     InviteRecord,
+    PaymentRecord,
     ProviderRecord,
     VolumeRecord,
     RouteRecord,
@@ -112,4 +114,22 @@ def route_item(route: RouteRecord) -> SingleTableItem:
         sk="PROFILE",
         entity_type="Route",
         attributes=route.model_dump(mode="json"),
+    )
+
+
+def payment_item(payment: PaymentRecord) -> SingleTableItem:
+    return SingleTableItem(
+        pk=f"USER#{payment.user_id}",
+        sk=f"PAYMENT#{payment.payment_id}",
+        entity_type="Payment",
+        attributes=payment.model_dump(mode="json"),
+    )
+
+
+def billing_history_item(history: BillingHistoryRecord) -> SingleTableItem:
+    return SingleTableItem(
+        pk=f"USER#{history.user_id}",
+        sk=f"BILLING_HISTORY#{history.history_id}",
+        entity_type="BillingHistory",
+        attributes=history.model_dump(mode="json"),
     )

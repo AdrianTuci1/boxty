@@ -163,8 +163,29 @@ class AccountRecord(BaseModel):
     balance_usd: float
     credit_grants_usd: float
     total_spend_usd: float = 0.0
+    stripe_customer_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class PaymentRecord(BaseModel):
+    payment_id: str = Field(default_factory=lambda: generated_id("pay"))
+    user_id: str
+    stripe_session_id: str | None = None
+    stripe_payment_intent_id: str | None = None
+    amount_usd: float
+    status: str = "pending"  # pending, completed, failed, refunded
+    created_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+
+
+class BillingHistoryRecord(BaseModel):
+    history_id: str = Field(default_factory=lambda: generated_id("bhi"))
+    user_id: str
+    type: str  # credit_purchase, usage_charge, refund
+    amount_usd: float
+    description: str
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class PricingRate(BaseModel):
@@ -508,6 +529,8 @@ class BillingUsageResponse(BaseModel):
 class BillingCreditsRequest(BaseModel):
     user_id: str
     amount_usd: float
+    success_url: str | None = None
+    cancel_url: str | None = None
 
 
 class BillingCreditsResponse(BaseModel):

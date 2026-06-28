@@ -9,8 +9,10 @@ from .config import settings
 from .dynamo import (
     account_item,
     api_key_item,
+    billing_history_item,
     environment_item,
     invite_item,
+    payment_item,
     provider_item,
     route_item,
     secret_item,
@@ -24,14 +26,21 @@ from .models import (
     AccountRecord,
     ApiKeyCreateRequest,
     ApiKeyRecord,
+    BillingBalanceResponse,
+    BillingCreditsResponse,
+    BillingHistoryRecord,
+    BillingUsageResponse,
+    DashboardSummary,
     EnvironmentCreateRequest,
     EnvironmentRecord,
     ExecutionBackend,
+    ImageCreateRequest,
+    ImageRecord,
     InviteCreateRequest,
     InviteRecord,
+    LoginResponse,
+    PaymentRecord,
     PricingRate,
-    SecretCreateRequest,
-    SecretRecord,
     ProviderHeartbeatRequest,
     ProviderRecord,
     ProviderRegistrationRequest,
@@ -41,35 +50,30 @@ from .models import (
     RouteRecord,
     SandboxSessionRecord,
     SandboxSessionRequest,
-    BillingBalanceResponse,
-    BillingCreditsResponse,
-    BillingUsageResponse,
-    DashboardSummary,
-    LoginResponse,
+    ScheduleCreateRequest,
+    ScheduleRecord,
+    SecretCreateRequest,
+    SecretRecord,
     SingleTableItem,
     UsageMeterRequest,
     UsageMeterResponse,
     UsageRecord,
     UserRecord,
-    WorkloadLaunchSpec,
-    WorkloadCreateRequest,
-    WorkloadKind,
-    WorkloadRecord,
-    WorkloadStatusUpdateRequest,
-    WorkerAssignmentRecord,
-    WorkloadStatus,
-    WorkspaceCreateRequest,
-    WorkspaceRecord,
     VolumeCreateRequest,
     VolumeEntryRecord,
     VolumeMount,
     VolumeRecord,
+    WorkloadCreateRequest,
+    WorkloadKind,
+    WorkloadLaunchSpec,
     WorkloadLogEntry,
     WorkloadMetrics,
-    ScheduleCreateRequest,
-    ScheduleRecord,
-    ImageCreateRequest,
-    ImageRecord,
+    WorkloadRecord,
+    WorkloadStatus,
+    WorkloadStatusUpdateRequest,
+    WorkerAssignmentRecord,
+    WorkspaceCreateRequest,
+    WorkspaceRecord,
     generated_id,
     utc_now,
 )
@@ -95,6 +99,8 @@ class InMemoryStore:
     sessions: dict[str, SandboxSessionRecord] = field(default_factory=dict)
     usages: dict[str, UsageRecord] = field(default_factory=dict)
     logs: dict[str, WorkloadLogEntry] = field(default_factory=dict)
+    payments: dict[str, PaymentRecord] = field(default_factory=dict)
+    billing_history: dict[str, BillingHistoryRecord] = field(default_factory=dict)
 
     def _put_item(self, item: SingleTableItem) -> None:
         try:
@@ -896,11 +902,83 @@ class InMemoryStore:
         account.updated_at = utc_now()
         self.accounts[user_id] = account
         self._put_item(account_item(account))
+        
+        # Add billing history entry
+        history = BillingHistoryRecord(
+            user_id=user_id,
+            type="credit_purchase",
+            amount_usd=amount_usd,
+            description=f"Added ${amount_usd:.2f} credits",
+        )
+        self.billing_history[history.history_id] = history
+        self._put_item(billing_history_item(history))
+        
         return BillingCreditsResponse(
             user_id=user_id,
             amount_usd=amount_usd,
             new_balance_usd=account.balance_usd,
         )
+
+    def update_account_stripe_customer(self, user_id: str, stripe_customer_id: str) -> AccountRecord:
+        account = self.accounts[user_id]
+        account.stripe_customer_id = stripe_customer_id
+        account.updated_at = utc_now()
+        self.accounts[user_id] = account
+        self._put_item(account_item(account))
+        return account
+
+    def create_pending_payment(self, user_id: str, stripe_session_id: str, amount_usd: float) -> PaymentRecord:
+        payment = PaymentRecord(
+            user_id=user_id,
+            stripe_session_id=stripe_session_id,
+            amount_usd=amount_usd,
+            status="pending",
+        )
+        self.payments[payment.payment_id] = payment
+        self._put_item(payment_item(payment))
+        return payment
+
+    def get_pending_payment_by_session(self, stripe_session_id: str) -> PaymentRecord | None:
+        for payment in self.payments.values():
+            if payment.stripe_session_id == stripe_session_id and payment.status == "pending":
+                return payment
+        return None
+
+    def mark_payment_completed(self, payment_id: str, stripe_payment_intent_id: str) -> PaymentRecord:
+        payment = self.payments[payment_id]
+        payment.status = "completed"
+        payment.stripe_payment_intent_id = stripe_payment_intent_id
+        payment.completed_at = utc_now()
+        self.payments[payment_id] = payment
+        self._put_item(payment_item(payment))
+        
+        # Add billing history
+        history = BillingHistoryRecord(
+            user_id=payment.user_id,
+            type="credit_purchase",
+            amount_usd=payment.amount_usd,
+            description=f"Credit purchase via Stripe (${payment.amount_usd:.2f})",
+        )
+        self.billing_history[history.history_id] = history
+        self._put_item(billing_history_item(history))
+        
+        return payment
+
+    def get_billing_history(self, user_id: str) -> list[BillingHistoryRecord]:
+        if user_id not in self.accounts:
+            raise KeyError(user_id)
+        return [h for h in self.billing_history.values() if h.user_id == user_id]
+
+    def add_usage_charge(self, user_id: str, amount_usd: float, description: str) -> BillingHistoryRecord:
+        history = BillingHistoryRecord(
+            user_id=user_id,
+            type="usage_charge",
+            amount_usd=-amount_usd,
+            description=description,
+        )
+        self.billing_history[history.history_id] = history
+        self._put_item(billing_history_item(history))
+        return history
 
     def list_workloads_filtered(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[WorkloadRecord]:
         items = list(self.workloads.values())
