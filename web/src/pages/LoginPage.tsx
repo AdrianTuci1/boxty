@@ -31,9 +31,12 @@ export default function LoginPage() {
         <label className="mb-1 block text-xs text-gray-400">Email (optional)</label>
         <input type="email" className="mb-4 w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" value={email} onChange={(e) => setEmail(e.target.value)} />
         <button type="submit" className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Login</button>
-        <p className="mt-3 text-center text-xs text-gray-500">
-          No account? <Link to="/register" className="text-mint hover:underline">Register</Link>
-        </p>
+        <div className="mt-3 flex items-center justify-between">
+          <p className="text-xs text-gray-500">
+            No account? <Link to="/register" className="text-mint hover:underline">Register</Link>
+          </p>
+          <Link to="/password-reset" className="text-xs text-gray-500 hover:text-white transition-colors">Forgot password?</Link>
+        </div>
       </form>
     </div>
   )

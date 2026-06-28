@@ -43,6 +43,7 @@ from .models import (
     InviteCreateRequest,
     InviteRecord,
     LoginResponse,
+    PasswordResetRecord,
     PaymentRecord,
     PricingRate,
     ProviderHeartbeatRequest,
@@ -80,6 +81,7 @@ from .models import (
     WorkloadStatusUpdateRequest,
     WorkerAssignmentRecord,
     WorkspaceCreateRequest,
+    WorkspaceMember,
     WorkspaceRecord,
     generated_id,
     utc_now,
@@ -107,6 +109,8 @@ class InMemoryStore:
     usages: dict[str, UsageRecord] = field(default_factory=dict)
     proxy_tokens: dict[str, Any] = field(default_factory=dict)
     environment_members: dict[str, Any] = field(default_factory=dict)
+    workspace_members: dict[str, Any] = field(default_factory=dict)
+    password_resets: dict[str, Any] = field(default_factory=dict)
     volume_entries: dict[str, Any] = field(default_factory=dict)
     volume_snapshots: dict[str, Any] = field(default_factory=dict)
     function_autoscalers: dict[str, Any] = field(default_factory=dict)
@@ -236,11 +240,16 @@ class InMemoryStore:
     def get_account(self, user_id: str) -> AccountRecord:
         return self.accounts[user_id]
 
+    def _hash_password(self, password: str) -> str:
+        import hashlib
+        return hashlib.sha256(password.encode()).hexdigest()
+
     def register_user(
         self,
         user_id: str,
         external_user_id: str,
         email: str | None = None,
+        password: str | None = None,
         organization_id: str | None = None,
     ) -> tuple[UserRecord, AccountRecord, WorkspaceRecord, EnvironmentRecord]:
         default_workspace_name = external_user_id
@@ -258,6 +267,7 @@ class InMemoryStore:
             user_id=user_id,
             external_user_id=external_user_id,
             email=email,
+            password_hash=self._hash_password(password) if password else None,
             organization_id=organization_id,
             default_workspace_id=workspace.workspace_id,
         )
@@ -1237,6 +1247,77 @@ class InMemoryStore:
             del self.environment_members[member_id]
             return True
         return False
+
+    # -- workspace members (RBAC) ------------------------------------------------
+
+    def create_workspace_member(self, member: WorkspaceMember) -> WorkspaceMember:
+        self.workspace_members[member.member_id] = member
+        return member
+
+    def list_workspace_members(self, workspace_id: str) -> list[WorkspaceMember]:
+        return [m for m in self.workspace_members.values() if m.workspace_id == workspace_id]
+
+    def get_workspace_member(self, member_id: str) -> WorkspaceMember:
+        return self.workspace_members[member_id]
+
+    def update_workspace_member(self, member_id: str, payload: dict[str, Any]) -> WorkspaceMember:
+        member = self.workspace_members[member_id]
+        if "role" in payload:
+            member.role = payload["role"]
+        if "permissions" in payload:
+            member.permissions = payload["permissions"]
+        member.updated_at = utc_now()
+        return member
+
+    def delete_workspace_member(self, member_id: str) -> bool:
+        if member_id in self.workspace_members:
+            del self.workspace_members[member_id]
+            return True
+        return False
+
+    # -- password reset ----------------------------------------------------------
+
+    def create_password_reset(self, user_id: str, email: str) -> PasswordResetRecord:
+        reset = PasswordResetRecord(user_id=user_id, email=email)
+        self.password_resets[reset.reset_id] = reset
+        return reset
+
+    def get_password_reset_by_token(self, token: str) -> PasswordResetRecord | None:
+        for reset in self.password_resets.values():
+            if reset.token == token and reset.status == "pending":
+                if reset.expires_at > utc_now():
+                    return reset
+        return None
+
+    def use_password_reset(self, token: str) -> PasswordResetRecord | None:
+        reset = self.get_password_reset_by_token(token)
+        if reset:
+            reset.status = "used"
+            reset.updated_at = utc_now()
+        return reset
+
+    # -- invite acceptance -------------------------------------------------------
+
+    def get_invite_by_token(self, token: str) -> InviteRecord | None:
+        for invite in self.invites.values():
+            if invite.token == token and invite.status == "pending":
+                return invite
+        return None
+
+    def accept_invite(self, token: str, user_id: str) -> InviteRecord:
+        invite = self.get_invite_by_token(token)
+        if not invite:
+            raise ValueError("invite not found or already used")
+        invite.status = "accepted"
+        invite.updated_at = utc_now()
+        # Create workspace member
+        member = WorkspaceMember(
+            workspace_id=invite.workspace_id,
+            user_id=user_id,
+            role=invite.role,
+        )
+        self.workspace_members[member.member_id] = member
+        return invite
 
     # -- volume entries --------------------------------------------------------
 

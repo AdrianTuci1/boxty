@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import PasswordResetPage from './pages/PasswordResetPage'
+import AcceptInvitePage from './pages/AcceptInvitePage'
 import DashboardPage from './pages/DashboardPage'
 import WorkspacesPage from './pages/WorkspacesPage'
 import WorkspaceDetailPage from './pages/WorkspaceDetailPage'
@@ -48,6 +50,8 @@ function AppRoutes() {
       <Route path="/playground" element={<Navigate to="/docs/guide/introduction" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/password-reset" element={<PasswordResetPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/apps/:workspace/:environment" element={<DashboardPage />} />
         <Route path="/apps/:workspace/:environment/:appId" element={<AppDetailPage />} />

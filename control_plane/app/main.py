@@ -1,7 +1,11 @@
+from email.message import EmailMessage
+import smtplib
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 
 from .config import settings
 from .models import (
+    AcceptInviteRequest,
     ApiKeyCreateRequest,
     BillingCreditsRequest,
     BillingReportRequest,
@@ -13,6 +17,8 @@ from .models import (
     ImageCreateRequest,
     InviteCreateRequest,
     LoginRequest,
+    PasswordResetConfirm,
+    PasswordResetRequest,
     ProxyToken,
     ProxyTokenCreateRequest,
     ProviderHeartbeatRequest,
@@ -31,10 +37,13 @@ from .models import (
     WorkloadCreateRequest,
     WorkloadStatusUpdateRequest,
     WorkspaceCreateRequest,
+    WorkspaceMember,
+    WorkspaceMemberUpdateRequest,
     VolumeCreateRequest,
     VolumeEntry,
     VolumeSnapshot,
     generated_id,
+    utc_now,
 )
 from .runpod import runpod_adapter
 import asyncio
@@ -102,6 +111,7 @@ def register_user(request: UserRegistrationRequest) -> UserRegistrationResponse:
         user_id=user_id,
         external_user_id=request.external_user_id,
         email=request.email,
+        password=request.password,
         organization_id=request.organization_id,
     )
     return UserRegistrationResponse(
@@ -955,6 +965,152 @@ def delete_proxy_token(token_id: str) -> dict:
     if store.delete_proxy_token(token_id):
         return {"deleted": True}
     raise HTTPException(status_code=404, detail="token not found")
+
+
+# -- workspace members (RBAC) ------------------------------------------------
+
+@app.get(f"{settings.api_prefix}/workspaces/{{workspace_id}}/members")
+def list_workspace_members(workspace_id: str) -> list[dict]:
+    members = store.list_workspace_members(workspace_id)
+    return [m.model_dump(mode="json") for m in members]
+
+
+@app.post(f"{settings.api_prefix}/workspaces/{{workspace_id}}/members")
+def add_workspace_member(workspace_id: str, payload: dict[str, Any]) -> dict:
+    member = WorkspaceMember(
+        workspace_id=workspace_id,
+        user_id=payload.get("user_id", ""),
+        role=payload.get("role", "viewer"),
+        permissions=payload.get("permissions", []),
+    )
+    store.create_workspace_member(member)
+    return member.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/workspaces/{{workspace_id}}/members/{{member_id}}")
+def get_workspace_member(workspace_id: str, member_id: str) -> dict:
+    try:
+        member = store.get_workspace_member(member_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return member.model_dump(mode="json")
+
+
+@app.patch(f"{settings.api_prefix}/workspaces/{{workspace_id}}/members/{{member_id}}")
+def update_workspace_member(workspace_id: str, member_id: str, payload: WorkspaceMemberUpdateRequest) -> dict:
+    try:
+        member = store.update_workspace_member(member_id, payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return member.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/workspaces/{{workspace_id}}/members/{{member_id}}")
+def remove_workspace_member(workspace_id: str, member_id: str) -> dict:
+    if store.delete_workspace_member(member_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="member not found")
+
+
+# -- password reset ----------------------------------------------------------
+
+@app.post(f"{settings.api_prefix}/auth/password-reset")
+def request_password_reset(request: PasswordResetRequest) -> dict:
+    # Find user by email
+    user = None
+    for u in store.users.values():
+        if u.email == request.email:
+            user = u
+            break
+    if not user:
+        # Return success even if user not found (security best practice)
+        return {"message": "If an account exists with this email, you will receive a password reset link."}
+    
+    # Create password reset record
+    reset = store.create_password_reset(user.user_id, request.email)
+    
+    # Send email via SMTP
+    subject = "Password Reset Request for Boxty"
+    body = (
+        f"You requested a password reset for your Boxty account.\n\n"
+        f"Reset token: {reset.token}\n\n"
+        f"This token will expire in 24 hours.\n\n"
+        f"If you did not request this reset, please ignore this email."
+    )
+    
+    if settings.invite_email_provider == "smtp" and settings.smtp_host:
+        try:
+            message = EmailMessage()
+            message["Subject"] = subject
+            message["From"] = settings.invite_email_from
+            message["To"] = request.email
+            message.set_content(body)
+            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+                smtp.starttls()
+                if settings.smtp_username:
+                    smtp.login(settings.smtp_username, settings.smtp_password)
+                smtp.send_message(message)
+        except Exception as exc:
+            print(f"[PasswordResetEmail] send failed: {exc}")
+    else:
+        print(f"[PasswordResetEmail] to={request.email} subject={subject}\n{body}")
+    
+    return {"message": "If an account exists with this email, you will receive a password reset link."}
+
+
+@app.post(f"{settings.api_prefix}/auth/password-reset/confirm")
+def confirm_password_reset(request: PasswordResetConfirm) -> dict:
+    reset = store.get_password_reset_by_token(request.token)
+    if not reset:
+        raise HTTPException(status_code=400, detail="Invalid or expired token")
+    
+    # Update user password
+    user = store.users.get(reset.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Hash new password
+    import hashlib
+    user.password_hash = hashlib.sha256(request.new_password.encode()).hexdigest()
+    user.updated_at = utc_now()
+    
+    # Mark reset as used
+    store.use_password_reset(request.token)
+    
+    return {"message": "Password reset successfully"}
+
+
+# -- invite acceptance -------------------------------------------------------
+
+@app.post(f"{settings.api_prefix}/invites/accept")
+def accept_invite(request: AcceptInviteRequest) -> dict:
+    # Find invite by token
+    invite = store.get_invite_by_token(request.token)
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found or already used")
+    
+    # Verify email matches
+    if invite.email != request.email:
+        raise HTTPException(status_code=400, detail="Email does not match invite")
+    
+    # Create user account
+    user_id = generated_id("usr")
+    user, account, workspace, environment = store.register_user(
+        user_id=user_id,
+        external_user_id=f"usr_{uuid.uuid4().hex[:12]}",
+        email=request.email,
+        password=request.password,
+    )
+    
+    # Accept invite and create workspace member
+    store.accept_invite(request.token, user_id)
+    
+    return {
+        "message": "Invite accepted successfully",
+        "user_id": user_id,
+        "workspace_id": invite.workspace_id,
+        "role": invite.role,
+    }
 
 
 # -- environment members (RBAC) ----------------------------------------------

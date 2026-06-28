@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, get_args, get_origin, get_type_hints
 from uuid import uuid4
@@ -134,6 +134,8 @@ class SessionAccessMode(str, Enum):
 class UserRegistrationRequest(BaseModel):
     external_user_id: str
     email: str | None = None
+    password: str | None = None
+    name: str | None = None
     organization_id: str | None = None
 
 
@@ -151,6 +153,7 @@ class UserRecord(BaseModel):
     user_id: str
     external_user_id: str
     email: str | None = None
+    password_hash: str | None = None
     organization_id: str | None = None
     default_workspace_id: str
     created_at: datetime = Field(default_factory=utc_now)
@@ -690,6 +693,54 @@ class EnvironmentMember(BaseModel):
 class EnvironmentMemberUpdateRequest(BaseModel):
     role: str | None = None
     permissions: list[str] | None = None
+
+
+class WorkspaceMember(BaseModel):
+    member_id: str = Field(default_factory=lambda: generated_id("wsm"))
+    workspace_id: str
+    user_id: str
+    role: str = "viewer"  # owner, admin, developer, viewer
+    permissions: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class WorkspaceMemberCreateRequest(BaseModel):
+    user_id: str
+    role: str = "viewer"
+    permissions: list[str] = Field(default_factory=list)
+
+
+class WorkspaceMemberUpdateRequest(BaseModel):
+    role: str | None = None
+    permissions: list[str] | None = None
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
+class PasswordResetRecord(BaseModel):
+    reset_id: str = Field(default_factory=lambda: generated_id("rst"))
+    user_id: str
+    email: str
+    token: str = Field(default_factory=lambda: uuid4().hex)
+    status: str = "pending"  # pending, used, expired
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime = Field(default_factory=lambda: utc_now() + timedelta(hours=24))
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+    email: str
+    password: str
+    name: str | None = None
 
 
 class SandboxExecRequest(BaseModel):
