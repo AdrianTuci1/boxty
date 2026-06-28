@@ -5,6 +5,7 @@ export interface Workspace {
   id: string // alias
   name: string
   description?: string
+  is_default?: boolean
   created_at: string
   environment_count?: number
   app_count?: number

@@ -4,13 +4,6 @@ import { listApiKeys, createApiKey, deleteApiKey } from '../../api/auth'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { Copy, MoreHorizontal, Plus, FileText } from 'lucide-react'
 
-const exampleTokens = [
-  { name: 'hermes', preview: 'ak-jllom3cesu0lxv4rvjzbkz', created: 'June 1, 2026', lastUsed: 'about 2 hours ago', id: '1' },
-  { name: 'cli', preview: 'ak-DU5X3zqQ...', created: 'June 1, 2026', lastUsed: '1 day ago', id: '2' },
-  { name: 'statsparrot', preview: 'ak-pl29xn8csj3kwr7v6mybdz', created: 'March 9, 2026', lastUsed: 'No recent activity', id: '3' },
-  { name: 'serverless-minio-data-v1', preview: 'ak-xk39djs82n4mvq1w5tybcz', created: 'October 7, 2025', lastUsed: 'Last used about 1 month ago', id: '4' },
-]
-
 export default function APITokensPage() {
   const { data } = useQuery({ queryKey: ['api-keys'], queryFn: () => listApiKeys('default') })
   const [keyName, setKeyName] = useState('')
@@ -63,11 +56,8 @@ export default function APITokensPage() {
           <span className="w-10" />
         </div>
 
-        {/* Rows */}
-        {tokens && tokens.length === 0 ? (
-          exampleTokens.map((tok, i) => (
-            <TokenRow key={i} token={tok} onDelete={() => {}} />
-          ))
+        {tokens.length === 0 ? (
+          <div className="px-4 py-8 text-center text-gray-600 text-xs">No tokens yet.</div>
         ) : (
           tokens.map((k: any, i: number) => (
             <TokenRow

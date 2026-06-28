@@ -266,11 +266,11 @@ export default function AppDetailPage() {
                   ))}
                 </div>
               </div>
-              {functionTab === 'Function Calls' && <FunctionCallsTable />}
-              {functionTab === 'Containers' && <FunctionMetrics />}
+              {functionTab === 'Function Calls' && <FunctionCallsTable appId={appId!} />}
+              {functionTab === 'Containers' && <FunctionMetrics appId={appId!} />}
               {functionTab === 'Metrics' && <FunctionDetails />}
-              {functionTab === 'Details' && <FunctionFiles />}
-              {functionTab === 'Files' && <FunctionFiles />}
+              {functionTab === 'Details' && <FunctionFiles volumeName={app?.name} />}
+              {functionTab === 'Files' && <FunctionFiles volumeName={app?.name} />}
             </>
           )}
 
