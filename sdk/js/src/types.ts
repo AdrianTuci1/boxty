@@ -285,6 +285,16 @@ export interface InviteInfo {
   updated_at: string;
 }
 
+export interface WorkspaceMemberInfo {
+  member_id: string;
+  workspace_id: string;
+  user_id: string;
+  role: string;
+  permissions: string[];
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ProviderInfo {
   id: string;
   provider_id: string;

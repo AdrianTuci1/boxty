@@ -523,8 +523,15 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def accept_invite(self, token: str) -> dict[str, Any]:
-        r = self._http.post("/v1/invites/accept", json={"token": token})
+    def accept_invite(self, token: str, email: str | None = None, password: str | None = None, name: str | None = None) -> dict[str, Any]:
+        payload = {"token": token}
+        if email:
+            payload["email"] = email
+        if password:
+            payload["password"] = password
+        if name:
+            payload["name"] = name
+        r = self._http.post("/v1/invites/accept", json=payload)
         r.raise_for_status()
         return r.json()
 
@@ -535,6 +542,53 @@ class Boxty:
 
     def delete_invite(self, invite_id: str) -> dict[str, Any]:
         r = self._http.delete(f"/v1/invites/{invite_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- workspace members (RBAC) ---------------------------------------------
+
+    def list_workspace_members(self, workspace_id: str) -> list[dict[str, Any]]:
+        r = self._http.get(f"/v1/workspaces/{workspace_id}/members")
+        r.raise_for_status()
+        return r.json()
+
+    def add_workspace_member(self, workspace_id: str, user_id: str, role: str = "viewer", permissions: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"user_id": user_id, "role": role}
+        if permissions:
+            payload["permissions"] = permissions
+        r = self._http.post(f"/v1/workspaces/{workspace_id}/members", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def get_workspace_member(self, workspace_id: str, member_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/workspaces/{workspace_id}/members/{member_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def update_workspace_member(self, workspace_id: str, member_id: str, role: str | None = None, permissions: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {}
+        if role is not None:
+            payload["role"] = role
+        if permissions is not None:
+            payload["permissions"] = permissions
+        r = self._http.patch(f"/v1/workspaces/{workspace_id}/members/{member_id}", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def remove_workspace_member(self, workspace_id: str, member_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/workspaces/{workspace_id}/members/{member_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- password reset --------------------------------------------------------
+
+    def request_password_reset(self, email: str) -> dict[str, Any]:
+        r = self._http.post("/v1/auth/password-reset", json={"email": email})
+        r.raise_for_status()
+        return r.json()
+
+    def confirm_password_reset(self, token: str, new_password: str) -> dict[str, Any]:
+        r = self._http.post("/v1/auth/password-reset/confirm", json={"token": token, "new_password": new_password})
         r.raise_for_status()
         return r.json()
 

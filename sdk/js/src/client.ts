@@ -29,6 +29,7 @@ import type {
   DashboardSummary,
   ApiKeyInfo,
   InviteInfo,
+  WorkspaceMemberInfo,
   ProviderInfo,
   PaymentInfo,
   BillingHistoryEntry,
@@ -698,17 +699,76 @@ export class BoxtyClient {
     return request<InviteInfo>(this.url(`/v1/invites/${encodeURIComponent(inviteId)}`));
   }
 
-  async acceptInvite(token: string): Promise<{ accepted: boolean }> {
-    return request<{ accepted: boolean }>(this.url("/v1/invites/accept"), {
+  async acceptInvite(token: string, email?: string, password?: string, name?: string): Promise<{ accepted: boolean; user_id?: string; workspace_id?: string; role?: string }> {
+    const payload: Record<string, string> = { token };
+    if (email) payload.email = email;
+    if (password) payload.password = password;
+    if (name) payload.name = name;
+    return request<{ accepted: boolean; user_id?: string; workspace_id?: string; role?: string }>(this.url("/v1/invites/accept"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
+      body: JSON.stringify(payload),
     });
   }
 
   async deleteInvite(inviteId: string): Promise<{ deleted: boolean }> {
     return request<{ deleted: boolean }>(this.url(`/v1/invites/${encodeURIComponent(inviteId)}`), {
       method: "DELETE",
+    });
+  }
+
+  // -- workspace members (RBAC) ------------------------------------------------
+
+  async listWorkspaceMembers(workspaceId: string): Promise<WorkspaceMemberInfo[]> {
+    return request<WorkspaceMemberInfo[]>(this.url(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members`));
+  }
+
+  async addWorkspaceMember(workspaceId: string, userId: string, role = "viewer", permissions?: string[]): Promise<WorkspaceMemberInfo> {
+    const payload: Record<string, any> = { user_id: userId, role };
+    if (permissions) payload.permissions = permissions;
+    return request<WorkspaceMemberInfo>(this.url(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getWorkspaceMember(workspaceId: string, memberId: string): Promise<WorkspaceMemberInfo> {
+    return request<WorkspaceMemberInfo>(this.url(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`));
+  }
+
+  async updateWorkspaceMember(workspaceId: string, memberId: string, role?: string, permissions?: string[]): Promise<WorkspaceMemberInfo> {
+    const payload: Record<string, any> = {};
+    if (role !== undefined) payload.role = role;
+    if (permissions !== undefined) payload.permissions = permissions;
+    return request<WorkspaceMemberInfo>(this.url(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`), {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async removeWorkspaceMember(workspaceId: string, memberId: string): Promise<{ deleted: boolean }> {
+    return request<{ deleted: boolean }>(this.url(`/v1/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`), {
+      method: "DELETE",
+    });
+  }
+
+  // -- password reset ----------------------------------------------------------
+
+  async requestPasswordReset(email: string): Promise<{ message: string }> {
+    return request<{ message: string }>(this.url("/v1/auth/password-reset"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async confirmPasswordReset(token: string, newPassword: string): Promise<{ message: string }> {
+    return request<{ message: string }>(this.url("/v1/auth/password-reset/confirm"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, new_password: newPassword }),
     });
   }
 
