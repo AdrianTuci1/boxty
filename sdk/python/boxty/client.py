@@ -58,8 +58,18 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def balance(self, user_id: str) -> dict[str, Any]:
+    def get_account(self, user_id: str) -> dict[str, Any]:
         r = self._http.get(f"/v1/accounts/{user_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def get_user(self, user_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/users/{user_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def balance(self, user_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/billing/balance?user_id={user_id}")
         r.raise_for_status()
         return r.json()
 
@@ -196,6 +206,17 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def whoami(self, token: str | None = None) -> dict[str, Any]:
+        """Validate access token and return current user info."""
+        headers = {}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        r = self._http.get("/v1/auth/me", headers=headers or None)
+        r.raise_for_status()
+        return r.json()
+
+    # -- workspaces ------------------------------------------------------------
+
     def delete_workspace(self, workspace_id: str) -> dict[str, Any]:
         r = self._http.delete(f"/v1/workspaces/{workspace_id}")
         r.raise_for_status()
@@ -205,6 +226,13 @@ class Boxty:
         r = self._http.get(f"/v1/workspaces/{workspace_id}")
         r.raise_for_status()
         return r.json()
+
+    def update_workspace(self, workspace_id: str, **kwargs: Any) -> dict[str, Any]:
+        r = self._http.patch(f"/v1/workspaces/{workspace_id}", json=kwargs)
+        r.raise_for_status()
+        return r.json()
+
+    # -- environments ----------------------------------------------------------
 
     def delete_environment(self, environment_id: str) -> dict[str, Any]:
         r = self._http.delete(f"/v1/environments/{environment_id}")
@@ -216,6 +244,13 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def update_environment(self, environment_id: str, **kwargs: Any) -> dict[str, Any]:
+        r = self._http.patch(f"/v1/environments/{environment_id}", json=kwargs)
+        r.raise_for_status()
+        return r.json()
+
+    # -- api keys --------------------------------------------------------------
+
     def delete_api_key(self, api_key_id: str) -> dict[str, Any]:
         r = self._http.delete(f"/v1/api-keys/{api_key_id}")
         r.raise_for_status()
@@ -225,6 +260,13 @@ class Boxty:
         r = self._http.get(f"/v1/api-keys/{api_key_id}")
         r.raise_for_status()
         return r.json()
+
+    def update_api_key(self, api_key_id: str, **kwargs: Any) -> dict[str, Any]:
+        r = self._http.patch(f"/v1/api-keys/{api_key_id}", json=kwargs)
+        r.raise_for_status()
+        return r.json()
+
+    # -- workloads -------------------------------------------------------------
 
     def get_workload(self, workload_id: str) -> dict[str, Any]:
         r = self._http.get(f"/v1/workloads/{workload_id}")
@@ -236,8 +278,16 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def update_workload_status(self, workload_id: str, status: str) -> dict[str, Any]:
-        r = self._http.post(f"/v1/workloads/{workload_id}/status", json={"status": status})
+    def update_workload(self, workload_id: str, **kwargs: Any) -> dict[str, Any]:
+        r = self._http.patch(f"/v1/workloads/{workload_id}", json=kwargs)
+        r.raise_for_status()
+        return r.json()
+
+    def update_workload_status(self, workload_id: str, status: str, runtime_details: dict[str, Any] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"status": status}
+        if runtime_details:
+            payload["runtime_details"] = runtime_details
+        r = self._http.post(f"/v1/workloads/{workload_id}/status", json=payload)
         r.raise_for_status()
         return r.json()
 
@@ -251,6 +301,12 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def get_workload_launch_spec(self, workload_id: str) -> dict[str, Any]:
+        """Get launch spec for a workload (provider auth required)."""
+        r = self._http.get(f"/v1/workloads/{workload_id}/launch-spec")
+        r.raise_for_status()
+        return r.json()
+
     def list_workloads_filtered(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[dict[str, Any]]:
         params = {}
         if workspace_id:
@@ -260,6 +316,8 @@ class Boxty:
         r = self._http.get("/v1/workloads", params=params or None)
         r.raise_for_status()
         return r.json()
+
+    # -- routes ----------------------------------------------------------------
 
     def list_routes(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[dict[str, Any]]:
         params = {}
@@ -281,9 +339,20 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def list_schedules(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
-        params = {"workspace_id": workspace_id} if workspace_id else None
-        r = self._http.get("/v1/schedules", params=params)
+    def get_route(self, route_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/routes/{route_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- schedules -------------------------------------------------------------
+
+    def list_schedules(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[dict[str, Any]]:
+        params = {}
+        if workspace_id:
+            params["workspace_id"] = workspace_id
+        if environment_id:
+            params["environment_id"] = environment_id
+        r = self._http.get("/v1/schedules", params=params or None)
         r.raise_for_status()
         return r.json()
 
@@ -303,6 +372,11 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def get_schedule(self, schedule_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/schedules/{schedule_id}")
+        r.raise_for_status()
+        return r.json()
+
     def update_schedule(self, schedule_id: str, **kwargs: Any) -> dict[str, Any]:
         r = self._http.patch(f"/v1/schedules/{schedule_id}", json=kwargs)
         r.raise_for_status()
@@ -318,8 +392,11 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def list_images(self) -> list[dict[str, Any]]:
-        r = self._http.get("/v1/images")
+    # -- images ----------------------------------------------------------------
+
+    def list_images(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
+        params = {"workspace_id": workspace_id} if workspace_id else None
+        r = self._http.get("/v1/images", params=params)
         r.raise_for_status()
         return r.json()
 
@@ -333,6 +410,13 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def delete_image(self, image_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/images/{image_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- dashboard -------------------------------------------------------------
+
     def dashboard(self, workspace_id: str, environment_id: str) -> dict[str, Any]:
         r = self._http.get(f"/v1/dashboard/{workspace_id}/{environment_id}")
         r.raise_for_status()
@@ -342,6 +426,8 @@ class Boxty:
         r = self._http.get(f"/v1/dashboard/{workspace_id}/{environment_id}/summary")
         r.raise_for_status()
         return r.json()
+
+    # -- billing ---------------------------------------------------------------
 
     def billing_balance(self, user_id: str) -> dict[str, Any]:
         r = self._http.get("/v1/billing/balance", params={"user_id": user_id})
@@ -358,6 +444,29 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def create_checkout(self, user_id: str, amount_usd: float, success_url: str | None = None, cancel_url: str | None = None) -> dict[str, Any]:
+        """Create a Stripe checkout session for credit purchase."""
+        r = self._http.post("/v1/billing/checkout", json={
+            "user_id": user_id,
+            "amount_usd": amount_usd,
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+        })
+        r.raise_for_status()
+        return r.json()
+
+    def get_billing_history(self, user_id: str) -> list[dict[str, Any]]:
+        r = self._http.get("/v1/billing/history", params={"user_id": user_id})
+        r.raise_for_status()
+        return r.json()
+
+    def get_invoices(self, user_id: str) -> list[dict[str, Any]]:
+        r = self._http.get("/v1/billing/invoices", params={"user_id": user_id})
+        r.raise_for_status()
+        return r.json()
+
+    # -- usage -----------------------------------------------------------------
+
     def list_usage(self, workload_id: str | None = None, owner_id: str | None = None) -> list[dict[str, Any]]:
         params = {}
         if workload_id:
@@ -367,6 +476,8 @@ class Boxty:
         r = self._http.get("/v1/usage", params=params or None)
         r.raise_for_status()
         return r.json()
+
+    # -- invites ---------------------------------------------------------------
 
     def list_invites(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
         params = {"workspace_id": workspace_id} if workspace_id else None
@@ -384,8 +495,25 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
+    def get_invite(self, invite_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/invites/{invite_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def delete_invite(self, invite_id: str) -> dict[str, Any]:
+        r = self._http.delete(f"/v1/invites/{invite_id}")
+        r.raise_for_status()
+        return r.json()
+
+    # -- providers -------------------------------------------------------------
+
     def list_providers(self) -> list[dict[str, Any]]:
         r = self._http.get("/v1/providers")
+        r.raise_for_status()
+        return r.json()
+
+    def get_provider(self, provider_id: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/providers/{provider_id}")
         r.raise_for_status()
         return r.json()
 
@@ -396,5 +524,43 @@ class Boxty:
 
     def delete_provider(self, provider_id: str) -> dict[str, Any]:
         r = self._http.delete(f"/v1/providers/{provider_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def provider_heartbeat(self, provider_id: str, available_slots: int = 0, running_workloads: int = 0, status: str = "online") -> dict[str, Any]:
+        """Send provider heartbeat (provider auth required)."""
+        r = self._http.post(f"/v1/providers/{provider_id}/heartbeat", json={
+            "available_slots": available_slots,
+            "running_workloads": running_workloads,
+            "status": status,
+        })
+        r.raise_for_status()
+        return r.json()
+
+    def claim_next_assignment(self, provider_id: str) -> dict[str, Any] | None:
+        """Claim next workload assignment (provider auth required)."""
+        r = self._http.post(f"/v1/providers/{provider_id}/assignments/next")
+        r.raise_for_status()
+        return r.json()
+
+    # -- runpod ----------------------------------------------------------------
+
+    def dispatch_runpod(self, workload_id: str, template: str, gpu_type: str | None = None, gpu_count: int = 0, env: dict[str, str] | None = None) -> dict[str, Any]:
+        """Dispatch a workload to RunPod."""
+        r = self._http.post("/v1/runpod/dispatch", json={
+            "workload_id": workload_id,
+            "template": template,
+            "gpu_type": gpu_type,
+            "gpu_count": gpu_count,
+            "env": env or {},
+        })
+        r.raise_for_status()
+        return r.json()
+
+    # -- sandbox sessions ------------------------------------------------------
+
+    def verify_sandbox_session(self, token: str) -> dict[str, Any]:
+        """Verify a sandbox session token (provider auth required)."""
+        r = self._http.get("/v1/sandbox-sessions/verify", params={"token": token})
         r.raise_for_status()
         return r.json()

@@ -12,21 +12,27 @@ class VolumesClient:
 
     # -- list / create / delete -----------------------------------------------
 
-    def list(self) -> list[dict[str, Any]]:
-        r = self._http.get("/api/volumes")
+    def list(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
+        params = {"workspace_id": workspace_id} if workspace_id else None
+        r = self._http.get("/v1/volumes", params=params)
         r.raise_for_status()
         return r.json()
 
     def create(
-        self, name: str, size_gb: int = 10, volume_type: str = "block-storage"
+        self, workspace_id: str, name: str, size_gb: int = 10, volume_type: str = "object-storage"
     ) -> dict[str, Any]:
-        payload = {"name": name, "sizeGb": size_gb, "type": volume_type}
-        r = self._http.post("/api/volumes", json=payload)
+        payload = {"workspace_id": workspace_id, "name": name, "size_gb": size_gb, "volume_type": volume_type}
+        r = self._http.post("/v1/volumes", json=payload)
         r.raise_for_status()
         return r.json()
 
-    def delete(self, locator: str) -> bool:
-        r = self._http.delete(f"/api/volumes/{locator}")
+    def get(self, workspace_id: str, locator: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/volumes/{workspace_id}/{locator}")
+        r.raise_for_status()
+        return r.json()
+
+    def delete(self, workspace_id: str, locator: str) -> bool:
+        r = self._http.delete(f"/v1/volumes/{workspace_id}/{locator}")
         r.raise_for_status()
         return r.json().get("deleted", False)
 
@@ -34,7 +40,7 @@ class VolumesClient:
 
     def list_entries(self, locator: str, path: str = "") -> list[dict[str, Any]]:
         params = {"path": path} if path else {}
-        r = self._http.get(f"/api/volumes/{locator}/entries", params=params)
+        r = self._http.get(f"/v1/volumes/{locator}/entries", params=params)
         r.raise_for_status()
         return r.json()
 
@@ -46,12 +52,12 @@ class VolumesClient:
         else:
             contents_str = contents
         payload = {"path": path, "contents": contents_str}
-        r = self._http.post(f"/api/volumes/{locator}/entries", json=payload)
+        r = self._http.post(f"/v1/volumes/{locator}/entries", json=payload)
         r.raise_for_status()
         return r.json()
 
     def delete_entry(self, locator: str, path: str) -> bool:
-        r = self._http.delete(f"/api/volumes/{locator}/entries", params={"path": path})
+        r = self._http.delete(f"/v1/volumes/{locator}/entries", params={"path": path})
         r.raise_for_status()
         return r.json().get("deleted", False)
 
@@ -60,10 +66,15 @@ class VolumesClient:
     def put_blob(self, locator: str, path: str, data: bytes) -> dict[str, Any]:
         params = {"path": path}
         r = self._http.put(
-            f"/api/volumes/{locator}/blob", params=params, content=data
+            f"/v1/volumes/{locator}/blob", params=params, content=data
         )
         r.raise_for_status()
         return r.json()
+
+    def get_blob(self, locator: str, path: str) -> bytes:
+        r = self._http.get(f"/v1/volumes/{locator}/blob", params={"path": path})
+        r.raise_for_status()
+        return r.content
 
     # -- public object URL ----------------------------------------------------
 

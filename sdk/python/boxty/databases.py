@@ -12,13 +12,15 @@ class DatabasesClient:
 
     # -- list / create / delete -----------------------------------------------
 
-    def list(self) -> list[dict[str, Any]]:
-        r = self._http.get("/api/databases")
+    def list(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
+        params = {"workspace_id": workspace_id} if workspace_id else None
+        r = self._http.get("/v1/databases", params=params)
         r.raise_for_status()
         return r.json()
 
     def create(
         self,
+        workspace_id: str,
         name: str,
         pk_name: str,
         sk_name: str = "",
@@ -27,38 +29,50 @@ class DatabasesClient:
         gsi_sk_name: str = "",
     ) -> dict[str, Any]:
         payload = {
+            "workspace_id": workspace_id,
             "name": name,
-            "pkName": pk_name,
-            "skName": sk_name,
-            "gsiName": gsi_name,
-            "gsiPkName": gsi_pk_name,
-            "gsiSkName": gsi_sk_name,
+            "pk_name": pk_name,
+            "sk_name": sk_name,
+            "gsi_name": gsi_name,
+            "gsi_pk_name": gsi_pk_name,
+            "gsi_sk_name": gsi_sk_name,
         }
-        r = self._http.post("/api/databases", json=payload)
+        r = self._http.post("/v1/databases", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def get(self, locator: str) -> dict[str, Any]:
+        r = self._http.get(f"/v1/databases/{locator}")
         r.raise_for_status()
         return r.json()
 
     def delete(self, locator: str) -> bool:
-        r = self._http.delete(f"/api/databases/{locator}")
+        r = self._http.delete(f"/v1/databases/{locator}")
         r.raise_for_status()
         return r.json().get("deleted", False)
 
     # -- items ----------------------------------------------------------------
 
     def list_items(self, locator: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/api/databases/{locator}/items")
+        r = self._http.get(f"/v1/databases/{locator}/items")
+        r.raise_for_status()
+        return r.json()
+
+    def get_item(self, locator: str, pk: str, sk: str = "") -> dict[str, Any]:
+        params = {"pk": pk, "sk": sk}
+        r = self._http.get(f"/v1/databases/{locator}/items", params=params)
         r.raise_for_status()
         return r.json()
 
     def put_item(self, locator: str, value: dict[str, Any]) -> dict[str, Any]:
         payload = {"value": value}
-        r = self._http.post(f"/api/databases/{locator}/items", json=payload)
+        r = self._http.post(f"/v1/databases/{locator}/items", json=payload)
         r.raise_for_status()
         return r.json()
 
     def delete_item(self, locator: str, pk: str, sk: str = "") -> bool:
         params = {"pk": pk, "sk": sk}
-        r = self._http.delete(f"/api/databases/{locator}/items", params=params)
+        r = self._http.delete(f"/v1/databases/{locator}/items", params=params)
         r.raise_for_status()
         return r.json().get("deleted", False)
 
@@ -102,6 +116,6 @@ class DatabasesClient:
             payload["gsiSkTo"] = gsi_sk_to
         if limit is not None:
             payload["limit"] = limit
-        r = self._http.post(f"/api/databases/{locator}/query", json=payload)
+        r = self._http.post(f"/v1/databases/{locator}/query", json=payload)
         r.raise_for_status()
         return r.json()

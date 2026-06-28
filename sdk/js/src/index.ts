@@ -40,4 +40,12 @@ export type {
   ApiKeyInfo,
   InviteInfo,
   ProviderInfo,
+  PaymentInfo,
+  BillingHistoryEntry,
+  SandboxSessionInfo,
+  UsageRecordInfo,
+  ProviderCapabilities,
+  WorkloadLaunchSpec,
+  RunPodDispatchPayload,
+  RunPodDispatchResponse,
 } from "./types.js";

@@ -425,3 +425,150 @@ class Provider:
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),
         )
+
+
+@dataclass
+class Payment:
+    payment_id: str
+    user_id: str
+    stripe_session_id: str | None = None
+    stripe_payment_intent_id: str | None = None
+    amount_usd: float = 0.0
+    status: str = "pending"
+    created_at: str = ""
+    completed_at: str | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Payment:
+        return cls(
+            payment_id=data.get("payment_id", ""),
+            user_id=data.get("user_id", ""),
+            stripe_session_id=data.get("stripe_session_id"),
+            stripe_payment_intent_id=data.get("stripe_payment_intent_id"),
+            amount_usd=data.get("amount_usd", 0.0),
+            status=data.get("status", "pending"),
+            created_at=data.get("created_at", ""),
+            completed_at=data.get("completed_at"),
+        )
+
+
+@dataclass
+class BillingHistoryEntry:
+    history_id: str
+    user_id: str
+    type: str
+    amount_usd: float = 0.0
+    description: str = ""
+    created_at: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> BillingHistoryEntry:
+        return cls(
+            history_id=data.get("history_id", ""),
+            user_id=data.get("user_id", ""),
+            type=data.get("type", ""),
+            amount_usd=data.get("amount_usd", 0.0),
+            description=data.get("description", ""),
+            created_at=data.get("created_at", ""),
+        )
+
+
+@dataclass
+class SandboxSession:
+    session_id: str
+    workload_id: str
+    requester_id: str
+    token: str = ""
+    ttl_seconds: int = 900
+    created_at: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> SandboxSession:
+        return cls(
+            session_id=data.get("session_id", ""),
+            workload_id=data.get("workload_id", ""),
+            requester_id=data.get("requester_id", ""),
+            token=data.get("token", ""),
+            ttl_seconds=data.get("ttl_seconds", 900),
+            created_at=data.get("created_at", ""),
+        )
+
+
+@dataclass
+class VolumeEntry:
+    path: str
+    entry_type: str
+    size: int | None = None
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> VolumeEntry:
+        return cls(
+            path=data.get("path", ""),
+            entry_type=data.get("entry_type", ""),
+            size=data.get("size"),
+        )
+
+
+@dataclass
+class Database:
+    database_id: str
+    name: str
+    pk_name: str
+    sk_name: str = ""
+    gsi_name: str = ""
+    gsi_pk_name: str = ""
+    gsi_sk_name: str = ""
+    created_at: str = ""
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Database:
+        return cls(
+            database_id=data.get("database_id", ""),
+            name=data.get("name", ""),
+            pk_name=data.get("pk_name", ""),
+            sk_name=data.get("sk_name", ""),
+            gsi_name=data.get("gsi_name", ""),
+            gsi_pk_name=data.get("gsi_pk_name", ""),
+            gsi_sk_name=data.get("gsi_sk_name", ""),
+            created_at=data.get("created_at", ""),
+        )
+
+
+@dataclass
+class DatabaseItem:
+    item_id: str
+    pk: str
+    sk: str
+    value: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> DatabaseItem:
+        return cls(
+            item_id=data.get("item_id", ""),
+            pk=data.get("pk", ""),
+            sk=data.get("sk", ""),
+            value=data.get("value", {}),
+        )
+
+
+@dataclass
+class WorkloadLaunchSpec:
+    workload_id: str
+    image: str = ""
+    command: list[str] = field(default_factory=list)
+    env: dict[str, str] = field(default_factory=dict)
+    resources: dict[str, Any] = field(default_factory=dict)
+    volume_mounts: list[dict[str, Any]] = field(default_factory=list)
+    secret_names: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> WorkloadLaunchSpec:
+        return cls(
+            workload_id=data.get("workload_id", ""),
+            image=data.get("image", ""),
+            command=data.get("command", []),
+            env=data.get("env", {}),
+            resources=data.get("resources", {}),
+            volume_mounts=data.get("volume_mounts", []),
+            secret_names=data.get("secret_names", []),
+        )
