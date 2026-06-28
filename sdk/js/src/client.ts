@@ -60,9 +60,22 @@ async function request<T>(
 
 export class BoxtyClient {
   private base: string;
+  private token: string | null;
 
-  constructor(gatewayUrl?: string) {
+  constructor(gatewayUrl?: string, token?: string) {
     this.base = baseUrl(gatewayUrl);
+    this.token = token || null;
+  }
+
+  static fromEnv(): BoxtyClient {
+    const gateway = typeof process !== "undefined" ? process.env?.BOXTY_GATEWAY_URL : undefined;
+    const token = typeof process !== "undefined" ? process.env?.BOXTY_TOKEN : undefined;
+    return new BoxtyClient(gateway, token);
+  }
+
+  static fromCredentials(email: string, password: string, gatewayUrl?: string): BoxtyClient {
+    // Placeholder for future password auth
+    return new BoxtyClient(gatewayUrl);
   }
 
   // -- helpers ---------------------------------------------------------------

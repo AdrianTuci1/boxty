@@ -33,6 +33,13 @@ class BoxtyValidationError(BoxtyError):
         super().__init__(message, status_code=422)
 
 
+class BoxtyAPIError(BoxtyError):
+    """Raised when the API returns an error response."""
+
+    def __init__(self, message: str = "API error", status_code: int | None = None) -> None:
+        super().__init__(message, status_code=status_code or 500)
+
+
 class BoxtyConnectionError(BoxtyError):
     """Raised when the SDK cannot reach the Boxty API."""
 

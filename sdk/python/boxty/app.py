@@ -424,6 +424,84 @@ class App:
             print("Error: no web endpoints defined in app", file=sys.stderr)
             sys.exit(1)
 
+    def deploy(self, *, workspace: str | None = None, environment: str | None = None) -> dict[str, Any]:
+        """Deploy the app to Boxty.
+
+        Returns the deployment result with workload IDs.
+        """
+        raise NotImplementedError("App.deploy() requires CLI integration")
+
+    def local_entrypoint(self, fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorator for a local entrypoint function.
+
+        This function runs locally and can call remote functions.
+        """
+        setattr(fn, "__boxty_local_entrypoint__", True)
+        return fn
+
+    def get_dashboard_url(self) -> str:
+        """Get the dashboard URL for this app."""
+        return f"https://boxty.io/dashboard/apps/{self.name}"
+
+    @classmethod
+    def lookup(cls, name: str, client: Any | None = None) -> App:
+        """Lookup an existing app by name."""
+        return cls(name)
+
+    def cls(
+        self,
+        *,
+        image: Image | None = None,
+        mounts: list[Mount] | None = None,
+        volumes: dict[str, Volume] | None = None,
+        secrets: list[Secret] | None = None,
+        timeout: int = 300,
+        gpu: str | None = None,
+    ) -> Callable[[type], type]:
+        """Decorator for a class-based function (Modal-style).
+
+        The decorated class can have methods that are exposed as functions.
+        """
+        def decorator(cls_def: type) -> type:
+            # Store metadata on the class
+            setattr(cls_def, _FUNCTIONS_ATTR, {
+                "image": image,
+                "mounts": mounts or [],
+                "volumes": volumes or {},
+                "secrets": secrets or [],
+                "timeout": timeout,
+                "gpu": gpu,
+            })
+            return cls_def
+        return decorator
+
+    def server(
+        self,
+        *,
+        port: int = 8000,
+        image: Image | None = None,
+        mounts: list[Mount] | None = None,
+        volumes: dict[str, Volume] | None = None,
+        secrets: list[Secret] | None = None,
+        timeout: int = 300,
+        gpu: str | None = None,
+        public: bool = True,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Decorator for a persistent server (like web_endpoint but long-lived).
+
+        Alias for web_endpoint for now.
+        """
+        return self.web_endpoint(
+            port=port,
+            image=image,
+            mounts=mounts,
+            volumes=volumes,
+            secrets=secrets,
+            timeout=timeout,
+            gpu=gpu,
+            public=public,
+        )
+
 
 # ---------------------------------------------------------------------------
 # CLI integration helpers
@@ -447,3 +525,37 @@ def _extract_manifest(mod_name: str) -> dict[str, Any] | None:
     if app is None:
         return None
     return app.to_manifest()
+
+
+# -- module-level decorators -------------------------------------------------
+
+def concurrent(max_concurrency: int = 10) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator to limit concurrent executions of a function.
+
+    Usage::
+
+        @boxty.concurrent(max_concurrency=5)
+        @app.function()
+        def my_func():
+            ...
+    """
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        setattr(fn, "__boxty_concurrent_limit__", max_concurrency)
+        return fn
+    return decorator
+
+
+def batched(max_batch_size: int = 10, wait_ms: int = 100) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator to enable batching of function calls.
+
+    Usage::
+
+        @boxty.batched(max_batch_size=32, wait_ms=50)
+        @app.function()
+        def my_func(inputs: list[str]):
+            ...
+    """
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        setattr(fn, "__boxty_batched__", {"max_batch_size": max_batch_size, "wait_ms": wait_ms})
+        return fn
+    return decorator

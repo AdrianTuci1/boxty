@@ -17,6 +17,21 @@ export type {
   FunctionConfig,
   WebEndpointConfig,
 } from "./app.js";
+export {
+  Workspace,
+  Environment,
+  ObjectManager,
+  ProxyTokenManager,
+  Sandbox,
+  FileSystemManager,
+  Function,
+  Period,
+  Cron,
+  Proxy,
+  Probe,
+  NetworkFileSystem,
+  CloudBucketMount,
+} from "./models.js";
 export type {
   CliState,
   WalletState,
