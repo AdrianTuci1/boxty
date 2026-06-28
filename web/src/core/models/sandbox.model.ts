@@ -35,8 +35,8 @@ export interface SandboxMetricsModel {
 
 export function mapSandboxFromApi(raw: Record<string, any>): SandboxModel {
   return {
-    id: raw.sandbox_id ?? raw.id ?? '',
-    appId: raw.app_id ?? raw.appId,
+    id: raw.sandbox_id ?? raw.workload_id ?? raw.id ?? '',
+    appId: raw.app_id ?? raw.workload_id ?? raw.appId,
     status: (raw.status as SandboxStatus) ?? 'stopped',
     startedAt: raw.started_at ? new Date(raw.started_at) : undefined,
     finishedAt: raw.finished_at ? new Date(raw.finished_at) : undefined,

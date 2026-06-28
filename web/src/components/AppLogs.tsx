@@ -3,7 +3,7 @@ import {
   Search, Filter, Settings, ChevronDown,
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '../api/client'
+import { getAppLogs } from '../api/apps'
 import { useAuth } from '../hooks/useAuth'
 import { shouldUseMocks } from '../core/services/mock-decider.service'
 
@@ -85,8 +85,8 @@ export default function AppLogs({ appId, appName }: { appId?: string; appName: s
   const useMocks = devMode || shouldUseMocks()
 
   const { data: realLogs } = useQuery({
-    queryKey: ['apps', appId, 'logs'],
-    queryFn: () => apiFetch<{ timestamp: string; message: string }[]>(`/apps/${appId}/logs`),
+    queryKey: ['workloads', appId, 'logs'],
+    queryFn: () => getAppLogs(appId!),
     enabled: !!appId && !useMocks,
   })
 
