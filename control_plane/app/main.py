@@ -434,6 +434,27 @@ def login(request: LoginRequest) -> dict:
     return result.model_dump(mode="json")
 
 
+@app.get(f"{settings.api_prefix}/auth/me")
+def whoami(authorization: str | None = Header(default=None)) -> dict:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="missing bearer token")
+    token = authorization.split(" ", 1)[1].strip()
+    # Find user by token - token format is "boxty_{external_user_id}_{random}"
+    # We can extract external_user_id from token prefix
+    parts = token.split("_")
+    if len(parts) >= 3 and parts[0] == "boxty":
+        external_user_id = parts[1]
+        for user in store.users.values():
+            if user.external_user_id == external_user_id:
+                return {
+                    "user_id": user.user_id,
+                    "external_user_id": user.external_user_id,
+                    "email": user.email,
+                    "created_at": user.created_at,
+                }
+    raise HTTPException(status_code=401, detail="invalid token")
+
+
 @app.delete(f"{settings.api_prefix}/api-keys/{{api_key_id}}")
 def delete_api_key(api_key_id: str) -> dict:
     deleted = store.delete_api_key(api_key_id)
