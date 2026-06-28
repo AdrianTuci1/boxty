@@ -5,6 +5,7 @@ from .models import (
     ApiKeyCreateRequest,
     BillingCreditsRequest,
     EnvironmentCreateRequest,
+    ImageCreateRequest,
     InviteCreateRequest,
     LoginRequest,
     ProviderHeartbeatRequest,
@@ -12,6 +13,7 @@ from .models import (
     RoutePublishRequest,
     RunPodDispatchRequest,
     SandboxSessionRequest,
+    ScheduleCreateRequest,
     SecretCreateRequest,
     UsageMeterRequest,
     UserRegistrationRequest,
@@ -26,6 +28,7 @@ from .runpod import runpod_adapter
 import asyncio
 import base64
 import json
+from typing import Any
 import uuid
 
 from .store import issued_access_token, store
@@ -643,3 +646,71 @@ async def proxy_endpoint(request: Request, endpoint_name: str) -> Response:
             if k.lower() not in {"content-length", "transfer-encoding"}
         },
     )
+
+
+@app.get(f"{settings.api_prefix}/schedules")
+def list_schedules(
+    workspace_id: str | None = Query(default=None),
+    environment_id: str | None = Query(default=None),
+) -> list[dict]:
+    return [s.model_dump(mode="json") for s in store.list_schedules(workspace_id, environment_id)]
+
+
+@app.post(f"{settings.api_prefix}/schedules")
+def create_schedule(request: ScheduleCreateRequest) -> dict:
+    schedule = store.create_schedule(request)
+    return schedule.model_dump(mode="json")
+
+
+@app.patch(f"{settings.api_prefix}/schedules/{{schedule_id}}")
+def update_schedule(schedule_id: str, payload: dict[str, Any]) -> dict:
+    try:
+        schedule = store.update_schedule(schedule_id, payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return schedule.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/schedules/{{schedule_id}}")
+def delete_schedule(schedule_id: str) -> dict:
+    if store.delete_schedule(schedule_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="schedule not found")
+
+
+@app.post(f"{settings.api_prefix}/schedules/{{schedule_id}}/trigger")
+def trigger_schedule(schedule_id: str) -> dict:
+    try:
+        schedule = store.trigger_schedule(schedule_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return schedule.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/images")
+def list_images(workspace_id: str | None = Query(default=None)) -> list[dict]:
+    return [i.model_dump(mode="json") for i in store.list_images(workspace_id)]
+
+
+@app.post(f"{settings.api_prefix}/images/build")
+def build_image(request: ImageCreateRequest) -> dict:
+    image = store.create_image(request)
+    image.status = "building"
+    image.build_log = "Build started..."
+    return image.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/images/{{image_id}}")
+def get_image(image_id: str) -> dict:
+    try:
+        image = store.get_image(image_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return image.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/images/{{image_id}}")
+def delete_image(image_id: str) -> dict:
+    if store.delete_image(image_id):
+        return {"deleted": True}
+    raise HTTPException(status_code=404, detail="image not found")

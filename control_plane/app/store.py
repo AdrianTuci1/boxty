@@ -66,6 +66,10 @@ from .models import (
     VolumeRecord,
     WorkloadLogEntry,
     WorkloadMetrics,
+    ScheduleCreateRequest,
+    ScheduleRecord,
+    ImageCreateRequest,
+    ImageRecord,
     generated_id,
     utc_now,
 )
@@ -78,6 +82,8 @@ class InMemoryStore:
     users: dict[str, UserRecord] = field(default_factory=dict)
     accounts: dict[str, AccountRecord] = field(default_factory=dict)
     workspaces: dict[str, WorkspaceRecord] = field(default_factory=dict)
+    schedules: dict[str, ScheduleRecord] = field(default_factory=dict)
+    images: dict[str, ImageRecord] = field(default_factory=dict)
     environments: dict[str, EnvironmentRecord] = field(default_factory=dict)
     api_keys: dict[str, ApiKeyRecord] = field(default_factory=dict)
     secrets: dict[str, SecretRecord] = field(default_factory=dict)
@@ -908,6 +914,86 @@ class InMemoryStore:
         log = WorkloadLogEntry(workload_id=workload_id, level=level, message=message)
         self.logs[log.log_id] = log
         return log
+
+    def create_schedule(self, request: ScheduleCreateRequest) -> ScheduleRecord:
+        schedule = ScheduleRecord(
+            name=request.name,
+            workspace_id=request.workspace_id,
+            environment_id=request.environment_id,
+            owner_id=request.owner_id,
+            workload_id=request.workload_id,
+            cron_expression=request.cron_expression,
+            interval_seconds=request.interval_seconds,
+            payload=request.payload,
+        )
+        self.schedules[schedule.schedule_id] = schedule
+        return schedule
+
+    def list_schedules(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[ScheduleRecord]:
+        items = list(self.schedules.values())
+        if workspace_id:
+            items = [s for s in items if s.workspace_id == workspace_id]
+        if environment_id:
+            items = [s for s in items if s.environment_id == environment_id]
+        return items
+
+    def get_schedule(self, schedule_id: str) -> ScheduleRecord:
+        return self.schedules[schedule_id]
+
+    def update_schedule(self, schedule_id: str, payload: dict[str, Any]) -> ScheduleRecord:
+        schedule = self.schedules[schedule_id]
+        for key, value in payload.items():
+            if hasattr(schedule, key):
+                setattr(schedule, key, value)
+        schedule.updated_at = utc_now()
+        return schedule
+
+    def delete_schedule(self, schedule_id: str) -> bool:
+        if schedule_id in self.schedules:
+            del self.schedules[schedule_id]
+            return True
+        return False
+
+    def trigger_schedule(self, schedule_id: str) -> ScheduleRecord:
+        schedule = self.schedules[schedule_id]
+        schedule.last_run_at = utc_now()
+        schedule.next_run_at = None
+        schedule.updated_at = utc_now()
+        return schedule
+
+    def create_image(self, request: ImageCreateRequest) -> ImageRecord:
+        image = ImageRecord(
+            name=request.name,
+            workspace_id=request.workspace_id,
+            owner_id=request.owner_id,
+            base_image=request.base_image,
+            dockerfile=request.dockerfile,
+            build_args=request.build_args,
+        )
+        self.images[image.image_id] = image
+        return image
+
+    def list_images(self, workspace_id: str | None = None) -> list[ImageRecord]:
+        items = list(self.images.values())
+        if workspace_id:
+            items = [i for i in items if i.workspace_id == workspace_id]
+        return items
+
+    def get_image(self, image_id: str) -> ImageRecord:
+        return self.images[image_id]
+
+    def delete_image(self, image_id: str) -> bool:
+        if image_id in self.images:
+            del self.images[image_id]
+            return True
+        return False
+
+    def build_image(self, image_id: str) -> ImageRecord:
+        image = self.images[image_id]
+        image.status = "building"
+        image.build_log = "Building image..."
+        image.updated_at = utc_now()
+        return image
 
 
 store = InMemoryStore()

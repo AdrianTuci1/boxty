@@ -558,3 +558,55 @@ class WorkloadLogEntry(BaseModel):
     timestamp: datetime = Field(default_factory=utc_now)
     level: str = "info"
     message: str
+
+
+class ScheduleCreateRequest(BaseModel):
+    name: str
+    workspace_id: str
+    environment_id: str
+    owner_id: str
+    workload_id: str
+    cron_expression: str | None = None
+    interval_seconds: int | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ScheduleRecord(BaseModel):
+    schedule_id: str = Field(default_factory=lambda: generated_id("sch"))
+    name: str
+    workspace_id: str
+    environment_id: str
+    owner_id: str
+    workload_id: str
+    cron_expression: str | None = None
+    interval_seconds: int | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    status: str = "active"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    last_run_at: datetime | None = None
+    next_run_at: datetime | None = None
+
+
+class ImageCreateRequest(BaseModel):
+    name: str
+    workspace_id: str
+    owner_id: str
+    base_image: str
+    dockerfile: str | None = None
+    build_args: dict[str, str] = Field(default_factory=dict)
+
+
+class ImageRecord(BaseModel):
+    image_id: str = Field(default_factory=lambda: generated_id("img"))
+    name: str
+    workspace_id: str
+    owner_id: str
+    base_image: str
+    dockerfile: str | None = None
+    build_args: dict[str, str] = Field(default_factory=dict)
+    status: str = "pending"
+    build_log: str = ""
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    built_at: datetime | None = None
