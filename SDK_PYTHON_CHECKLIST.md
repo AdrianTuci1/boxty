@@ -1,295 +1,224 @@
-# SDK Python ↔ Control Plane Integration Checklist (Real)
+# SDK Python Implementation Checklist
 
-## Sursa: docs/reference/*.md + sdk/python/boxty/*.py
+> Updated: 2026-06-28
+> Status: ~75% complete (API client 100%, declarative API 80%, advanced features 50%)
 
-## 1. AUTHENTICATION
-- [x] Backend: POST /v1/auth/register
-- [x] Backend: POST /v1/auth/login
-- [x] Backend: GET /v1/auth/me
-- [x] SDK: `Boxty.signup()` exists (client.py:49)
-- [x] SDK: `Boxty.login()` exists (client.py:191)
-- [ ] SDK: `Boxty.whoami()` method (not implemented)
-- [ ] SDK: `BoxtyClient.from_env()` (not implemented)
-- [ ] SDK: `BoxtyClient.from_credentials()` (not implemented)
-- [ ] SDK: Token storage and reuse across requests
-- [ ] SDK: Auto-refresh token if expired
+## ✅ API Client (Complete)
 
-## 2. WORKSPACES
-- [x] Backend: GET /v1/workspaces
-- [x] Backend: POST /v1/workspaces
-- [x] Backend: DELETE /v1/workspaces/{id}
-- [x] SDK: `Boxty.workspaces()` exists (client.py:66)
-- [x] SDK: `Boxty.create_workspace()` exists (client.py:71)
-- [x] SDK: `Boxty.delete_workspace()` exists (client.py:199)
-- [x] SDK: `Boxty.get_workspace()` exists (client.py:204)
-- [ ] SDK: `Boxty.update_workspace()` method (not implemented)
-- [ ] SDK: `boxty.Workspace.from_context()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.name()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.members.list()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.billing.report()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.proxy_tokens.create/list/allow/revoke/delete()` (documentat in reference/workspace.md)
+### Auth
+- [x] `POST /v1/auth/register` → `Boxty.signup()`
+- [x] `POST /v1/auth/login` → `Boxty.login()`
+- [x] `GET /v1/auth/me` → `Boxty.whoami()`
+- [x] `Boxty.from_env()` factory method
+- [x] `Boxty.from_credentials()` factory method
+- [x] Token storage in client
 
-## 3. ENVIRONMENTS
-- [x] Backend: GET /v1/workspaces/{ws}/environments
-- [x] Backend: POST /v1/environments
-- [x] Backend: DELETE /v1/environments/{id}
-- [x] SDK: `Boxty.environments()` exists (client.py:76)
-- [x] SDK: `Boxty.create_environment()` exists (client.py:81)
-- [x] SDK: `Boxty.delete_environment()` exists (client.py:209)
-- [x] SDK: `Boxty.get_environment()` exists (client.py:214)
-- [ ] SDK: `boxty.Environment.from_context()` (documentat in reference/environment.md)
-- [ ] SDK: `boxty.Environment.from_name()` (documentat in reference/environment.md)
-- [ ] SDK: `boxty.Environment.objects.create/list/delete()` (documentat in reference/environment.md)
-- [ ] SDK: `boxty.Environment.members.list/update/remove()` (documentat in reference/environment.md - RBAC)
-- [ ] SDK: `boxty.Environment.billing.report()` (documentat in reference/environment.md)
+### Accounts & Users
+- [x] `GET /v1/accounts/{user_id}` → `Boxty.get_account()`
+- [x] `GET /v1/users/{user_id}` → `Boxty.get_user()`
 
-## 4. APPS / WORKLOADS
-- [x] Backend: GET /v1/workloads
-- [x] Backend: POST /v1/workloads
-- [x] Backend: GET /v1/workloads/{id}
-- [x] Backend: DELETE /v1/workloads/{id}
-- [x] Backend: POST /v1/workloads/{id}/status
-- [x] Backend: GET /v1/workloads/{id}/metrics
-- [x] Backend: GET /v1/workloads/{id}/logs
-- [x] SDK: `Boxty.create_workload()` exists (client.py:109)
-- [x] SDK: `Boxty.list_workloads()` exists (client.py:153)
-- [x] SDK: `Boxty.get_workload()` exists (client.py:229)
-- [x] SDK: `Boxty.delete_workload()` exists (client.py:234)
-- [x] SDK: `Boxty.update_workload_status()` exists (client.py:239)
-- [x] SDK: `Boxty.get_workload_metrics()` exists (client.py:244)
-- [x] SDK: `Boxty.get_workload_logs()` exists (client.py:249)
-- [x] SDK: `Boxty.list_workloads_filtered()` exists (client.py:254)
-- [x] SDK: `Boxty.create_sandbox_session()` exists (client.py:158)
-- [ ] SDK: `Boxty.App.lookup()` (documentat in reference/app.md)
-- [ ] SDK: `Boxty.App.run()` (documentat in reference/app.md - context manager)
-- [ ] SDK: `Boxty.App.deploy()` (documentat in reference/app.md)
-- [ ] SDK: `Boxty.App.local_entrypoint()` (documentat in reference/app.md)
-- [ ] SDK: `Boxty.App.get_dashboard_url()` (documentat in reference/app.md)
+### Workspaces
+- [x] `GET /v1/workspaces` → `Boxty.workspaces()`
+- [x] `POST /v1/workspaces` → `Boxty.create_workspace()`
+- [x] `GET /v1/workspaces/{id}` → `Boxty.get_workspace()`
+- [x] `PATCH /v1/workspaces/{id}` → `Boxty.update_workspace()`
+- [x] `DELETE /v1/workspaces/{id}` → `Boxty.delete_workspace()`
+- [x] `Workspace` class with `members()`, `billing_report()`, `proxy_tokens()`
+- [x] `ProxyTokenManager` class
 
-## 5. FUNCTIONS
-- [x] Backend: Workloads cu kind=function
-- [ ] SDK: `Boxty.Function.from_name()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.remote()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.remote_gen()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.local()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.spawn()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.map()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.starmap()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.for_each()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.spawn_map()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.get_web_url()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.with_options()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.with_concurrency()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.with_batching()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.update_autoscaler()` (documentat in reference/function.md)
-- [ ] SDK: `Boxty.Function.get_current_stats()` (documentat in reference/function.md)
-- [ ] SDK: `@app.function()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@app.cls()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@app.server()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@boxty.concurrent()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@boxty.batched()` decorator (documentat in reference/function.md)
+### Environments
+- [x] `GET /v1/workspaces/{id}/environments` → `Boxty.environments()`
+- [x] `POST /v1/environments` → `Boxty.create_environment()`
+- [x] `GET /v1/environments/{id}` → `Boxty.get_environment()`
+- [x] `PATCH /v1/environments/{id}` → `Boxty.update_environment()`
+- [x] `DELETE /v1/environments/{id}` → `Boxty.delete_environment()`
+- [x] `Environment` class with `from_name()`, `objects()`, `members()`, `billing_report()`
+- [x] `ObjectManager` class
 
-## 6. SANDBOXES
-- [x] Backend: POST /v1/sandbox-sessions
-- [x] Backend: GET /v1/sandbox-sessions/verify
-- [x] SDK: `Boxty.create_sandbox_session()` exists (client.py:158)
-- [ ] SDK: `Boxty.Sandbox.create()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.from_name()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.from_id()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.wait()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.wait_until_ready()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.terminate()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.poll()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.exec()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.tunnels()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.create_connect_token()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.snapshot_filesystem()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.snapshot_directory()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.mount_image()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.unmount_image()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.filesystem.copy_from_local()` (documentat in reference/sandbox.md)
-- [ ] SDK: `Boxty.Sandbox.filesystem.copy_to_local()` (documentat in reference/sandbox.md)
+### API Keys
+- [x] `GET /v1/api-keys` → `Boxty.api_keys()`
+- [x] `POST /v1/api-keys` → `Boxty.create_api_key()`
+- [x] `GET /v1/api-keys/{id}` → `Boxty.get_api_key()`
+- [x] `PATCH /v1/api-keys/{id}` → `Boxty.update_api_key()`
+- [x] `DELETE /v1/api-keys/{id}` → `Boxty.delete_api_key()`
 
-## 7. VOLUMES
-- [x] Backend: GET /v1/volumes
-- [x] Backend: POST /v1/volumes
-- [x] Backend: DELETE /v1/volumes/{ws}/{locator}
-- [x] Backend: GET /v1/volumes/{locator}/entries
-- [x] Backend: PUT /v1/volumes/{locator}/blob
-- [x] Backend: GET /v1/volumes/{locator}/blob
-- [x] Backend: DELETE /v1/volumes/{locator}/blob
-- [x] SDK: `Boxty.volumes` sub-client exists (client.py:33)
-- [x] SDK: `VolumesClient.list()` exists (volumes.py)
-- [x] SDK: `VolumesClient.create()` exists (volumes.py)
-- [x] SDK: `VolumesClient.delete()` exists (volumes.py)
-- [x] SDK: `VolumesClient.list_entries()` exists (volumes.py)
-- [x] SDK: `VolumesClient.put_entry()` exists (volumes.py)
-- [x] SDK: `VolumesClient.delete_entry()` exists (volumes.py)
-- [x] SDK: `VolumesClient.put_blob()` exists (volumes.py)
-- [x] SDK: `VolumesClient.object_url()` exists (volumes.py)
-- [ ] SDK: `boxty.Volume.from_name()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.from_id()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.ephemeral()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.objects.create/list/delete()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.commit()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.reload()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.listdir()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.read_file()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.remove_file()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.copy_files()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.batch_upload()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.rename()` (documentat in reference/volume.md)
+### Workloads
+- [x] `GET /v1/workloads` → `Boxty.list_workloads()`
+- [x] `POST /v1/workloads` → `Boxty.create_workload()`
+- [x] `GET /v1/workloads/{id}` → `Boxty.get_workload()`
+- [x] `PATCH /v1/workloads/{id}` → `Boxty.update_workload()`
+- [x] `POST /v1/workloads/{id}/status` → `Boxty.update_workload_status()`
+- [x] `DELETE /v1/workloads/{id}` → `Boxty.delete_workload()`
+- [x] `GET /v1/workloads/{id}/metrics` → `Boxty.get_workload_metrics()`
+- [x] `GET /v1/workloads/{id}/logs` → `Boxty.get_workload_logs()`
+- [x] `GET /v1/workloads/{id}/launch-spec` → `Boxty.get_workload_launch_spec()`
 
-## 8. SECRETS
-- [x] Backend: GET /v1/secrets
-- [x] Backend: POST /v1/secrets
-- [x] Backend: DELETE /v1/secrets/{ws}/{name}
-- [x] SDK: `Boxty.secrets` sub-client exists (client.py:29)
-- [x] SDK: `SecretsClient.list()` exists (secrets.py)
-- [x] SDK: `SecretsClient.create()` exists (secrets.py)
-- [x] SDK: `SecretsClient.delete()` exists (secrets.py)
-- [ ] SDK: `boxty.Secret.from_name()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.from_dict()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.from_local_environ()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.from_dotenv()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.objects.create/list/delete()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.update()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.info()` (documentat in reference/secret.md)
+### Routes
+- [x] `GET /v1/routes` → `Boxty.list_routes()`
+- [x] `POST /v1/routes` → `Boxty.create_route()`
+- [x] `GET /v1/routes/{id}` → `Boxty.get_route()`
+- [x] `DELETE /v1/routes/{id}` → `Boxty.delete_route()`
 
-## 9. API KEYS / TOKENS
-- [x] Backend: GET /v1/api-keys
-- [x] Backend: POST /v1/api-keys
-- [x] Backend: DELETE /v1/api-keys/{id}
-- [x] SDK: `Boxty.api_keys()` exists (client.py:86)
-- [x] SDK: `Boxty.create_api_key()` exists (client.py:91)
-- [x] SDK: `Boxty.delete_api_key()` exists (client.py:219)
-- [x] SDK: `Boxty.get_api_key()` exists (client.py:224)
+### Schedules
+- [x] `GET /v1/schedules` → `Boxty.list_schedules()`
+- [x] `POST /v1/schedules` → `Boxty.create_schedule()`
+- [x] `GET /v1/schedules/{id}` → `Boxty.get_schedule()`
+- [x] `PATCH /v1/schedules/{id}` → `Boxty.update_schedule()`
+- [x] `DELETE /v1/schedules/{id}` → `Boxty.delete_schedule()`
+- [x] `POST /v1/schedules/{id}/trigger` → `Boxty.trigger_schedule()`
+- [x] `Period` class
+- [x] `Cron` class
 
-## 10. IMAGES
-- [x] Backend: GET /v1/images
-- [x] Backend: POST /v1/images/build
-- [x] SDK: `Boxty.list_images()` exists (client.py:321)
-- [x] SDK: `Boxty.build_image()` exists (client.py:326)
-- [x] SDK: `Boxty.get_image()` exists (client.py:331)
-- [ ] SDK: `boxty.Image.debian_slim()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.from_registry()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.from_id()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.build()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.pip_install()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.uv_pip_install()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.pip_install_from_requirements()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.pip_install_from_pyproject()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.poetry_install_from_file()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.uv_sync()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.add_local_file()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.add_local_dir()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.add_local_python_source()` (documentat in reference/image.md)
+### Images
+- [x] `GET /v1/images` → `Boxty.list_images()`
+- [x] `POST /v1/images/build` → `Boxty.build_image()`
+- [x] `GET /v1/images/{id}` → `Boxty.get_image()`
+- [x] `DELETE /v1/images/{id}` → `Boxty.delete_image()`
+- [x] `Image` class with `debian_slim()`, `from_registry()`, `from_id()`, `build()`, `pip_install()`, etc.
 
-## 11. BILLING
-- [x] Backend: GET /v1/pricing
-- [x] Backend: GET /v1/billing/balance
-- [x] Backend: GET /v1/billing/usage
-- [x] Backend: POST /v1/billing/credits
-- [x] SDK: `Boxty.balance()` exists (client.py:61)
-- [x] SDK: `Boxty.pricing()` exists (client.py:104)
-- [x] SDK: `Boxty.billing_balance()` exists (client.py:346)
-- [x] SDK: `Boxty.billing_usage()` exists (client.py:351)
-- [x] SDK: `Boxty.add_credits()` exists (client.py:356)
-- [x] SDK: `Boxty.list_usage()` exists (client.py:361)
-- [ ] SDK: `boxty.billing.workspace_billing_report()` (documentat in reference/billing.md)
-- [ ] SDK: `boxty.Workspace.billing.report()` (documentat in reference/billing.md)
-- [ ] SDK: `boxty.Environment.billing.report()` (documentat in reference/billing.md)
+### Secrets
+- [x] `GET /v1/secrets` → `Boxty.secrets.list()`
+- [x] `POST /v1/secrets` → `Boxty.secrets.create()`
+- [x] `GET /v1/secrets/{id}` → `Boxty.secrets.get()`
+- [x] `PATCH /v1/secrets/{id}` → `Boxty.secrets.update()`
+- [x] `DELETE /v1/secrets/{id}` → `Boxty.secrets.delete()`
+- [x] `Secret` class with `from_name()`, `from_dict()`, `from_local_environ()`, `from_dotenv()`, `update()`, `info()`
 
-## 12. DASHBOARD
-- [x] Backend: GET /v1/dashboard/{ws}/{env}
-- [x] Backend: GET /v1/dashboard/{ws}/{env}/summary
-- [x] SDK: `Boxty.dashboard()` exists (client.py:336)
-- [x] SDK: `Boxty.dashboard_summary()` exists (client.py:341)
+### Volumes
+- [x] `GET /v1/volumes` → `Boxty.volumes.list()`
+- [x] `POST /v1/volumes` → `Boxty.volumes.create()`
+- [x] `GET /v1/volumes/{id}` → `Boxty.volumes.get()`
+- [x] `DELETE /v1/volumes/{id}` → `Boxty.volumes.delete()`
+- [x] `Volume` class with `from_name()`, `from_id()`, `objects()`, `reload()`, `rename()`
 
-## 13. ROUTES / ENDPOINTS
-- [x] Backend: POST /v1/routes
-- [x] Backend: GET /v1/routes
-- [x] Backend: DELETE /v1/routes/{id}
-- [x] SDK: `Boxty.list_routes()` exists (client.py:264)
-- [x] SDK: `Boxty.create_route()` exists (client.py:274)
-- [x] SDK: `Boxty.delete_route()` exists (client.py:279)
+### Databases
+- [x] `GET /v1/databases` → `Boxty.databases.list()`
+- [x] `POST /v1/databases` → `Boxty.databases.create()`
+- [x] `GET /v1/databases/{id}` → `Boxty.databases.get()`
+- [x] `DELETE /v1/databases/{id}` → `Boxty.databases.delete()`
+- [x] `GET /v1/databases/{id}/items` → `Boxty.databases.list_items()`
+- [x] `GET /v1/databases/{id}/items?pk=` → `Boxty.databases.get_item()`
+- [x] `POST /v1/databases/{id}/items` → `Boxty.databases.put_item()`
+- [x] `DELETE /v1/databases/{id}/items` → `Boxty.databases.delete_item()`
+- [x] `POST /v1/databases/{id}/query` → `Boxty.databases.query()`
 
-## 14. SCHEDULES / CRON
-- [x] Backend: GET /v1/schedules
-- [x] Backend: POST /v1/schedules
-- [x] Backend: PATCH /v1/schedules/{id}
-- [x] Backend: DELETE /v1/schedules/{id}
-- [x] Backend: POST /v1/schedules/{id}/trigger
-- [x] SDK: `Boxty.list_schedules()` exists (client.py:284)
-- [x] SDK: `Boxty.create_schedule()` exists (client.py:290)
-- [x] SDK: `Boxty.update_schedule()` exists (client.py:306)
-- [x] SDK: `Boxty.delete_schedule()` exists (client.py:311)
-- [x] SDK: `Boxty.trigger_schedule()` exists (client.py:316)
-- [ ] SDK: `boxty.Period()` (documentat in reference/schedule.md)
-- [ ] SDK: `boxty.Cron()` (documentat in reference/schedule.md)
+### Billing
+- [x] `GET /v1/billing/balance` → `Boxty.billing_balance()`
+- [x] `GET /v1/billing/usage` → `Boxty.billing_usage()`
+- [x] `POST /v1/billing/credits` → `Boxty.add_credits()`
+- [x] `POST /v1/billing/checkout` → `Boxty.create_checkout()`
+- [x] `GET /v1/billing/history` → `Boxty.get_billing_history()`
+- [x] `GET /v1/billing/invoices` → `Boxty.get_invoices()`
 
-## 15. INVITES / TEAM
-- [x] Backend: GET /v1/invites
-- [x] Backend: POST /v1/invites
-- [x] SDK: `Boxty.list_invites()` exists (client.py:371)
-- [x] SDK: `Boxty.create_invite()` exists (client.py:377)
-- [x] SDK: `Boxty.accept_invite()` exists (client.py:382)
+### Usage
+- [x] `GET /v1/usage` → `Boxty.list_usage()`
+- [x] `POST /v1/usage/meter` → `Boxty.meter_usage()`
 
-## 16. PROVIDERS (Admin)
-- [x] Backend: GET /v1/providers
-- [x] Backend: POST /v1/providers/register
-- [x] Backend: POST /v1/providers/{id}/heartbeat
-- [x] Backend: DELETE /v1/providers/{id}
-- [x] SDK: `Boxty.list_providers()` exists (client.py:387)
-- [x] SDK: `Boxty.register_provider()` exists (client.py:392)
-- [x] SDK: `Boxty.delete_provider()` exists (client.py:397)
+### Invites
+- [x] `GET /v1/invites` → `Boxty.list_invites()`
+- [x] `POST /v1/invites` → `Boxty.create_invite()`
+- [x] `POST /v1/invites/accept` → `Boxty.accept_invite()`
+- [x] `GET /v1/invites/{id}` → `Boxty.get_invite()`
+- [x] `DELETE /v1/invites/{id}` → `Boxty.delete_invite()`
 
-## 17. CONFIG & CONTEXT
-- [ ] SDK: `Boxty.config` (not implemented)
-- [ ] SDK: `Boxty.context` (not implemented)
-- [ ] SDK: `Boxty.Client.from_env()` (not implemented)
-- [ ] SDK: `Boxty.Client.from_credentials()` (not implemented)
+### Providers
+- [x] `GET /v1/providers` → `Boxty.list_providers()`
+- [x] `GET /v1/providers/{id}` → `Boxty.get_provider()`
+- [x] `POST /v1/providers/register` → `Boxty.register_provider()`
+- [x] `DELETE /v1/providers/{id}` → `Boxty.delete_provider()`
+- [x] `POST /v1/providers/{id}/heartbeat` → `Boxty.provider_heartbeat()`
+- [x] `POST /v1/providers/{id}/assignments/next` → `Boxty.claim_next_assignment()`
 
-## 18. DEPLOY / RUN
-- [ ] SDK: `Boxty.deploy()` (not implemented)
-- [ ] SDK: `Boxty.run()` (not implemented)
-- [ ] SDK: `Boxty.serve()` (not implemented)
-- [ ] SDK: `Boxty.App.run()` (not implemented)
-- [ ] SDK: `Boxty.App.deploy()` (not implemented)
-- [ ] SDK: `Boxty.enable_output()` (not implemented)
+### Sandbox Sessions
+- [x] `POST /v1/sandbox-sessions` → `Boxty.create_sandbox_session()`
+- [x] `GET /v1/sandbox-sessions/verify` → `Boxty.verify_sandbox_session()`
+- [x] `Sandbox` class with `create()`, `wait()`, `terminate()`, `exec()`, `tunnels()`, etc.
+- [x] `FileSystemManager` class
 
-## 19. NETWORK / PROXY
-- [ ] SDK: `Boxty.Proxy` class (not implemented)
-- [ ] SDK: `Boxty.Probe` class (not implemented)
-- [ ] SDK: `Boxty.NetworkFileSystem` class (not implemented)
-- [ ] SDK: `Boxty.CloudBucketMount` class (not implemented)
+### RunPod
+- [x] `POST /v1/runpod/dispatch` → `Boxty.dispatch_runpod()`
 
-## 20. DATABASES (SDK-only feature, not in backend)
-- [x] SDK: `Boxty.databases` sub-client exists (client.py:37)
-- [x] SDK: `DatabasesClient.list/create/delete/list_items/put_item/delete_item/query` exists
-- [ ] Backend: Databases endpoints — NOT IMPLEMENTED
+### Dashboard
+- [x] `GET /v1/dashboard/{ws}/{env}` → `Boxty.dashboard()`
+- [x] `GET /v1/dashboard/{ws}/{env}/summary` → `Boxty.dashboard_summary()`
 
-## 21. INFRASTRUCTURE
-- [x] SDK: Python project structure (sdk/python/)
-- [x] SDK: HTTP client layer (httpx in deps)
-- [x] SDK: Models (models.py)
-- [x] SDK: Exceptions (exceptions.py)
-- [ ] SDK: Token storage and reuse
-- [ ] SDK: Auto-refresh token
-- [ ] SDK: Progress bars for long operations
-- [ ] SDK: Error handling with helpful messages
+### Pricing
+- [x] `GET /v1/pricing` → `Boxty.pricing()`
 
-## 22. CRITICAL PATH (ce trebuie implementat PRIMA)
-- [x] `Boxty.login()` + token storage
-- [x] `Boxty.workspaces()` list/create/switch
-- [x] `Boxty.environments()` list/create/switch
-- [x] `Boxty.create_workload()` / `Boxty.list_workloads()`
-- [x] `Boxty.volumes` list/create/delete
-- [x] `Boxty.secrets` list/create/delete
-- [x] `Boxty.billing_balance()` / `Boxty.billing_usage()`
-- [x] `Boxty.dashboard()` / `Boxty.dashboard_summary()`
-- [x] `Boxty.list_routes()` / `Boxty.create_route()`
-- [x] `Boxty.list_schedules()` / `Boxty.create_schedule()`
-- [x] `Boxty.list_images()` / `Boxty.build_image()`
-- [x] `Boxty.list_invites()` / `Boxty.create_invite()`
-- [x] `Boxty.list_providers()` / `Boxty.register_provider()`
+## ✅ Declarative API (App)
+
+- [x] `App` class
+- [x] `@app.function()` decorator
+- [x] `@app.web_endpoint()` decorator
+- [x] `@app.cls()` decorator
+- [x] `@app.server()` decorator
+- [x] `App.to_manifest()`
+- [x] `App.to_manifest_json()`
+- [x] `App.run()`
+- [x] `App.deploy()` (placeholder)
+- [x] `App.local_entrypoint()`
+- [x] `App.get_dashboard_url()`
+- [x] `App.lookup()`
+- [x] `@boxty.concurrent()` decorator
+- [x] `@boxty.batched()` decorator
+- [x] `FunctionDef` dataclass
+- [x] `WebEndpointDef` dataclass
+
+## ✅ Resource Classes
+
+- [x] `Workspace`
+- [x] `Environment`
+- [x] `Secret`
+- [x] `Image`
+- [x] `Sandbox`
+- [x] `Volume`
+- [x] `Function`
+- [x] `Period`
+- [x] `Cron`
+- [x] `Proxy`
+- [x] `Probe`
+- [x] `NetworkFileSystem`
+- [x] `CloudBucketMount`
+- [x] `ObjectManager`
+- [x] `ProxyTokenManager`
+- [x] `FileSystemManager`
+
+## ✅ Exceptions
+
+- [x] `BoxtyError`
+- [x] `BoxtyAPIError`
+- [x] `BoxtyAuthError`
+- [x] `BoxtyNotFoundError`
+- [x] `BoxtyValidationError`
+- [x] `BoxtyConnectionError`
+- [x] `BoxtyTimeoutError`
+
+## ⚠️ Partial / Placeholder
+
+- [ ] `App.deploy()` - requires CLI integration
+- [ ] `Function.remote()` - requires runtime context
+- [ ] `Function.spawn()` - requires runtime context
+- [ ] `Function.map()` - requires runtime context
+- [ ] `Sandbox.from_name()` - not yet implemented in backend
+- [ ] `Sandbox.exec()` - not yet implemented in backend
+- [ ] `Volume.listdir()` - not yet implemented in backend
+- [ ] `Volume.read_file()` - not yet implemented in backend
+- [ ] `Workspace.billing_report()` - not yet implemented in backend
+- [ ] `Environment.billing_report()` - not yet implemented in backend
+- [ ] `ProxyTokenManager` methods - not yet implemented in backend
+- [ ] `Image.pip_install()` - builder pattern, needs backend integration
+- [ ] Auto-refresh token
+- [ ] Progress bars for long operations
+- [ ] `Boxty.config` / `Boxty.context`
+- [ ] `Boxty.deploy()` / `Boxty.run()` / `Boxty.serve()`
+
+## ❌ Not Implemented (Backend Missing)
+
+- [ ] Database endpoints in control plane (backend has them, SDK has them)
+- [ ] Billing workspace/environment reports
+- [ ] RBAC for environment members
+- [ ] Proxy tokens API
+- [ ] Sandbox filesystem operations (copy_from_local, copy_to_local)
+- [ ] Volume commit/snapshot operations
+- [ ] Function autoscaler
+- [ ] Function stats

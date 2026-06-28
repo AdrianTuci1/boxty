@@ -1,290 +1,203 @@
-# SDK JS ↔ Control Plane Integration Checklist (Real)
+# SDK JavaScript Implementation Checklist
 
-## Sursa: docs/reference/*.md + docs/guide/sdk-javascript-go.md + sdk/js/dist/client.d.ts
+> Updated: 2026-06-28
+> Status: ~75% complete (API client 100%, declarative API 80%, advanced features 50%)
 
-## 1. AUTHENTICATION
-- [x] Backend: POST /v1/auth/register
-- [x] Backend: POST /v1/auth/login
-- [x] Backend: GET /v1/auth/me
-- [x] SDK: `BoxtyClient.signup()` method (client.ts)
-- [x] SDK: `BoxtyClient.login()` method (client.ts)
-- [ ] SDK: `BoxtyClient.whoami()` method (not implemented)
-- [ ] SDK: Token storage and reuse across requests
-- [ ] SDK: Auto-refresh token if expired
-- [ ] SDK: `BoxtyClient.from_env()` (documentat in reference/client.md)
-- [ ] SDK: `BoxtyClient.from_credentials()` (documentat in reference/client.md)
+## ✅ API Client (Complete)
 
-## 2. WORKSPACES
-- [x] Backend: GET /v1/workspaces
-- [x] Backend: POST /v1/workspaces
-- [x] Backend: DELETE /v1/workspaces/{id}
-- [x] SDK: `BoxtyClient.listWorkspaces()` method (client.ts)
-- [x] SDK: `BoxtyClient.createWorkspace()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteWorkspace()` method (client.ts)
-- [x] SDK: `BoxtyClient.getWorkspace()` method (client.ts)
-- [ ] SDK: `boxty.Workspace.from_context()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.members.list()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.billing.report()` (documentat in reference/workspace.md)
-- [ ] SDK: `boxty.Workspace.proxy_tokens.create/list/allow/revoke/delete()` (documentat in reference/workspace.md)
+### Auth
+- [x] `POST /v1/auth/register` → `BoxtyClient.signup()`
+- [x] `POST /v1/auth/login` → `BoxtyClient.login()`
+- [x] `GET /v1/auth/me` → `BoxtyClient.whoami()`
+- [x] `BoxtyClient.fromEnv()` factory method
+- [x] `BoxtyClient.fromCredentials()` factory method
+- [x] Token storage in client
 
-## 3. ENVIRONMENTS
-- [x] Backend: GET /v1/workspaces/{ws}/environments
-- [x] Backend: POST /v1/environments
-- [x] Backend: DELETE /v1/environments/{id}
-- [x] SDK: `BoxtyClient.listEnvironments()` method (client.ts)
-- [x] SDK: `BoxtyClient.createEnvironment()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteEnvironment()` method (client.ts)
-- [x] SDK: `BoxtyClient.getEnvironment()` method (client.ts)
-- [ ] SDK: `boxty.Environment.from_context()` (documentat in reference/environment.md)
-- [ ] SDK: `boxty.Environment.from_name()` (documentat in reference/environment.md)
-- [ ] SDK: `boxty.Environment.objects.create/list/delete()` (documentat in reference/environment.md)
-- [ ] SDK: `boxty.Environment.members.list/update/remove()` (documentat in reference/environment.md - RBAC)
-- [ ] SDK: `boxty.Environment.billing.report()` (documentat in reference/environment.md)
+### Accounts & Users
+- [x] `GET /v1/accounts/{user_id}` → `BoxtyClient.getAccount()`
+- [x] `GET /v1/users/{user_id}` → `BoxtyClient.getUser()`
 
-## 4. APPS / WORKLOADS
-- [x] Backend: GET /v1/workloads
-- [x] Backend: POST /v1/workloads
-- [x] Backend: GET /v1/workloads/{id}
-- [x] Backend: DELETE /v1/workloads/{id}
-- [x] Backend: POST /v1/workloads/{id}/status
-- [x] Backend: GET /v1/workloads/{id}/metrics
-- [x] Backend: GET /v1/workloads/{id}/logs
-- [x] SDK: `BoxtyClient.listWorkloads()` method (client.ts)
-- [x] SDK: `BoxtyClient.createWorkload()` method (client.ts)
-- [x] SDK: `BoxtyClient.getWorkload()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteWorkload()` method (client.ts)
-- [x] SDK: `BoxtyClient.updateWorkloadStatus()` method (client.ts)
-- [x] SDK: `BoxtyClient.getWorkloadMetrics()` method (client.ts)
-- [x] SDK: `BoxtyClient.getWorkloadLogs()` method (client.ts)
-- [ ] SDK: `BoxtyClient.App.lookup()` (documentat in reference/app.md)
-- [ ] SDK: `BoxtyClient.App.run()` (documentat in reference/app.md - context manager)
-- [ ] SDK: `BoxtyClient.App.deploy()` (documentat in reference/app.md)
-- [ ] SDK: `BoxtyClient.App.local_entrypoint()` (documentat in reference/app.md)
-- [ ] SDK: `BoxtyClient.App.get_dashboard_url()` (documentat in reference/app.md)
+### Workspaces
+- [x] `GET /v1/workspaces` → `BoxtyClient.listWorkspaces()`
+- [x] `POST /v1/workspaces` → `BoxtyClient.createWorkspace()`
+- [x] `GET /v1/workspaces/{id}` → `BoxtyClient.getWorkspace()`
+- [x] `PATCH /v1/workspaces/{id}` → `BoxtyClient.updateWorkspace()`
+- [x] `DELETE /v1/workspaces/{id}` → `BoxtyClient.deleteWorkspace()`
+- [x] `Workspace` class with `members()`, `billingReport()`, `proxyTokens()`
+- [x] `ProxyTokenManager` class
 
-## 5. FUNCTIONS
-- [x] Backend: Workloads cu kind=function
-- [ ] SDK: `BoxtyClient.Function.from_name()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.remote()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.remote_gen()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.local()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.spawn()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.map()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.starmap()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.for_each()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.spawn_map()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.get_web_url()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.with_options()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.with_concurrency()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.with_batching()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.update_autoscaler()` (documentat in reference/function.md)
-- [ ] SDK: `BoxtyClient.Function.get_current_stats()` (documentat in reference/function.md)
-- [ ] SDK: `@app.function()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@app.cls()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@app.server()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@boxty.concurrent()` decorator (documentat in reference/function.md)
-- [ ] SDK: `@boxty.batched()` decorator (documentat in reference/function.md)
+### Environments
+- [x] `GET /v1/workspaces/{id}/environments` → `BoxtyClient.listEnvironments()`
+- [x] `POST /v1/environments` → `BoxtyClient.createEnvironment()`
+- [x] `GET /v1/environments/{id}` → `BoxtyClient.getEnvironment()`
+- [x] `PATCH /v1/environments/{id}` → `BoxtyClient.updateEnvironment()`
+- [x] `DELETE /v1/environments/{id}` → `BoxtyClient.deleteEnvironment()`
+- [x] `Environment` class with `fromName()`, `objects()`, `members()`, `billingReport()`
+- [x] `ObjectManager` class
 
-## 6. SANDBOXES
-- [x] Backend: POST /v1/sandbox-sessions
-- [x] Backend: GET /v1/sandbox-sessions/verify
-- [ ] SDK: `BoxtyClient.Sandbox.create()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.from_name()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.from_id()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.wait()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.wait_until_ready()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.terminate()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.poll()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.exec()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.tunnels()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.create_connect_token()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.snapshot_filesystem()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.snapshot_directory()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.mount_image()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.unmount_image()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.filesystem.copy_from_local()` (documentat in reference/sandbox.md)
-- [ ] SDK: `BoxtyClient.Sandbox.filesystem.copy_to_local()` (documentat in reference/sandbox.md)
+### API Keys
+- [x] `GET /v1/api-keys` → `BoxtyClient.listApiKeys()`
+- [x] `POST /v1/api-keys` → `BoxtyClient.createApiKey()`
+- [x] `GET /v1/api-keys/{id}` → `BoxtyClient.getApiKey()`
+- [x] `PATCH /v1/api-keys/{id}` → `BoxtyClient.updateApiKey()`
+- [x] `DELETE /v1/api-keys/{id}` → `BoxtyClient.deleteApiKey()`
 
-## 7. VOLUMES
-- [x] Backend: GET /v1/volumes
-- [x] Backend: POST /v1/volumes
-- [x] Backend: DELETE /v1/volumes/{ws}/{locator}
-- [x] Backend: GET /v1/volumes/{locator}/entries
-- [x] Backend: PUT /v1/volumes/{locator}/blob
-- [x] Backend: GET /v1/volumes/{locator}/blob
-- [x] Backend: DELETE /v1/volumes/{locator}/blob
-- [x] SDK: `BoxtyClient.listVolumes()` method (client.ts)
-- [x] SDK: `BoxtyClient.createVolume()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteVolume()` method (client.ts)
-- [x] SDK: `BoxtyClient.listVolumeEntries()` method (client.ts)
-- [x] SDK: `BoxtyClient.putVolumeEntry()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteVolumeEntry()` method (client.ts)
-- [x] SDK: `BoxtyClient.putVolumeBlob()` method (client.ts)
-- [x] SDK: `BoxtyClient.objectUrl()` method (client.ts)
-- [ ] SDK: `boxty.Volume.from_name()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.from_id()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.ephemeral()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.objects.create/list/delete()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.commit()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.reload()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.listdir()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.read_file()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.remove_file()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.copy_files()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.batch_upload()` (documentat in reference/volume.md)
-- [ ] SDK: `boxty.Volume.rename()` (documentat in reference/volume.md)
+### Workloads
+- [x] `GET /v1/workloads` → `BoxtyClient.listWorkloads()`
+- [x] `POST /v1/workloads` → `BoxtyClient.createWorkload()`
+- [x] `GET /v1/workloads/{id}` → `BoxtyClient.getWorkload()`
+- [x] `PATCH /v1/workloads/{id}` → `BoxtyClient.updateWorkload()`
+- [x] `POST /v1/workloads/{id}/status` → `BoxtyClient.updateWorkloadStatus()`
+- [x] `DELETE /v1/workloads/{id}` → `BoxtyClient.deleteWorkload()`
+- [x] `GET /v1/workloads/{id}/metrics` → `BoxtyClient.getWorkloadMetrics()`
+- [x] `GET /v1/workloads/{id}/logs` → `BoxtyClient.getWorkloadLogs()`
+- [x] `GET /v1/workloads/{id}/launch-spec` → `BoxtyClient.getWorkloadLaunchSpec()`
 
-## 8. SECRETS
-- [x] Backend: GET /v1/secrets
-- [x] Backend: POST /v1/secrets
-- [x] Backend: DELETE /v1/secrets/{ws}/{name}
-- [x] SDK: `BoxtyClient.listSecrets()` method (client.ts)
-- [x] SDK: `BoxtyClient.createSecret()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteSecret()` method (client.ts)
-- [ ] SDK: `boxty.Secret.from_name()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.from_dict()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.from_local_environ()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.from_dotenv()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.objects.create/list/delete()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.update()` (documentat in reference/secret.md)
-- [ ] SDK: `boxty.Secret.info()` (documentat in reference/secret.md)
+### Routes
+- [x] `GET /v1/routes` → `BoxtyClient.listRoutes()`
+- [x] `POST /v1/routes` → `BoxtyClient.createRoute()`
+- [x] `GET /v1/routes/{id}` → `BoxtyClient.getRoute()`
+- [x] `DELETE /v1/routes/{id}` → `BoxtyClient.deleteRoute()`
 
-## 9. API KEYS / TOKENS
-- [x] Backend: GET /v1/api-keys
-- [x] Backend: POST /v1/api-keys
-- [x] Backend: DELETE /v1/api-keys/{id}
-- [x] SDK: `BoxtyClient.listApiKeys()` method (client.ts)
-- [x] SDK: `BoxtyClient.createApiKey()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteApiKey()` method (client.ts)
+### Schedules
+- [x] `GET /v1/schedules` → `BoxtyClient.listSchedules()`
+- [x] `POST /v1/schedules` → `BoxtyClient.createSchedule()`
+- [x] `GET /v1/schedules/{id}` → `BoxtyClient.getSchedule()`
+- [x] `PATCH /v1/schedules/{id}` → `BoxtyClient.updateSchedule()`
+- [x] `DELETE /v1/schedules/{id}` → `BoxtyClient.deleteSchedule()`
+- [x] `POST /v1/schedules/{id}/trigger` → `BoxtyClient.triggerSchedule()`
+- [x] `Period` class
+- [x] `Cron` class
 
-## 10. IMAGES
-- [x] Backend: GET /v1/images
-- [x] Backend: POST /v1/images/build
-- [x] SDK: `BoxtyClient.listImages()` method (client.ts)
-- [x] SDK: `BoxtyClient.buildImage()` method (client.ts)
-- [x] SDK: `BoxtyClient.getImage()` method (client.ts)
-- [ ] SDK: `boxty.Image.debian_slim()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.from_registry()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.from_id()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.build()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.pip_install()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.uv_pip_install()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.pip_install_from_requirements()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.pip_install_from_pyproject()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.poetry_install_from_file()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.uv_sync()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.add_local_file()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.add_local_dir()` (documentat in reference/image.md)
-- [ ] SDK: `boxty.Image.add_local_python_source()` (documentat in reference/image.md)
+### Images
+- [x] `GET /v1/images` → `BoxtyClient.listImages()`
+- [x] `POST /v1/images/build` → `BoxtyClient.buildImage()`
+- [x] `GET /v1/images/{id}` → `BoxtyClient.getImage()`
+- [x] `DELETE /v1/images/{id}` → `BoxtyClient.deleteImage()`
+- [x] `Image` class with `debianSlim()`, `fromRegistry()`, `fromId()`, `build()`, `pipInstall()`, etc.
 
-## 11. BILLING
-- [x] Backend: GET /v1/pricing
-- [x] Backend: GET /v1/billing/balance
-- [x] Backend: GET /v1/billing/usage
-- [x] Backend: POST /v1/billing/credits
-- [x] SDK: `BoxtyClient.getBalance()` method (client.ts)
-- [x] SDK: `BoxtyClient.getUsage()` method (client.ts)
-- [x] SDK: `BoxtyClient.addCredits()` method (client.ts)
-- [x] SDK: `BoxtyClient.getPricing()` method (client.ts)
-- [ ] SDK: `boxty.billing.workspace_billing_report()` (documentat in reference/billing.md)
-- [ ] SDK: `boxty.Workspace.billing.report()` (documentat in reference/billing.md)
-- [ ] SDK: `boxty.Environment.billing.report()` (documentat in reference/billing.md)
+### Secrets
+- [x] `GET /v1/secrets` → `BoxtyClient.listSecrets()`
+- [x] `POST /v1/secrets` → `BoxtyClient.createSecret()`
+- [x] `GET /v1/secrets/{id}` → `BoxtyClient.getSecret()`
+- [x] `PATCH /v1/secrets/{id}` → `BoxtyClient.updateSecret()`
+- [x] `DELETE /v1/secrets/{id}` → `BoxtyClient.deleteSecret()`
+- [x] `Secret` class with `fromName()`, `fromDict()`, `fromLocalEnviron()`, `update()`, `info()`
 
-## 12. DASHBOARD
-- [x] Backend: GET /v1/dashboard/{ws}/{env}
-- [x] Backend: GET /v1/dashboard/{ws}/{env}/summary
-- [x] SDK: `BoxtyClient.getDashboard()` method (client.ts)
-- [x] SDK: `BoxtyClient.getDashboardSummary()` method (client.ts)
+### Volumes
+- [x] `GET /v1/volumes` → `BoxtyClient.listVolumes()`
+- [x] `POST /v1/volumes` → `BoxtyClient.createVolume()`
+- [x] `GET /v1/volumes/{id}` → `BoxtyClient.getVolume()`
+- [x] `DELETE /v1/volumes/{id}` → `BoxtyClient.deleteVolume()`
+- [x] `Volume` class with `fromName()`, `fromId()`, `objects()`, `reload()`, `rename()`
 
-## 13. ROUTES / ENDPOINTS
-- [x] Backend: POST /v1/routes
-- [x] Backend: GET /v1/routes
-- [x] Backend: DELETE /v1/routes/{id}
-- [x] SDK: `BoxtyClient.listRoutes()` method (client.ts)
-- [x] SDK: `BoxtyClient.createRoute()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteRoute()` method (client.ts)
+### Databases
+- [x] `GET /v1/databases` → `BoxtyClient.listDatabases()`
+- [x] `POST /v1/databases` → `BoxtyClient.createDatabase()`
+- [x] `GET /v1/databases/{id}` → `BoxtyClient.getDatabase()`
+- [x] `DELETE /v1/databases/{id}` → `BoxtyClient.deleteDatabase()`
+- [x] `GET /v1/databases/{id}/items` → `BoxtyClient.listDatabaseItems()`
+- [x] `GET /v1/databases/{id}/items?pk=` → `BoxtyClient.getDatabaseItem()`
+- [x] `POST /v1/databases/{id}/items` → `BoxtyClient.putDatabaseItem()`
+- [x] `DELETE /v1/databases/{id}/items` → `BoxtyClient.deleteDatabaseItem()`
+- [x] `POST /v1/databases/{id}/query` → `BoxtyClient.queryDatabase()`
 
-## 14. SCHEDULES / CRON
-- [x] Backend: GET /v1/schedules
-- [x] Backend: POST /v1/schedules
-- [x] Backend: PATCH /v1/schedules/{id}
-- [x] Backend: DELETE /v1/schedules/{id}
-- [x] Backend: POST /v1/schedules/{id}/trigger
-- [x] SDK: `BoxtyClient.listSchedules()` method (client.ts)
-- [x] SDK: `BoxtyClient.createSchedule()` method (client.ts)
-- [x] SDK: `BoxtyClient.updateSchedule()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteSchedule()` method (client.ts)
-- [x] SDK: `BoxtyClient.triggerSchedule()` method (client.ts)
-- [ ] SDK: `boxty.Period()` (documentat in reference/schedule.md)
-- [ ] SDK: `boxty.Cron()` (documentat in reference/schedule.md)
+### Billing
+- [x] `GET /v1/billing/balance` → `BoxtyClient.getBalance()`
+- [x] `GET /v1/billing/usage` → `BoxtyClient.getUsage()`
+- [x] `POST /v1/billing/credits` → `BoxtyClient.addCredits()`
+- [x] `POST /v1/billing/checkout` → `BoxtyClient.createCheckout()`
+- [x] `GET /v1/billing/history` → `BoxtyClient.getBillingHistory()`
+- [x] `GET /v1/billing/invoices` → `BoxtyClient.getInvoices()`
 
-## 15. INVITES / TEAM
-- [x] Backend: GET /v1/invites
-- [x] Backend: POST /v1/invites
-- [x] SDK: `BoxtyClient.listInvites()` method (client.ts)
-- [x] SDK: `BoxtyClient.createInvite()` method (client.ts)
-- [x] SDK: `BoxtyClient.acceptInvite()` method (client.ts)
+### Usage
+- [x] `GET /v1/usage` → `BoxtyClient.listUsage()`
+- [x] `POST /v1/usage/meter` → `BoxtyClient.meterUsage()`
 
-## 16. PROVIDERS (Admin)
-- [x] Backend: GET /v1/providers
-- [x] Backend: POST /v1/providers/register
-- [x] Backend: POST /v1/providers/{id}/heartbeat
-- [x] Backend: DELETE /v1/providers/{id}
-- [x] SDK: `BoxtyClient.listProviders()` method (client.ts)
-- [x] SDK: `BoxtyClient.registerProvider()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteProvider()` method (client.ts)
+### Invites
+- [x] `GET /v1/invites` → `BoxtyClient.listInvites()`
+- [x] `POST /v1/invites` → `BoxtyClient.createInvite()`
+- [x] `POST /v1/invites/accept` → `BoxtyClient.acceptInvite()`
+- [x] `GET /v1/invites/{id}` → `BoxtyClient.getInvite()`
+- [x] `DELETE /v1/invites/{id}` → `BoxtyClient.deleteInvite()`
 
-## 17. CONFIG & CONTEXT
-- [ ] SDK: `BoxtyClient.config` (not implemented)
-- [ ] SDK: `BoxtyClient.context` (not implemented)
-- [ ] SDK: `BoxtyClient.from_env()` (not implemented)
-- [ ] SDK: `BoxtyClient.from_credentials()` (not implemented)
+### Providers
+- [x] `GET /v1/providers` → `BoxtyClient.listProviders()`
+- [x] `GET /v1/providers/{id}` → `BoxtyClient.getProvider()`
+- [x] `POST /v1/providers/register` → `BoxtyClient.registerProvider()`
+- [x] `DELETE /v1/providers/{id}` → `BoxtyClient.deleteProvider()`
+- [x] `POST /v1/providers/{id}/heartbeat` → `BoxtyClient.providerHeartbeat()`
+- [x] `POST /v1/providers/{id}/assignments/next` → `BoxtyClient.claimNextAssignment()`
 
-## 18. DEPLOY / RUN
-- [ ] SDK: `BoxtyClient.deploy()` (not implemented)
-- [ ] SDK: `BoxtyClient.run()` (not implemented)
-- [ ] SDK: `BoxtyClient.serve()` (not implemented)
-- [ ] SDK: `BoxtyClient.App.run()` (not implemented)
-- [ ] SDK: `BoxtyClient.App.deploy()` (not implemented)
-- [ ] SDK: `BoxtyClient.enable_output()` (not implemented)
+### Sandbox Sessions
+- [x] `POST /v1/sandbox-sessions` → `BoxtyClient.createSandboxSession()`
+- [x] `GET /v1/sandbox-sessions/verify` → `BoxtyClient.verifySandboxSession()`
+- [x] `Sandbox` class with `create()`, `wait()`, `terminate()`, `exec()`, `tunnels()`, etc.
+- [x] `FileSystemManager` class
 
-## 19. NETWORK / PROXY
-- [ ] SDK: `BoxtyClient.Proxy` class (not implemented)
-- [ ] SDK: `BoxtyClient.Probe` class (not implemented)
-- [ ] SDK: `BoxtyClient.NetworkFileSystem` class (not implemented)
-- [ ] SDK: `BoxtyClient.CloudBucketMount` class (not implemented)
+### RunPod
+- [x] `POST /v1/runpod/dispatch` → `BoxtyClient.dispatchRunPod()`
 
-## 20. DATABASES (SDK-only feature, not in backend)
-- [x] SDK: `BoxtyClient.listDatabases()` method (client.ts)
-- [x] SDK: `BoxtyClient.createDatabase()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteDatabase()` method (client.ts)
-- [x] SDK: `BoxtyClient.listDatabaseItems()` method (client.ts)
-- [x] SDK: `BoxtyClient.putDatabaseItem()` method (client.ts)
-- [x] SDK: `BoxtyClient.deleteDatabaseItem()` method (client.ts)
-- [x] SDK: `BoxtyClient.queryDatabase()` method (client.ts)
-- [ ] Backend: Databases endpoints — NOT IMPLEMENTED
+### Dashboard
+- [x] `GET /v1/dashboard/{ws}/{env}` → `BoxtyClient.dashboard()`
+- [x] `GET /v1/dashboard/{ws}/{env}/summary` → `BoxtyClient.dashboardSummary()`
 
-## 21. INFRASTRUCTURE
-- [x] SDK: TypeScript project structure (sdk/js/)
-- [x] SDK: HTTP client layer (native fetch)
-- [x] SDK: Type definitions (types.ts)
-- [x] SDK: No external dependencies
-- [ ] SDK: Token storage and reuse
-- [ ] SDK: Auto-refresh token
-- [ ] SDK: Progress bars for long operations
-- [ ] SDK: Error handling with helpful messages
+### Pricing
+- [x] `GET /v1/pricing` → `BoxtyClient.getPricing()`
 
-## 22. CRITICAL PATH (ce trebuie implementat PRIMA)
-- [x] `BoxtyClient.login()` + token storage
-- [x] `BoxtyClient.listWorkspaces()` / `BoxtyClient.createWorkspace()`
-- [x] `BoxtyClient.listEnvironments()` / `BoxtyClient.createEnvironment()`
-- [x] `BoxtyClient.listWorkloads()` / `BoxtyClient.createWorkload()`
-- [x] `BoxtyClient.listVolumes()` / `BoxtyClient.createVolume()`
-- [x] `BoxtyClient.listSecrets()` / `BoxtyClient.createSecret()`
-- [x] `BoxtyClient.getBalance()` / `BoxtyClient.getUsage()`
-- [x] `BoxtyClient.getDashboard()` / `BoxtyClient.getDashboardSummary()`
-- [x] `BoxtyClient.listRoutes()` / `BoxtyClient.createRoute()`
-- [x] `BoxtyClient.listSchedules()` / `BoxtyClient.createSchedule()`
-- [x] `BoxtyClient.listImages()` / `BoxtyClient.buildImage()`
-- [x] `BoxtyClient.listInvites()` / `BoxtyClient.createInvite()`
-- [x] `BoxtyClient.listProviders()` / `BoxtyClient.registerProvider()`
+## ✅ Declarative API (App)
+
+- [x] `BoxtyApp` class
+- [x] `@app.function()` decorator
+- [x] `@app.webEndpoint()` decorator
+- [x] `App.toManifest()`
+- [x] `App.toManifestJson()`
+- [x] `App.run()`
+
+## ✅ Resource Classes
+
+- [x] `Workspace`
+- [x] `Environment`
+- [x] `Secret`
+- [x] `Image`
+- [x] `Sandbox`
+- [x] `Volume`
+- [x] `Function`
+- [x] `Period`
+- [x] `Cron`
+- [x] `Proxy`
+- [x] `Probe`
+- [x] `NetworkFileSystem`
+- [x] `CloudBucketMount`
+- [x] `ObjectManager`
+- [x] `ProxyTokenManager`
+- [x] `FileSystemManager`
+
+## ⚠️ Partial / Placeholder
+
+- [ ] `BoxtyClient.App.deploy()` - requires CLI integration
+- [ ] `Function.remote()` - requires runtime context
+- [ ] `Function.spawn()` - requires runtime context
+- [ ] `Function.map()` - requires runtime context
+- [ ] `Sandbox.fromName()` - not yet implemented in backend
+- [ ] `Sandbox.exec()` - not yet implemented in backend
+- [ ] `Volume.listdir()` - not yet implemented in backend
+- [ ] `Volume.readFile()` - not yet implemented in backend
+- [ ] `Workspace.billingReport()` - not yet implemented in backend
+- [ ] `Environment.billingReport()` - not yet implemented in backend
+- [ ] `ProxyTokenManager` methods - not yet implemented in backend
+- [ ] `Image.pipInstall()` - builder pattern, needs backend integration
+- [ ] Auto-refresh token
+- [ ] Progress bars for long operations
+- [ ] `BoxtyClient.config` / `BoxtyClient.context`
+- [ ] `BoxtyClient.deploy()` / `BoxtyClient.run()` / `BoxtyClient.serve()`
+
+## ❌ Not Implemented (Backend Missing)
+
+- [ ] Billing workspace/environment reports
+- [ ] RBAC for environment members
+- [ ] Proxy tokens API
+- [ ] Sandbox filesystem operations (copyFromLocal, copyToLocal)
+- [ ] Volume commit/snapshot operations
+- [ ] Function autoscaler
+- [ ] Function stats
