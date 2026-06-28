@@ -22,7 +22,7 @@ from .dynamo import (
     workload_item,
     workspace_item,
 )
-from .integrations import dynamo_mirror, invite_email_sender
+from .integrations import dynamo_mirror, invite_email_sender, password_reset_email_sender
 from .models import (
     AccountRecord,
     ApiKeyCreateRequest,

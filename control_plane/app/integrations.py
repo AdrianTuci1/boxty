@@ -76,27 +76,69 @@ class InviteEmailSender:
     def __init__(self) -> None:
         self.provider = settings.invite_email_provider
 
+    def _send_smtp(self, to: str, subject: str, body: str) -> None:
+        if not settings.smtp_host:
+            return
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = settings.invite_email_from
+        message["To"] = to
+        message.set_content(body)
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+            smtp.starttls()
+            if settings.smtp_username:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+
     def send(self, invite: InviteRecord, workspace_name: str) -> None:
         subject = f"Invitation to Boxty workspace {workspace_name}"
         body = (
             f"You were invited to join workspace '{workspace_name}'.\n\n"
-            f"Invite token: {invite.token}\n"
+            f"Click the link below to accept the invitation:\n"
+            f"{settings.api_base_url or 'https://boxty.dev'}/accept-invite?token={invite.token}\n\n"
             f"Role: {invite.role}\n"
+            f"If you don't have an account yet, you'll be able to create one after clicking the link.\n"
         )
         if self.provider == "smtp" and settings.smtp_host:
-            message = EmailMessage()
-            message["Subject"] = subject
-            message["From"] = settings.invite_email_from
-            message["To"] = invite.email
-            message.set_content(body)
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
-                smtp.starttls()
-                if settings.smtp_username:
-                    smtp.login(settings.smtp_username, settings.smtp_password)
-                smtp.send_message(message)
+            self._send_smtp(invite.email, subject, body)
             return
 
         print(f"[InviteEmail] to={invite.email} subject={subject}\n{body}")
+
+
+class PasswordResetEmailSender:
+    def __init__(self) -> None:
+        self.provider = settings.invite_email_provider
+
+    def _send_smtp(self, to: str, subject: str, body: str) -> None:
+        if not settings.smtp_host:
+            return
+        message = EmailMessage()
+        message["Subject"] = subject
+        message["From"] = settings.invite_email_from
+        message["To"] = to
+        message.set_content(body)
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
+            smtp.starttls()
+            if settings.smtp_username:
+                smtp.login(settings.smtp_username, settings.smtp_password)
+            smtp.send_message(message)
+
+    def send(self, email: str, token: str) -> None:
+        subject = "Reset your Boxty password"
+        reset_url = f"{settings.api_base_url or 'https://boxty.dev'}/password-reset?token={token}"
+        body = (
+            f"You requested a password reset for your Boxty account.\n\n"
+            f"Click the link below to reset your password:\n"
+            f"{reset_url}\n\n"
+            f"This link will expire in 1 hour.\n"
+            f"If you did not request this reset, please ignore this email.\n"
+        )
+        if self.provider == "smtp" and settings.smtp_host:
+            self._send_smtp(email, subject, body)
+            return
+
+        print(f"[PasswordResetEmail] to={email} subject={subject}\n{body}")
 
 
 class CloudflareR2StorageClient:
@@ -193,4 +235,5 @@ class CloudflareR2StorageClient:
 
 dynamo_mirror = DynamoSingleTableMirror()
 invite_email_sender = InviteEmailSender()
+password_reset_email_sender = PasswordResetEmailSender()
 r2_storage_client = CloudflareR2StorageClient()

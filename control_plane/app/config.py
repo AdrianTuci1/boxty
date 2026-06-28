@@ -36,6 +36,7 @@ class Settings:
     app_name: str = os.environ.get("BOXTY_APP_NAME", "boxty-control-plane")
     environment: str = os.environ.get("BOXTY_ENVIRONMENT", "development")
     api_prefix: str = os.environ.get("BOXTY_API_PREFIX", "/v1")
+    api_base_url: str = os.environ.get("BOXTY_API_BASE_URL", "")
     default_provider_pool: str = os.environ.get("BOXTY_DEFAULT_PROVIDER_POOL", "general")
     state_store: str = os.environ.get("BOXTY_STATE_STORE", "memory")
     dynamodb_table_name: str = os.environ.get("BOXTY_DYNAMODB_TABLE_NAME", "")

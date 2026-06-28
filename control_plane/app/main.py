@@ -1029,31 +1029,9 @@ def request_password_reset(request: PasswordResetRequest) -> dict:
     # Create password reset record
     reset = store.create_password_reset(user.user_id, request.email)
     
-    # Send email via SMTP
-    subject = "Password Reset Request for Boxty"
-    body = (
-        f"You requested a password reset for your Boxty account.\n\n"
-        f"Reset token: {reset.token}\n\n"
-        f"This token will expire in 24 hours.\n\n"
-        f"If you did not request this reset, please ignore this email."
-    )
-    
-    if settings.invite_email_provider == "smtp" and settings.smtp_host:
-        try:
-            message = EmailMessage()
-            message["Subject"] = subject
-            message["From"] = settings.invite_email_from
-            message["To"] = request.email
-            message.set_content(body)
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=30) as smtp:
-                smtp.starttls()
-                if settings.smtp_username:
-                    smtp.login(settings.smtp_username, settings.smtp_password)
-                smtp.send_message(message)
-        except Exception as exc:
-            print(f"[PasswordResetEmail] send failed: {exc}")
-    else:
-        print(f"[PasswordResetEmail] to={request.email} subject={subject}\n{body}")
+    # Send email via SMTP using the dedicated sender
+    from .integrations import password_reset_email_sender
+    password_reset_email_sender.send(request.email, reset.token)
     
     return {"message": "If an account exists with this email, you will receive a password reset link."}
 
