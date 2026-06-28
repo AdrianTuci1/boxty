@@ -108,7 +108,7 @@ function TokenRow({ token, onDelete }: { token: { name: string; preview: string;
         <p className="font-bold text-white text-xs">{token.name}</p>
         <div className="flex items-center gap-1 mt-1">
           <span className="font-mono text-gray-400 text-[11px]">{token.preview}</span>
-          <button className="text-gray-600 hover:text-gray-400 transition-colors">
+          <button onClick={() => navigator.clipboard.writeText(token.preview)} className="text-gray-600 hover:text-gray-400 transition-colors">
             <Copy className="h-3 w-3" />
           </button>
         </div>

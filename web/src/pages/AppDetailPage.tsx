@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { getAppMetrics } from '../api/apps'
+import { getAppMetrics, stopApp } from '../api/apps'
 import { useAppById } from '../hooks/useApps'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -44,6 +44,12 @@ export default function AppDetailPage() {
   const isSandbox = app?.kind === 'sandbox'
   const functions = isSandbox ? [] : [app?.name || 'fastapi_app']
   const sandboxes = isSandbox ? [app?.name || 'sandbox'] : []
+
+  const handleStop = async () => {
+    if (!appId) return
+    await stopApp(appId)
+    appQ.refetch()
+  }
 
   const isFunctionView = functions.includes(navTab)
   const isSandboxView = sandboxes.includes(navTab)
@@ -199,7 +205,7 @@ export default function AppDetailPage() {
                     <span className="text-gray-500 text-xs">{app?.updated_at ? timeAgo(app.updated_at) : ''}</span>
                   </div>
                 </div>
-                <button className="flex items-center gap-1.5 border border-red-900/50 text-red-400 text-xs font-medium px-3 py-1.5 rounded-md hover:bg-red-950/20 transition-colors">
+                <button onClick={handleStop} className="flex items-center gap-1.5 border border-red-900/50 text-red-400 text-xs font-medium px-3 py-1.5 rounded-md hover:bg-red-950/20 transition-colors">
                   <span className="text-sm leading-none">⨂</span> Stop app
                 </button>
               </div>
@@ -243,7 +249,7 @@ export default function AppDetailPage() {
                 <h2 className="text-base font-semibold text-white mb-2">Endpoint</h2>
                 <div className="flex items-center gap-2 rounded-md border border-[#262626] bg-[#111111] px-3 py-2">
                   <span className="text-xs text-gray-400 font-mono">{endpointUrl}</span>
-                  <button className="text-gray-500 hover:text-white transition-colors"><Copy className="h-3.5 w-3.5" /></button>
+                  <button onClick={() => navigator.clipboard.writeText(endpointUrl)} className="text-gray-500 hover:text-white transition-colors"><Copy className="h-3.5 w-3.5" /></button>
                   <a href={endpointUrl} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:text-white transition-colors"><ExternalLink className="h-3.5 w-3.5" /></a>
                 </div>
               </div>

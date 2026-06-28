@@ -79,7 +79,7 @@ export default function WorkspacesListPage() {
               </div>
               <span className="w-32 text-gray-400 text-xs">Owner</span>
               <div className="w-40 flex items-center gap-1.5 justify-end">
-                <button className="flex items-center gap-1 text-gray-500 hover:text-gray-300 text-xs px-2.5 py-1 rounded transition-colors">
+                <button onClick={() => navigator.clipboard.writeText(ws.workspace_id)} className="flex items-center gap-1 text-gray-500 hover:text-gray-300 text-xs px-2.5 py-1 rounded transition-colors">
                   <Copy className="h-3 w-3" />
                   Copy ID
                 </button>

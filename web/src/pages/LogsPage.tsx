@@ -1,6 +1,8 @@
 import { useParams } from 'react-router-dom'
 import { Activity } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useApps } from '../hooks/useApps'
+import { stopApp } from '../api/apps'
 import type { App } from '../api/apps'
 
 function formatRelativeTime(date: string | undefined): string {
@@ -21,6 +23,7 @@ function deriveStatus(app: App): 'deployed' | 'stopped' {
 export default function LogsPage() {
   const { environment } = useParams<{ workspace: string; environment: string }>()
   const { data, isLoading } = useApps(environment)
+  const qc = useQueryClient()
 
   const entries = (data || []).map((app) => ({
     id: app.id,
@@ -92,7 +95,13 @@ export default function LogsPage() {
                     <td className={`p-3 ${timeColor}`}>{entry.stopped}</td>
                     <td className="p-3">
                       {!isTerminated && (
-                        <button className="bg-[#161616] border border-[#2d2d2d] text-white hover:bg-red-950/20 hover:text-red-400 hover:border-red-900/50 text-[11px] font-medium px-2.5 py-1 rounded transition-all">
+                        <button
+                          onClick={async () => {
+                            await stopApp(entry.id)
+                            qc.invalidateQueries({ queryKey: ['apps'] })
+                          }}
+                          className="bg-[#161616] border border-[#2d2d2d] text-white hover:bg-red-950/20 hover:text-red-400 hover:border-red-900/50 text-[11px] font-medium px-2.5 py-1 rounded transition-all"
+                        >
                           Stop now
                         </button>
                       )}
