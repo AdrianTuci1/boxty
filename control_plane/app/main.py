@@ -64,6 +64,14 @@ app = FastAPI(title=settings.app_name)
 
 @app.on_event("startup")
 async def startup_event():
+    if settings.state_store == "dynamodb-single-table":
+        try:
+            store.load_from_dynamodb()
+            print(f"[startup] loaded state from DynamoDB table {settings.dynamodb_table_name}")
+        except Exception as exc:  # pragma: no cover - external integration
+            print(f"[startup] DynamoDB load failed: {exc}")
+    else:
+        print("[startup] running with in-memory state store")
     start_scheduler()
 
 

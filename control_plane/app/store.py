@@ -89,6 +89,7 @@ from .models import (
     utc_now,
 )
 from .secret_crypto import secret_cipher
+from .security_tokens import generate_salt, generate_token, hash_token, verify_token
 from .integrations import r2_storage_client
 
 
@@ -340,18 +341,35 @@ class InMemoryStore:
             raise ValueError("workspace not found")
         if not environment or environment.workspace_id != request.workspace_id:
             raise ValueError("environment not found")
-        token = f"bx_{generated_id('secret')}_{generated_id('key')}"
+        token = generate_token("bx_", 32)
+        salt = generate_salt()
         api_key = ApiKeyRecord(
             owner_id=request.owner_id,
             workspace_id=request.workspace_id,
             environment_id=request.environment_id,
             name=request.name,
             secret_preview=f"{token[:12]}...",
-            secret_token=token,
+            secret_token_hash=hash_token(token, salt),
+            secret_token_salt=salt,
+            secret_token="",
         )
         self.api_keys[api_key.api_key_id] = api_key
         self._put_item(api_key_item(api_key))
         return api_key
+
+    def verify_api_key(self, api_key_id: str, token: str) -> ApiKeyRecord | None:
+        """Verify an API key token against its stored hash."""
+        api_key = self.api_keys.get(api_key_id)
+        if not api_key or not token:
+            return None
+        if api_key.secret_token_salt:
+            if verify_token(token, api_key.secret_token_salt, api_key.secret_token_hash):
+                return api_key
+            return None
+        # Backward compatibility: legacy plaintext tokens.
+        if api_key.secret_token and api_key.secret_token == token:
+            return api_key
+        return None
 
     def list_api_keys(self, workspace_id: str | None = None) -> list[ApiKeyRecord]:
         items = list(self.api_keys.values())
@@ -547,7 +565,8 @@ class InMemoryStore:
         return items
 
     def register_provider(self, request: ProviderRegistrationRequest) -> ProviderRegistrationResponse:
-        provider_token = f"bwp_{secrets_lib.token_urlsafe(24)}"
+        provider_token = generate_token("bwp_", 24)
+        salt = generate_salt()
         provider = ProviderRecord(
             provider_name=request.provider_name,
             region=request.region,
@@ -557,7 +576,8 @@ class InMemoryStore:
             session_access_mode=request.session_access_mode,
             labels=request.labels,
             capabilities=request.capabilities,
-            auth_token_hash=self._hash_provider_token(provider_token),
+            auth_token_hash=hash_token(provider_token, salt),
+            auth_token_salt=salt,
         )
         self.providers[provider.provider_id] = provider
         self._put_item(provider_item(provider))
@@ -573,6 +593,11 @@ class InMemoryStore:
         provider = self.providers.get(provider_id)
         if not provider or not token:
             return False
+        if provider.auth_token_salt:
+            return verify_token(token, provider.auth_token_salt, provider.auth_token_hash)
+        # Backward compatibility: legacy providers registered without a salt
+        # used plain SHA256. This path can be removed once all providers are
+        # migrated to salted HMAC hashes.
         return provider.auth_token_hash == self._hash_provider_token(token)
 
     def heartbeat_provider(self, provider_id: str, request: ProviderHeartbeatRequest) -> ProviderRecord:

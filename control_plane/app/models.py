@@ -240,7 +240,11 @@ class ApiKeyRecord(BaseModel):
     environment_id: str
     name: str
     secret_preview: str
-    secret_token: str
+    secret_token_hash: str = ""
+    secret_token_salt: str = ""
+    # Deprecated: plaintext storage kept for data migration only.
+    # New keys use secret_token_hash + secret_token_salt.
+    secret_token: str = ""
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -319,6 +323,7 @@ class ProviderRecord(BaseModel):
     labels: dict[str, str]
     capabilities: ProviderCapabilities
     auth_token_hash: str = ""
+    auth_token_salt: str = ""
     status: ProviderStatus = ProviderStatus.online
     available_slots: int = 0
     running_workloads: int = 0

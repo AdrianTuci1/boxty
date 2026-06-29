@@ -78,14 +78,19 @@ class ControlPlaneStoreTests(unittest.TestCase):
             self.store.delete_environment(self.environment.environment_id)
 
     def test_create_api_key_and_invite(self) -> None:
-        api_key = self.store.create_api_key(
-            ApiKeyCreateRequest(
-                owner_id="usr_test",
-                workspace_id=self.workspace.workspace_id,
-                environment_id=self.environment.environment_id,
-                name="ci-key",
+        with patch.object(
+            sys.modules["app.store"],
+            "generate_token",
+            return_value="bx_knownapitokenvalue",
+        ):
+            api_key = self.store.create_api_key(
+                ApiKeyCreateRequest(
+                    owner_id="usr_test",
+                    workspace_id=self.workspace.workspace_id,
+                    environment_id=self.environment.environment_id,
+                    name="ci-key",
+                )
             )
-        )
         invite = self.store.create_invite(
             InviteCreateRequest(
                 inviter_user_id="usr_test",
@@ -93,7 +98,12 @@ class ControlPlaneStoreTests(unittest.TestCase):
                 email="teammate@example.com",
             )
         )
-        self.assertTrue(api_key.secret_token.startswith("bx_"))
+        self.assertTrue(api_key.secret_preview.startswith("bx_"))
+        self.assertTrue(api_key.secret_token_hash)
+        self.assertTrue(api_key.secret_token_salt)
+        self.assertFalse(api_key.secret_token)
+        self.assertIsNone(self.store.verify_api_key(api_key.api_key_id, "wrong-token"))
+        self.assertIsNotNone(self.store.verify_api_key(api_key.api_key_id, "bx_knownapitokenvalue"))
         self.assertEqual(invite.email, "teammate@example.com")
 
     def test_secret_is_resolved_only_in_launch_spec(self) -> None:

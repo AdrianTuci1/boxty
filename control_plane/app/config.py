@@ -73,3 +73,32 @@ class Settings:
 
 
 settings = Settings()
+
+
+if settings.environment == "production":
+    if settings.state_store != "dynamodb-single-table":
+        raise RuntimeError(
+            "BOXTY_ENVIRONMENT=production requires BOXTY_STATE_STORE=dynamodb-single-table"
+        )
+    if not settings.dynamodb_table_name:
+        raise RuntimeError(
+            "BOXTY_ENVIRONMENT=production requires BOXTY_DYNAMODB_TABLE_NAME to be set"
+        )
+    if not settings.secret_encryption_key.strip():
+        raise RuntimeError(
+            "BOXTY_ENVIRONMENT=production requires BOXTY_SECRET_ENCRYPTION_KEY to be set"
+        )
+    if not settings.provider_shared_token.strip():
+        raise RuntimeError(
+            "BOXTY_ENVIRONMENT=production requires BOXTY_PROVIDER_TOKEN to be set"
+        )
+    if settings.object_storage_provider == "filesystem":
+        raise RuntimeError(
+            "BOXTY_ENVIRONMENT=production requires a non-filesystem object storage provider"
+        )
+
+
+if settings.state_store == "dynamodb-single-table" and not settings.dynamodb_table_name:
+    raise RuntimeError(
+        "BOXTY_STATE_STORE=dynamodb-single-table requires BOXTY_DYNAMODB_TABLE_NAME"
+    )
