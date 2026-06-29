@@ -68,12 +68,23 @@ class TestApp:
 
     def test_deploy(self, runner, mock_client):
         with patch('boxty_cli.main.get_client', return_value=mock_client):
-            mock_client.create_workload.return_value = {"workload_id": "wl_123", "name": "test"}
-            with patch('boxty_cli.main.get_active_workspace', return_value='ws_123'):
-                with patch('boxty_cli.main.get_active_environment', return_value='env_123'):
-                    result = runner.invoke(cli, ['app', 'deploy', 'test', '--image', 'python:3.9'])
-                    assert result.exit_code == 0
-                    assert "Deployed workload" in result.output
+            with patch('boxty_cli.main._import_app_from_file') as mock_import:
+                mock_app = Mock()
+                mock_app.deploy.return_value = {
+                    "app": "test",
+                    "workspace_id": "ws_123",
+                    "environment_id": "env_123",
+                    "image_ids": ["img_123"],
+                    "function_ids": {"hello": "wl_fn_123"},
+                    "endpoint_ids": {"serve": "wl_ep_123"},
+                    "route_ids": {"serve": "rt_123"},
+                }
+                mock_import.return_value = mock_app
+                result = runner.invoke(cli, ['app', 'deploy', 'app.py'])
+                assert result.exit_code == 0
+                assert "Deployed app: test" in result.output
+                assert "wl_fn_123" in result.output
+                mock_app.deploy.assert_called_once_with(workspace=None, environment=None)
 
 
 class TestVolume:

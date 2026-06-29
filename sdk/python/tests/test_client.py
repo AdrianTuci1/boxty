@@ -341,6 +341,23 @@ class TestImages:
             result = client.build_image("custom", dockerfile="FROM python:3.9")
             assert result["image_id"] == "img_123"
 
+    def test_build_image_with_workspace_and_owner(self, client, mock_response):
+        with patch.object(client._http, 'post', return_value=mock_response(json_data={"image_id": "img_123", "name": "custom"})) as mock_post:
+            result = client.build_image("custom", base_image="python:3.9", workspace_id="ws_123", owner_id="usr_123")
+            assert result["image_id"] == "img_123"
+            mock_post.assert_called_once_with("/v1/images/build", json={
+                "name": "custom",
+                "base_image": "python:3.9",
+                "workspace_id": "ws_123",
+                "owner_id": "usr_123",
+            })
+
+    def test_invoke_workload(self, client, mock_response):
+        with patch.object(client._http, 'post', return_value=mock_response(json_data={"workload_id": "wl_123", "stdout": "hello", "stderr": "", "return_code": 0})):
+            result = client.invoke_workload("wl_123", {"name": "world"})
+            assert result["stdout"] == "hello"
+            assert result["return_code"] == 0
+
     def test_get_image(self, client, mock_response):
         with patch.object(client._http, 'get', return_value=mock_response(json_data={"image_id": "img_123", "name": "custom"})):
             result = client.get_image("img_123")

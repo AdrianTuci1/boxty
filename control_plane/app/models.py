@@ -621,6 +621,8 @@ class ImageCreateRequest(BaseModel):
     base_image: str
     dockerfile: str | None = None
     build_args: dict[str, str] = Field(default_factory=dict)
+    source_file_content: str | None = None  # base64 encoded source file
+    source_filename: str | None = None
 
 
 class ImageRecord(BaseModel):
@@ -631,12 +633,41 @@ class ImageRecord(BaseModel):
     base_image: str
     dockerfile: str | None = None
     build_args: dict[str, str] = Field(default_factory=dict)
+    source_file_content: str | None = None  # decoded plain text
+    source_filename: str | None = None
     status: str = "pending"
     build_log: str = ""
     image_ref: str = ""
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
     built_at: datetime | None = None
+
+
+class FunctionInvocationRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)
+    sync: bool = True
+    timeout_seconds: int = Field(default=300, ge=1)
+
+
+class FunctionInvocationResponse(BaseModel):
+    invocation_id: str = Field(default_factory=lambda: generated_id("inv"))
+    status: str = "pending"
+    workload_id: str | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    started_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+
+
+class WorkloadInvokeRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkloadInvokeResponse(BaseModel):
+    workload_id: str
+    stdout: str
+    stderr: str
+    return_code: int
 
 
 class BillingReportRequest(BaseModel):

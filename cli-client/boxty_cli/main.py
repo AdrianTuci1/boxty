@@ -1,13 +1,14 @@
 """Boxty CLI - Client interface for the Boxty platform."""
 
 import click
+import importlib
 import os
 import json
 import sys
 from pathlib import Path
 from typing import Optional
 
-from boxty import Boxty
+from boxty import App, Boxty
 from boxty.exceptions import BoxtyError, BoxtyAuthError
 
 # Config paths
@@ -36,7 +37,8 @@ def save_config(config: dict):
 def get_client() -> Boxty:
     config = load_config()
     base_url = os.environ.get("BOXTY_API_URL", config.get("api_url", "http://127.0.0.1:8080"))
-    return Boxty(base_url=base_url)
+    token = os.environ.get("BOXTY_TOKEN") or config.get("token")
+    return Boxty(base_url=base_url, token=token)
 
 
 def get_token() -> Optional[str]:
@@ -308,37 +310,67 @@ def app_list(workspace_id, environment_id):
         click.echo(f"Error: {e.message}", err=True)
 
 
+def _import_app_from_file(file_path: str) -> App:
+    """Import a Python file and return the first boxty.App instance."""
+    path = Path(file_path).resolve()
+    if not path.exists():
+        raise click.ClickException(f"File not found: {file_path}")
+    if path.suffix != ".py":
+        raise click.ClickException(f"Expected a .py file: {file_path}")
+
+    module_name = path.stem
+    parent = str(path.parent)
+    if parent not in sys.path:
+        sys.path.insert(0, parent)
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, path)
+        if spec is None or spec.loader is None:
+            raise click.ClickException(f"Could not load module from {file_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    except Exception as exc:
+        raise click.ClickException(f"Failed to import {file_path}: {exc}") from exc
+
+    for obj in vars(module).values():
+        if isinstance(obj, App):
+            return obj
+    raise click.ClickException(f"No boxty.App instance found in {file_path}")
+
+
 @app.command("deploy")
-@click.argument("name")
-@click.option("--kind", default="sandbox", help="Workload kind (sandbox, function, endpoint, build)")
-@click.option("--image", required=True, help="Docker image")
+@click.argument("file_path")
 @click.option("--workspace-id", default=None, help="Workspace ID")
 @click.option("--environment-id", default=None, help="Environment ID")
-@click.option("--cpu", default=1, help="CPU cores")
-@click.option("--memory", default=512, help="Memory MB")
-@click.option("--gpu", default=0, help="GPU count")
-def app_deploy(name, kind, image, workspace_id, environment_id, cpu, memory, gpu):
-    """Deploy a new workload."""
-    client = get_client()
-    ws_id = workspace_id or get_active_workspace()
-    env_id = environment_id or get_active_environment()
-    if not ws_id or not env_id:
-        click.echo("Workspace and environment required. Use --workspace-id and --environment-id or set active context.")
-        return
+def app_deploy(file_path, workspace_id, environment_id):
+    """Deploy an app defined in a Python file (e.g. app.py)."""
     try:
-        result = client.create_workload(
-            owner_id="cli-user",  # TODO: get from auth
-            workspace_id=ws_id,
-            environment_id=env_id,
-            kind=kind,
-            image=image,
-            cpu_cores=cpu,
-            memory_mb=memory,
-            gpu_count=gpu,
-        )
-        click.echo(f"Deployed workload: {result.get('workload_id')}")
+        app = _import_app_from_file(file_path)
+        result = app.deploy(workspace=workspace_id, environment=environment_id)
+        click.echo(f"Deployed app: {result['app']}")
+        click.echo(f"Workspace: {result['workspace_id']}")
+        click.echo(f"Environment: {result['environment_id']}")
+        if result.get("image_ids"):
+            click.echo("Images:")
+            for image_id in result["image_ids"]:
+                click.echo(f"  - {image_id}")
+        if result.get("function_ids"):
+            click.echo("Functions:")
+            for name, workload_id in result["function_ids"].items():
+                click.echo(f"  - {name}: {workload_id}")
+        if result.get("endpoint_ids"):
+            click.echo("Endpoints:")
+            for name, workload_id in result["endpoint_ids"].items():
+                click.echo(f"  - {name}: {workload_id}")
+        if result.get("route_ids"):
+            click.echo("Routes:")
+            for name, route_id in result["route_ids"].items():
+                click.echo(f"  - {name}: {route_id}")
     except BoxtyError as e:
         click.echo(f"Error: {e.message}", err=True)
+        sys.exit(1)
+    except click.ClickException as e:
+        e.show()
+        sys.exit(1)
 
 
 @app.command("stop")
@@ -376,6 +408,39 @@ def app_metrics(workload_id):
         click.echo(json.dumps(metrics, indent=2))
     except BoxtyError as e:
         click.echo(f"Error: {e.message}", err=True)
+
+
+# FUNCTION
+@cli.group()
+def function():
+    """Function invocation."""
+    pass
+
+
+@function.command("invoke")
+@click.argument("workload_id")
+@click.argument("payload", required=False)
+def function_invoke(workload_id, payload):
+    """Invoke a function workload. Optional JSON payload."""
+    client = get_client()
+    parsed_payload: dict = {}
+    if payload:
+        try:
+            parsed_payload = json.loads(payload)
+        except json.JSONDecodeError as exc:
+            click.echo(f"Invalid JSON payload: {exc}", err=True)
+            sys.exit(1)
+    try:
+        result = client.invoke_workload(workload_id, parsed_payload)
+        click.echo(result.get("stdout", ""))
+        if result.get("stderr"):
+            click.echo(result["stderr"], err=True)
+        return_code = result.get("return_code", 0)
+        if return_code != 0:
+            sys.exit(return_code)
+    except BoxtyError as e:
+        click.echo(f"Error: {e.message}", err=True)
+        sys.exit(1)
 
 
 # VOLUME

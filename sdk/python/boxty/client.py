@@ -210,6 +210,7 @@ class Boxty:
         disk_gb: int | None = None,
         gpu_count: int | None = None,
         gpu_type: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "owner_id": owner_id,
@@ -240,6 +241,8 @@ class Boxty:
             payload["gpu_count"] = gpu_count
         if gpu_type is not None:
             payload["gpu_type"] = gpu_type
+        if metadata is not None:
+            payload["metadata"] = metadata
         r = self._http.post("/v1/workloads", json=payload)
         r.raise_for_status()
         return r.json()
@@ -304,8 +307,20 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def create_route(self, workload_id: str, endpoint_name: str) -> dict[str, Any]:
-        r = self._http.post("/v1/routes", json={"workload_id": workload_id, "endpoint_name": endpoint_name})
+    def create_route(
+        self,
+        workload_id: str,
+        endpoint_name: str | None = None,
+        *,
+        hostname: str | None = None,
+        path_prefix: str = "/",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"workload_id": workload_id, "path_prefix": path_prefix}
+        if hostname is not None:
+            payload["hostname"] = hostname
+        if endpoint_name is not None:
+            payload["endpoint_name"] = endpoint_name
+        r = self._http.post("/v1/routes", json=payload)
         r.raise_for_status()
         return r.json()
 
@@ -380,8 +395,30 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def build_image(self, name: str, dockerfile: str | None = None, base_image: str | None = None) -> dict[str, Any]:
-        r = self._http.post("/v1/images/build", json={"name": name, "dockerfile": dockerfile, "base_image": base_image})
+    def build_image(
+        self,
+        name: str,
+        dockerfile: str | None = None,
+        base_image: str | None = None,
+        *,
+        workspace_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"name": name}
+        if dockerfile is not None:
+            payload["dockerfile"] = dockerfile
+        if base_image is not None:
+            payload["base_image"] = base_image
+        if workspace_id is not None:
+            payload["workspace_id"] = workspace_id
+        if owner_id is not None:
+            payload["owner_id"] = owner_id
+        r = self._http.post("/v1/images/build", json=payload)
+        r.raise_for_status()
+        return r.json()
+
+    def invoke_workload(self, workload_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+        r = self._http.post(f"/v1/workloads/{workload_id}/invoke", json={"payload": payload or {}})
         r.raise_for_status()
         return r.json()
 

@@ -8,9 +8,10 @@ use std::path::PathBuf;
 use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 type WorkerResult<T> = Result<T, Box<dyn Error>>;
+type InvokeResult<T> = Result<T, String>;
 
 #[derive(Debug)]
 struct WorkerHttpError {
@@ -162,26 +163,26 @@ struct WorkerAssignmentRecord {
 }
 
 #[derive(Debug, Deserialize)]
-struct WorkloadLaunchSpec {
-    workload: WorkloadRecord,
-    env: HashMap<String, String>,
+pub(crate) struct WorkloadLaunchSpec {
+    pub(crate) workload: WorkloadRecord,
+    pub(crate) env: HashMap<String, String>,
 }
 
 #[derive(Debug, Deserialize)]
-struct WorkloadRecord {
-    workload_id: String,
-    owner_id: String,
-    kind: String,
-    image: String,
+pub(crate) struct WorkloadRecord {
+    pub(crate) workload_id: String,
+    pub(crate) owner_id: String,
+    pub(crate) kind: String,
+    pub(crate) image: String,
     #[serde(default)]
-    command: Vec<String>,
+    pub(crate) command: Vec<String>,
     #[serde(default)]
-    metadata: HashMap<String, Value>,
+    pub(crate) metadata: HashMap<String, Value>,
     #[serde(default)]
-    endpoint_name: Option<String>,
+    pub(crate) endpoint_name: Option<String>,
     #[serde(default)]
-    volume_mounts: Vec<WorkloadVolumeMount>,
-    resources: WorkloadResources,
+    pub(crate) volume_mounts: Vec<WorkloadVolumeMount>,
+    pub(crate) resources: WorkloadResources,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -192,16 +193,16 @@ struct WorkloadVolumeMount {
     read_only: bool,
 }
 
-#[derive(Debug, Deserialize)]
-struct WorkloadResources {
+#[derive(Debug, Deserialize, Clone)]
+pub(crate) struct WorkloadResources {
     #[serde(default = "default_one")]
-    cpu_cores: u32,
+    pub(crate) cpu_cores: u32,
     #[serde(default = "default_memory")]
-    memory_mb: u32,
+    pub(crate) memory_mb: u32,
     #[serde(default = "default_disk")]
-    disk_gb: u32,
+    pub(crate) disk_gb: u32,
     #[serde(default)]
-    gpu_count: u32,
+    pub(crate) gpu_count: u32,
 }
 
 fn default_one() -> u32 {
@@ -237,14 +238,14 @@ struct PreparedVolumeMount {
     read_only: bool,
 }
 
-struct ControlPlaneClient {
+pub(crate) struct ControlPlaneClient {
     base_url: String,
     enrollment_token: Option<String>,
     http: reqwest::Client,
 }
 
 impl ControlPlaneClient {
-    fn new(base_url: &str) -> WorkerResult<Self> {
+    pub(crate) fn new(base_url: &str) -> WorkerResult<Self> {
         Ok(Self {
             base_url: base_url.trim_end_matches('/').to_string(),
             enrollment_token: std::env::var("BOXTY_PROVIDER_TOKEN")
@@ -588,7 +589,7 @@ impl ControlPlaneClient {
         .await
     }
 
-    async fn workload_launch_spec(
+    pub(crate) async fn workload_launch_spec(
         &self,
         provider_id: &str,
         provider_token: &str,
@@ -734,16 +735,109 @@ impl ControlPlaneClient {
     }
 }
 
-struct WorkerRuntime {
+pub(crate) struct WorkerRuntime {
     binary: String,
     worker_data_dir: PathBuf,
+    warm_pool: Arc<tokio::sync::Mutex<WarmPool>>,
 }
 
-struct RuntimeLaunchResult {
-    status: String,
-    runtime_details: HashMap<String, Value>,
-    container_id: Option<String>,
-    detached: bool,
+#[derive(Debug, Clone)]
+struct WarmContainer {
+    container_id: String,
+    image: String,
+    command: Vec<String>,
+    workload_id: String,
+    created_at: Instant,
+    last_used: Instant,
+    in_use: bool,
+}
+
+struct WarmPool {
+    containers: Vec<WarmContainer>,
+    max_idle: usize,
+    idle_ttl: Duration,
+}
+
+impl WarmPool {
+    fn new(max_idle: usize, idle_ttl: Duration) -> Self {
+        Self {
+            containers: Vec::new(),
+            max_idle,
+            idle_ttl,
+        }
+    }
+
+    fn find_idle(&self, image: &str, command: &[String]) -> Option<usize> {
+        self.containers
+            .iter()
+            .position(|c| c.image == image && !c.in_use && c.command == command)
+    }
+
+    fn acquire(&mut self, index: usize) -> String {
+        let container = &mut self.containers[index];
+        container.in_use = true;
+        container.last_used = Instant::now();
+        container.container_id.clone()
+    }
+
+    fn add(&mut self, container_id: String, image: String, command: Vec<String>, workload_id: String) {
+        self.containers.push(WarmContainer {
+            container_id,
+            image,
+            command,
+            workload_id,
+            created_at: Instant::now(),
+            last_used: Instant::now(),
+            in_use: true,
+        });
+    }
+
+    fn release(&mut self, container_id: &str, remove: bool) {
+        if remove {
+            self.containers.retain(|c| c.container_id != container_id);
+            return;
+        }
+        if let Some(c) = self.containers.iter_mut().find(|c| c.container_id == container_id) {
+            c.in_use = false;
+            c.last_used = Instant::now();
+        }
+    }
+
+    fn idle_to_remove(&self, now: Instant) -> Vec<String> {
+        self.containers
+            .iter()
+            .filter(|c| !c.in_use && now.duration_since(c.last_used) > self.idle_ttl)
+            .map(|c| c.container_id.clone())
+            .collect()
+    }
+
+    fn trim_excess_idle(&mut self) -> Vec<String> {
+        let mut idle: Vec<_> = self
+            .containers
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !c.in_use)
+            .map(|(i, c)| (i, c.last_used, c.container_id.clone()))
+            .collect();
+        if idle.len() <= self.max_idle {
+            return Vec::new();
+        }
+        idle.sort_by_key(|(_, last_used, _)| *last_used);
+        let excess = idle.len() - self.max_idle;
+        idle.iter().take(excess).map(|(_, _, id)| id.clone()).collect()
+    }
+
+    fn remove(&mut self, container_id: &str) {
+        self.containers.retain(|c| c.container_id != container_id);
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct RuntimeLaunchResult {
+    pub(crate) status: String,
+    pub(crate) runtime_details: HashMap<String, Value>,
+    pub(crate) container_id: Option<String>,
+    pub(crate) detached: bool,
 }
 
 struct RuntimeInspectResult {
@@ -760,9 +854,21 @@ impl WorkerRuntime {
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::temp_dir().join("boxty-worker"));
         std::fs::create_dir_all(&worker_data_dir)?;
+        let max_warm = std::env::var("BOXTY_WARM_POOL_MAX")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(4);
+        let idle_ttl_sec = std::env::var("BOXTY_WARM_POOL_IDLE_TTL_SEC")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(300);
         Ok(Self {
             binary,
             worker_data_dir,
+            warm_pool: Arc::new(tokio::sync::Mutex::new(WarmPool::new(
+                max_warm,
+                Duration::from_secs(idle_ttl_sec),
+            ))),
         })
     }
 
@@ -1095,6 +1201,270 @@ impl WorkerRuntime {
             detached: true,
         })
     }
+
+    async fn create_warm_container(
+        &self,
+        image: &str,
+        command: &[String],
+        workload_id: &str,
+        resources: &WorkloadResources,
+    ) -> WorkerResult<String> {
+        let unique = format!(
+            "{}-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis(),
+            rand::random::<u32>()
+        );
+        let container_name = format!("boxty-warm-{workload_id}-{unique}");
+        let warm_command = if command.is_empty() {
+            vec!["sleep".to_string(), "infinity".to_string()]
+        } else {
+            command.to_vec()
+        };
+
+        let binary = self.binary.clone();
+        let image = image.to_string();
+        let container_name_clone = container_name.clone();
+        let cpu = resources.cpu_cores.to_string();
+        let memory = format!("{}m", resources.memory_mb.max(128));
+        let output = tokio::task::spawn_blocking(move || {
+            Command::new(&binary)
+                .args([
+                    "run",
+                    "-d",
+                    "--name",
+                    &container_name_clone,
+                    "--cpus",
+                    &cpu,
+                    "--memory",
+                    &memory,
+                    "--pids-limit",
+                    "512",
+                ])
+                .arg(&image)
+                .args(&warm_command)
+                .output()
+        })
+        .await??;
+        if !output.status.success() {
+            return Err(combine_output(&output).into());
+        }
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    fn build_payload_exec_code(payload: &Value) -> String {
+        payload
+            .get("exec_code")
+            .and_then(Value::as_str)
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| {
+                "import json, os; print(json.dumps(json.loads(os.environ.get('BOXTY_FUNCTION_PAYLOAD', '{}'))))".to_string()
+            })
+    }
+
+    async fn exec_in_warm_container(
+        &self,
+        container_id: &str,
+        payload: &Value,
+        env: &HashMap<String, String>,
+    ) -> InvokeResult<RuntimeLaunchResult> {
+        let payload_json = payload.to_string();
+        let exec_code = Self::build_payload_exec_code(payload);
+
+        let mut args = vec![
+            "exec".to_string(),
+            "-e".to_string(),
+            format!("BOXTY_FUNCTION_PAYLOAD={payload_json}"),
+        ];
+        for (key, value) in env {
+            args.push("-e".to_string());
+            args.push(format!("{key}={value}"));
+        }
+        args.push(container_id.to_string());
+        args.push("python".to_string());
+        args.push("-c".to_string());
+        args.push(exec_code);
+
+        let binary = self.binary.clone();
+        let output = match tokio::task::spawn_blocking(move || {
+            Command::new(&binary).args(&args).output()
+        })
+        .await
+        {
+            Ok(Ok(output)) => output,
+            Ok(Err(error)) => return Err(error.to_string()),
+            Err(error) => return Err(error.to_string()),
+        };
+
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let exit_code = output.status.code().unwrap_or(1);
+        let mut runtime_details = HashMap::new();
+        runtime_details.insert(
+            "container_runtime".to_string(),
+            Value::String(self.binary.clone()),
+        );
+        runtime_details.insert(
+            "container_id".to_string(),
+            Value::String(container_id.to_string()),
+        );
+        runtime_details.insert("exit_code".to_string(), json!(exit_code));
+        runtime_details.insert("stdout".to_string(), Value::String(stdout));
+        runtime_details.insert("stderr".to_string(), Value::String(stderr));
+        runtime_details.insert("warm".to_string(), json!(true));
+
+        Ok(RuntimeLaunchResult {
+            status: if exit_code == 0 {
+                "completed".to_string()
+            } else {
+                "failed".to_string()
+            },
+            runtime_details,
+            container_id: Some(container_id.to_string()),
+            detached: false,
+        })
+    }
+
+    async fn launch_function_with_payload(
+        &self,
+        launch_spec: &WorkloadLaunchSpec,
+        payload: &Value,
+    ) -> InvokeResult<RuntimeLaunchResult> {
+        let workload = &launch_spec.workload;
+        let prepare_result: Result<(PathBuf, PathBuf, PathBuf, Vec<PreparedVolumeMount>), String> =
+            (|| {
+                let dirs = self.ensure_workload_dirs(&workload.workload_id)?;
+                let mounts = self.prepare_volume_mounts(workload)?;
+                Ok((dirs.0, dirs.1, dirs.2, mounts))
+            })()
+            .map_err(|e: Box<dyn Error>| e.to_string());
+        let (_root, workspace, tmp, volume_mounts) = match prepare_result {
+            Ok(value) => value,
+            Err(error) => return Err(error),
+        };
+        let container_name = Self::workload_name(&workload.workload_id);
+
+        let payload_json = payload.to_string();
+        let mut env = launch_spec.env.clone();
+        env.insert("BOXTY_FUNCTION_PAYLOAD".to_string(), payload_json);
+        let exec_code = Self::build_payload_exec_code(payload);
+
+        let mut args = vec![
+            "run".to_string(),
+            "--rm".to_string(),
+            "--name".to_string(),
+            container_name.clone(),
+        ];
+        args.extend(self.base_runtime_args(workload, &workspace, &tmp, &volume_mounts));
+        args.extend(Self::base_env_args(&env));
+        args.push(workload.image.clone());
+        args.push("python".to_string());
+        args.push("-c".to_string());
+        args.push(exec_code);
+
+        let binary = self.binary.clone();
+        let output = match tokio::task::spawn_blocking(move || {
+            Command::new(&binary).args(&args).output()
+        })
+        .await
+        {
+            Ok(Ok(output)) => output,
+            Ok(Err(error)) => return Err(error.to_string()),
+            Err(error) => return Err(error.to_string()),
+        };
+
+        let logs = combine_output(&output);
+        let exit_code = output.status.code().unwrap_or(1);
+        let mut runtime_details = HashMap::new();
+        runtime_details.insert(
+            "container_runtime".to_string(),
+            Value::String(self.binary.clone()),
+        );
+        runtime_details.insert("exit_code".to_string(), json!(exit_code));
+        runtime_details.insert("stdout".to_string(), Value::String(logs));
+        runtime_details.insert("warm".to_string(), json!(false));
+
+        Ok(RuntimeLaunchResult {
+            status: if exit_code == 0 {
+                "completed".to_string()
+            } else {
+                "failed".to_string()
+            },
+            runtime_details,
+            container_id: None,
+            detached: false,
+        })
+    }
+
+    pub(crate) async fn invoke_function(
+        &self,
+        launch_spec: &WorkloadLaunchSpec,
+        payload: &Value,
+    ) -> WorkerResult<RuntimeLaunchResult> {
+        let workload = &launch_spec.workload;
+        let warm_command = Self::default_command(workload);
+
+        let container_id = {
+            let mut pool = self.warm_pool.lock().await;
+            if let Some(index) = pool.find_idle(&workload.image, &warm_command) {
+                pool.acquire(index)
+            } else {
+                let container_id = self
+                    .create_warm_container(
+                        &workload.image,
+                        &warm_command,
+                        &workload.workload_id,
+                        &workload.resources,
+                    )
+                    .await?;
+                pool.add(
+                    container_id.clone(),
+                    workload.image.clone(),
+                    warm_command.clone(),
+                    workload.workload_id.clone(),
+                );
+                container_id
+            }
+        };
+
+        let warm_result = self
+            .exec_in_warm_container(&container_id, payload, &launch_spec.env)
+            .await;
+
+        match warm_result {
+            Ok(result) => {
+                let mut pool = self.warm_pool.lock().await;
+                pool.release(&container_id, false);
+                Ok(result)
+            }
+            Err(error) => {
+                eprintln!(
+                    "[worker] warm invocation failed for {}, falling back: {error}",
+                    workload.workload_id
+                );
+                let mut pool = self.warm_pool.lock().await;
+                pool.release(&container_id, true);
+                self.launch_function_with_payload(launch_spec, payload)
+                    .await
+                    .map_err(|e| e.into())
+            }
+        }
+    }
+
+    pub(crate) async fn cleanup_warm_pool(&self) {
+        let mut pool = self.warm_pool.lock().await;
+        let now = Instant::now();
+        for container_id in pool.idle_to_remove(now) {
+            self.remove_container(&container_id);
+            pool.remove(&container_id);
+        }
+        for container_id in pool.trim_excess_idle() {
+            self.remove_container(&container_id);
+            pool.remove(&container_id);
+        }
+    }
 }
 
 async fn hydrate_volume_mounts(
@@ -1197,7 +1567,7 @@ pub async fn handle_worker(
     once: bool,
 ) -> WorkerResult<()> {
     let config = load_worker_config(config_path)?;
-    let runtime = WorkerRuntime::new()?;
+    let runtime = Arc::new(WorkerRuntime::new()?);
     let client = ControlPlaneClient::new(&config.control_plane.url)?;
     let task_timeout_sec = config.worker.task_timeout_sec;
     let max_retries = config.control_plane.max_retries.max(1);
@@ -1228,7 +1598,7 @@ pub async fn handle_worker(
     });
 
     if let Some(token) = attach_session_token {
-        return handle_worker_attach(&client, &runtime, token).await;
+        return handle_worker_attach(&client, runtime.as_ref(), token).await;
     }
 
     let mut state = build_initial_state(&config);
@@ -1253,8 +1623,9 @@ pub async fn handle_worker(
     maybe_start_gateway();
 
     let control_plane_url = config.control_plane.url.clone();
+    let runtime_for_tunnel = Arc::clone(&runtime);
     tokio::spawn(async move {
-        crate::cli::tunnel::run_tunnel_loop(control_plane_url).await;
+        crate::cli::tunnel::run_tunnel_loop(runtime_for_tunnel, control_plane_url).await;
     });
 
     let retry_delay = Duration::from_millis(config.control_plane.retry_interval_ms.max(500));
@@ -1309,7 +1680,8 @@ pub async fn handle_worker(
             continue;
         }
 
-        reconcile_jobs(&client, &runtime, &mut state, task_timeout_sec).await?;
+        reconcile_jobs(&client, runtime.as_ref(), &mut state, task_timeout_sec).await?;
+        runtime.cleanup_warm_pool().await;
 
         let running_jobs = state
             .jobs
@@ -1370,7 +1742,7 @@ pub async fn handle_worker(
                     .await
                 {
                     Ok(Some(assignment)) => {
-                        launch_assignment(&client, &runtime, &mut state, assignment.workload).await?;
+                        launch_assignment(&client, runtime.as_ref(), &mut state, assignment.workload).await?;
                     }
                     Ok(None) => {}
                     Err(error) => {
@@ -1784,6 +2156,10 @@ fn combine_output(output: &Output) -> String {
         body.push_str(&String::from_utf8_lossy(&output.stderr));
     }
     body
+}
+
+fn log_warm_invocation_error(workload_id: &str, error: String) {
+    eprintln!("[worker] warm invocation failed for {workload_id}, falling back: {error}");
 }
 
 fn reserve_local_port() -> WorkerResult<u16> {

@@ -1,7 +1,7 @@
 from email.message import EmailMessage
 import smtplib
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 
 from .config import settings
 from .models import (
@@ -13,6 +13,8 @@ from .models import (
     EnvironmentMember,
     EnvironmentMemberUpdateRequest,
     FunctionAutoscalerConfig,
+    FunctionInvocationRequest,
+    FunctionInvocationResponse,
     FunctionStats,
     ImageCreateRequest,
     InviteCreateRequest,
@@ -35,6 +37,8 @@ from .models import (
     UserRegistrationRequest,
     UserRegistrationResponse,
     WorkloadCreateRequest,
+    WorkloadInvokeRequest,
+    WorkloadInvokeResponse,
     WorkloadStatusUpdateRequest,
     WorkspaceCreateRequest,
     WorkspaceMember,
@@ -408,6 +412,92 @@ def update_workload_status(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="workload not found") from exc
     return workload.model_dump(mode="json")
+
+
+@app.post(f"{settings.api_prefix}/workloads/{{workload_id}}/invoke")
+async def invoke_workload(
+    workload_id: str,
+    request: WorkloadInvokeRequest,
+) -> dict:
+    workload = store.workloads.get(workload_id)
+    if not workload:
+        raise HTTPException(status_code=404, detail="workload not found")
+
+    runtime_details = workload.runtime_details or {}
+    container_id = runtime_details.get("container_id")
+    provider_id = workload.assigned_provider_id
+
+    # Fast path: use warm container via WebSocket tunnel if available.
+    if workload.status.value in {"running", "completed"} and container_id and provider_id and provider_id in active_tunnels:
+        websocket = active_tunnels[provider_id]
+        request_id = str(uuid.uuid4())
+        message = {
+            "type": "function_invoke",
+            "request_id": request_id,
+            "workload_id": workload_id,
+            "container_id": container_id,
+            "payload": request.payload,
+        }
+        future = asyncio.get_event_loop().create_future()
+        pending_responses[request_id] = future
+        try:
+            await websocket.send_text(json.dumps(message))
+            response_data = await asyncio.wait_for(future, timeout=30.0)
+        except asyncio.TimeoutError:
+            raise HTTPException(status_code=504, detail="invoke timeout")
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"invoke tunnel error: {exc}") from exc
+        finally:
+            pending_responses.pop(request_id, None)
+
+        return WorkloadInvokeResponse(
+            workload_id=workload_id,
+            stdout=response_data.get("stdout", ""),
+            stderr=response_data.get("stderr", ""),
+            return_code=response_data.get("return_code", 0),
+        ).model_dump(mode="json")
+
+    # Fallback: schedule the workload and poll until it reaches a terminal state.
+    try:
+        invocation = store.invoke_workload_sync(workload_id, request)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="workload not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    poll_interval = settings.worker_poll_interval_seconds
+    timeout = 300
+    elapsed = 0.0
+    while elapsed < timeout:
+        workload = store.workloads.get(workload_id)
+        if workload is None:
+            invocation.status = "failed"
+            invocation.error = "workload disappeared during invocation"
+            invocation.completed_at = utc_now()
+            return invocation.model_dump(mode="json")
+
+        if workload.status in {"completed", "failed", "stopped"}:
+            invocation.status = workload.status
+            invocation.completed_at = utc_now()
+            stdout = workload.runtime_details.get("stdout") or workload.runtime_details.get("logs") or ""
+            invocation.result = {
+                "workload_id": workload.workload_id,
+                "status": workload.status,
+                "stdout": stdout,
+                "runtime_details": workload.runtime_details,
+                "accrued_cost_usd": workload.accrued_cost_usd,
+            }
+            if workload.status == "failed":
+                invocation.error = stdout or "function execution failed"
+            return invocation.model_dump(mode="json")
+
+        await asyncio.sleep(poll_interval)
+        elapsed += poll_interval
+
+    invocation.status = "timeout"
+    invocation.error = f"invocation timed out after {timeout} seconds"
+    invocation.completed_at = utc_now()
+    return invocation.model_dump(mode="json")
 
 
 @app.post(f"{settings.api_prefix}/routes")
@@ -846,12 +936,40 @@ def list_images(workspace_id: str | None = Query(default=None)) -> list[dict]:
     return [i.model_dump(mode="json") for i in store.list_images(workspace_id)]
 
 
+def _run_image_build(image_id: str) -> None:
+    """Background task that runs the real Docker build."""
+    try:
+        store.build_image(image_id)
+    except Exception as exc:
+        # Best-effort logging; failures are already stored on the image record.
+        print(f"[build_image] background build failed for {image_id}: {exc}")
+
+
 @app.post(f"{settings.api_prefix}/images/build")
-def build_image(request: ImageCreateRequest) -> dict:
+def build_image(request: ImageCreateRequest, background_tasks: BackgroundTasks) -> dict:
     image = store.create_image(request)
     image.status = "building"
     image.build_log = "Build started..."
+    # Persist the initial building state
+    store.images[image.image_id] = image
+    background_tasks.add_task(_run_image_build, image.image_id)
     return image.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/images/{{image_id}}/build-status")
+def get_image_build_status(image_id: str) -> dict:
+    try:
+        image = store.get_image(image_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "image_id": image.image_id,
+        "status": image.status,
+        "image_ref": image.image_ref,
+        "build_log": image.build_log,
+        "updated_at": image.updated_at,
+        "built_at": image.built_at,
+    }
 
 
 @app.get(f"{settings.api_prefix}/images/{{image_id}}")

@@ -37,6 +37,7 @@ from .models import (
     EnvironmentRecord,
     ExecutionBackend,
     FunctionAutoscalerConfig,
+    FunctionInvocationResponse,
     FunctionStats,
     ImageCreateRequest,
     ImageRecord,
@@ -72,6 +73,7 @@ from .models import (
     VolumeRecord,
     VolumeSnapshot,
     WorkloadCreateRequest,
+    WorkloadInvokeRequest,
     WorkloadKind,
     WorkloadLaunchSpec,
     WorkloadLogEntry,
@@ -115,6 +117,7 @@ class InMemoryStore:
     volume_snapshots: dict[str, Any] = field(default_factory=dict)
     function_autoscalers: dict[str, Any] = field(default_factory=dict)
     function_stats: dict[str, Any] = field(default_factory=dict)
+    invocations: dict[str, FunctionInvocationResponse] = field(default_factory=dict)
     logs: dict[str, WorkloadLogEntry] = field(default_factory=dict)
     payments: dict[str, PaymentRecord] = field(default_factory=dict)
     billing_history: dict[str, BillingHistoryRecord] = field(default_factory=dict)
@@ -1111,6 +1114,14 @@ class InMemoryStore:
         return schedule
 
     def create_image(self, request: ImageCreateRequest) -> ImageRecord:
+        source_content = request.source_file_content
+        if source_content:
+            import base64
+            try:
+                source_content = base64.b64decode(source_content, validate=True).decode("utf-8")
+            except Exception:
+                # If decoding fails, treat as plain text for backwards compatibility
+                pass
         image = ImageRecord(
             name=request.name,
             workspace_id=request.workspace_id,
@@ -1118,6 +1129,8 @@ class InMemoryStore:
             base_image=request.base_image,
             dockerfile=request.dockerfile,
             build_args=request.build_args,
+            source_file_content=source_content,
+            source_filename=request.source_filename,
         )
         self.images[image.image_id] = image
         return image
@@ -1141,46 +1154,64 @@ class InMemoryStore:
         import subprocess
         import tempfile
         import os
-        
-        image = self.images[image_id]
+
+        image = self.images.get(image_id)
+        if image is None:
+            raise KeyError(f"image {image_id} not found")
+
         image.status = "building"
         image.updated_at = utc_now()
-        
-        # Create temp directory for build context
+        self.images[image_id] = image
+
+        # Tag is deterministic per workspace/image
+        tag = f"boxty/{image.workspace_id}/{image.name}:latest"
+
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Write Dockerfile
             dockerfile_path = os.path.join(tmpdir, "Dockerfile")
-            dockerfile_content = image.dockerfile or f"FROM {image.base_image or 'alpine:latest'}\n"
+
+            if image.dockerfile:
+                dockerfile_content = image.dockerfile
+            elif image.source_filename and image.source_filename.endswith(".py"):
+                dockerfile_content = "FROM python:3.11-slim\nWORKDIR /app\nCOPY main.py /app/main.py\nCMD [\"python\", \"/app/main.py\"]\n"
+            else:
+                dockerfile_content = f"FROM {image.base_image or 'alpine:latest'}\n"
+
             with open(dockerfile_path, "w") as f:
                 f.write(dockerfile_content)
-            
-            # Build args
+
+            # Save source file into build context when available
+            if image.source_filename and image.source_file_content:
+                source_path = os.path.join(tmpdir, image.source_filename)
+                try:
+                    os.makedirs(os.path.dirname(source_path) or tmpdir, exist_ok=True)
+                except OSError:
+                    pass
+                # Normalize Python source to be copied as main.py when generating Dockerfile
+                if image.source_filename.endswith(".py") and not image.dockerfile:
+                    source_path = os.path.join(tmpdir, "main.py")
+                with open(source_path, "w") as f:
+                    f.write(image.source_file_content)
+
             build_args = image.build_args or {}
             args_list = []
             for key, value in build_args.items():
                 args_list.extend(["--build-arg", f"{key}={value}"])
-            
-            # Tag
-            tag = f"boxty/{image.workspace_id}/{image.name}:latest"
-            
+
             try:
-                # Run docker build
                 result = subprocess.run(
                     ["docker", "build", "-t", tag, "."] + args_list,
                     cwd=tmpdir,
                     capture_output=True,
                     text=True,
-                    timeout=300,  # 5 minute timeout
+                    timeout=300,
                 )
-                
                 image.build_log = result.stdout + result.stderr
-                
                 if result.returncode == 0:
                     image.status = "ready"
                     image.image_ref = tag
+                    image.built_at = utc_now()
                 else:
                     image.status = "failed"
-                    
             except subprocess.TimeoutExpired:
                 image.status = "failed"
                 image.build_log = "Build timed out after 5 minutes"
@@ -1190,9 +1221,94 @@ class InMemoryStore:
             except Exception as e:
                 image.status = "failed"
                 image.build_log = f"Build error: {str(e)}"
-        
+
+        image.updated_at = utc_now()
         self.images[image_id] = image
         return image
+
+    def _select_backend_for_workload(self, workload: WorkloadRecord) -> tuple[ExecutionBackend, str | None]:
+        """Mirror of select_backend using an existing workload record."""
+        self.expire_stale_providers()
+        self.reclaim_expired_assignments()
+        gpu_needed = workload.resources.gpu_count > 0
+        if workload.requested_backend:
+            if workload.requested_backend == ExecutionBackend.runpod_serverless:
+                return ExecutionBackend.runpod_serverless, None
+
+        eligible = [
+            provider
+            for provider in self.providers.values()
+            if provider.status == ProviderStatus.online
+            and provider.pool == (workload.pool or settings.default_provider_pool)
+            and provider.region == (workload.region or provider.region)
+            and provider.available_slots > 0
+            and provider.capabilities.cpu_cores >= workload.resources.cpu_cores
+            and provider.capabilities.memory_mb >= workload.resources.memory_mb
+            and provider.capabilities.disk_gb >= workload.resources.disk_gb
+            and provider.capabilities.gpu_count >= workload.resources.gpu_count
+            and (not gpu_needed or provider.capabilities.gpu_type == workload.resources.gpu_type or workload.resources.gpu_type is None)
+            and (
+                workload.kind != WorkloadKind.endpoint
+                or provider.capabilities.supports_endpoint_serving
+            )
+        ]
+        if eligible:
+            selected = sorted(eligible, key=lambda provider: (-provider.available_slots, provider.updated_at))[0]
+            return ExecutionBackend.provider, selected.provider_id
+
+        if settings.runpod_enabled:
+            return ExecutionBackend.runpod_serverless, None
+
+        raise ValueError("no eligible backend available")
+
+    def invoke_workload_sync(
+        self,
+        workload_id: str,
+        request: WorkloadInvokeRequest,
+        timeout_seconds: int = 300,
+    ) -> FunctionInvocationResponse:
+        workload = self.workloads.get(workload_id)
+        if workload is None:
+            raise KeyError(f"workload {workload_id} not found")
+        if workload.kind != WorkloadKind.function:
+            raise ValueError("invoke_sync is only supported for function workloads")
+
+        invocation = FunctionInvocationResponse(
+            workload_id=workload_id,
+            status=WorkloadStatus.pending.value,
+        )
+        self.invocations[invocation.invocation_id] = invocation
+
+        # Encode payload into the workload env so the worker can pass it to the container
+        if request.payload:
+            import json as _json
+            workload.env["BOXTY_INVOCATION_PAYLOAD"] = _json.dumps(request.payload)
+        workload.env["BOXTY_INVOCATION_ID"] = invocation.invocation_id
+        workload.env["BOXTY_SYNC_TIMEOUT"] = str(timeout_seconds)
+
+        # Assign a backend if the workload is not already scheduled to a provider
+        if not workload.assigned_provider_id:
+            backend, provider_id = self._select_backend_for_workload(workload)
+            workload.selected_backend = backend
+            workload.assigned_provider_id = provider_id
+            if provider_id and provider_id in self.providers:
+                provider = self.providers[provider_id]
+                provider.available_slots = max(0, provider.available_slots - 1)
+                provider.running_workloads += 1
+                provider.updated_at = utc_now()
+                self.providers[provider_id] = provider
+                self._put_item(provider_item(provider))
+
+        workload.status = WorkloadStatus.scheduled
+        workload.updated_at = utc_now()
+        self.workloads[workload_id] = workload
+        self._put_item(workload_item(workload))
+
+        invocation.status = WorkloadStatus.scheduled.value
+        return invocation
+
+    def get_invocation(self, invocation_id: str) -> FunctionInvocationResponse:
+        return self.invocations[invocation_id]
 
     # -- proxy tokens ----------------------------------------------------------
 

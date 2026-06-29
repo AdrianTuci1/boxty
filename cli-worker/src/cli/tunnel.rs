@@ -1,10 +1,11 @@
 use base64::{Engine as _, engine::general_purpose};
 use futures::{SinkExt, StreamExt};
 use serde_json::{json, Value};
+use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 
-pub async fn run_tunnel_loop(_control_plane_url: String) {
+pub async fn run_tunnel_loop(_runtime: Arc<crate::cli::worker::WorkerRuntime>, _control_plane_url: String) {
     let retry_delay = std::time::Duration::from_secs(5);
     loop {
         let state = crate::state::read_json::<Option<crate::state::ProviderState>>(
@@ -14,7 +15,13 @@ pub async fn run_tunnel_loop(_control_plane_url: String) {
 
         if let Some(ref state) = state {
             if !state.provider_id.is_empty() && !state.provider_auth_token.is_empty() {
-                run_tunnel(&state.control_plane_url, &state.provider_id, &state.provider_auth_token).await;
+                run_tunnel(
+                    Arc::clone(&_runtime),
+                    &state.control_plane_url,
+                    &state.provider_id,
+                    &state.provider_auth_token,
+                )
+                .await;
             }
         }
 
@@ -23,6 +30,7 @@ pub async fn run_tunnel_loop(_control_plane_url: String) {
 }
 
 pub async fn run_tunnel(
+    runtime: Arc<crate::cli::worker::WorkerRuntime>,
     control_plane_url: &str,
     provider_id: &str,
     provider_token: &str,
@@ -62,8 +70,9 @@ pub async fn run_tunnel(
         match msg {
             Ok(Message::Text(text)) => {
                 let tx = tx.clone();
+                let runtime = Arc::clone(&runtime);
                 tokio::spawn(async move {
-                    if let Some(response) = handle_request(&text).await {
+                    if let Some(response) = handle_message(runtime, &text).await {
                         let _ = tx.send(response);
                     }
                 });
@@ -81,12 +90,20 @@ pub async fn run_tunnel(
     }
 }
 
-async fn handle_request(text: &str) -> Option<String> {
+async fn handle_message(
+    runtime: Arc<crate::cli::worker::WorkerRuntime>,
+    text: &str,
+) -> Option<String> {
     let request: Value = serde_json::from_str(text).ok()?;
-    if request.get("type").and_then(|v| v.as_str()) != Some("request") {
-        return None;
+    let msg_type = request.get("type").and_then(|v| v.as_str())?;
+    match msg_type {
+        "request" => handle_endpoint_request(&request).await,
+        "function_invoke" => handle_function_invoke(runtime, &request).await,
+        _ => None,
     }
+}
 
+async fn handle_endpoint_request(request: &Value) -> Option<String> {
     let request_id = request
         .get("request_id")
         .and_then(|v| v.as_str())
@@ -123,6 +140,70 @@ async fn handle_request(text: &str) -> Option<String> {
             "status": response.status,
             "headers": response.headers,
             "body": response.body,
+        })
+        .to_string(),
+    )
+}
+
+async fn handle_function_invoke(
+    runtime: Arc<crate::cli::worker::WorkerRuntime>,
+    request: &Value,
+) -> Option<String> {
+    let request_id = request
+        .get("request_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let workload_id = request
+        .get("workload_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let invocation_id = request
+        .get("invocation_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let payload = request.get("payload").cloned().unwrap_or(Value::Null);
+
+    if workload_id.is_empty() {
+        return Some(
+            json!({
+                "type": "function_invoke_response",
+                "request_id": request_id,
+                "invocation_id": invocation_id,
+                "status": "failed",
+                "runtime_details": {
+                    "error": "missing workload_id"
+                },
+            })
+            .to_string(),
+        );
+    }
+
+    let state = crate::state::read_json::<Option<crate::state::ProviderState>>(
+        &crate::state::provider_path(),
+        None,
+    )?;
+    let provider_id = state.provider_id;
+    let provider_token = state.provider_auth_token;
+    let control_plane_url = state.control_plane_url;
+
+    let client = crate::cli::worker::ControlPlaneClient::new(&control_plane_url).ok()?;
+    let launch_spec = client
+        .workload_launch_spec(&provider_id, &provider_token, &workload_id)
+        .await
+        .ok()?;
+
+    let result = runtime.invoke_function(&launch_spec, &payload).await.ok()?;
+
+    Some(
+        json!({
+            "type": "function_invoke_response",
+            "request_id": request_id,
+            "invocation_id": invocation_id,
+            "status": result.status,
+            "runtime_details": result.runtime_details,
         })
         .to_string(),
     )
