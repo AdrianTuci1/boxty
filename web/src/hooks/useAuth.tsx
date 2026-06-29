@@ -23,8 +23,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
   }, [])
 
+  const devMode = (import.meta as any).env?.VITE_DEV_MODE === 'true' || (import.meta as any).env?.VITE_DEV_MODE === '1'
+
   return (
-    <AuthContext.Provider value={{ token, login, logout, isAuthenticated: !!token, devMode: false }}>
+    <AuthContext.Provider value={{ token, login, logout, isAuthenticated: !!token, devMode }}>
       {children}
     </AuthContext.Provider>
   )
