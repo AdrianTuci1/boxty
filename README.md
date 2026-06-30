@@ -8,7 +8,7 @@ Boxty is a serverless platform with a centralized FastAPI control plane, provide
 boxty/
 ├── control_plane/   # FastAPI control plane, user/worker/admin CLIs, tests
 ├── cli/             # Rust CLI codebase retained from agentnet
-├── ansible/         # Contabo deployment for control plane and workers
+├── infrastructure/  # Terraform, Ansible, and deployment scripts
 ├── sdk/             # Python and JavaScript SDKs
 ├── landing/         # Marketing / landing frontend
 ├── web/             # Product dashboard frontend
@@ -72,17 +72,20 @@ The legacy Rust CLI (`cli/sdk/`) is a cross-platform binary built with **Cargo**
 - **`sdk/python/`** — Python SDK (`boxty` package) for secrets, volumes, databases, and app state. Requires Python 3.9+. Built with `hatchling` and published to PyPI.
 - **`sdk/js/`** — JavaScript/TypeScript SDK (`@boxty/sdk`) for the same surface. Distributed as ESM + CJS with TypeScript declarations. Published to npm.
 
-### `ansible/` — Infrastructure Deployment
+### `infrastructure/` — Infrastructure Deployment
 
-Ansible playbooks and inventory templates for deploying onto **Contabo** VPS instances.
+Terraform, Ansible, and GitHub Actions for deploying Boxty onto an existing VPS and managing cloud resources (AWS DynamoDB, Cloudflare R2 + DNS).
 
-- `deploy-control-plane.yml` — deploys the FastAPI control plane as a systemd service on a dedicated VPS.
-- `deploy-workers.yml` — downloads the `boxty` CLI binary, installs it as a systemd worker service, and configures it against the control plane.
-- `inventory.yml` — host inventory for operator-managed worker fleets.
+- `terraform/` — AWS DynamoDB, IAM, Cloudflare R2 bucket, DNS records.
+- `ansible/` — playbooks and inventory for deploying the control plane and worker fleet onto existing VPS instances.
+- `scripts/` — helper scripts including `sync-secrets.sh` for uploading local `.env` files to GitHub Secrets.
 
 **Deployment model:**
-- Control plane: one VPS.
-- Workers: manual fleet expansion by adding entries to `inventory.yml` and running the playbook. No Kubernetes required at this stage.
+- Control plane: one existing VPS.
+- Workers: manual fleet expansion by adding entries to `infrastructure/ansible/inventory.yml` and running the playbook. No Kubernetes required at this stage.
+- All workflows are triggered manually via `workflow_dispatch`.
+
+See `infrastructure/README.md` for full setup instructions.
 
 ### `docs/` — Platform Documentation
 
@@ -110,7 +113,6 @@ Ansible playbooks and inventory templates for deploying onto **Contabo** VPS ins
 
 - [Platform Docs](docs/README.md)
 - [Central Control Plane](docs/central-control-plane.md)
+- [Infrastructure Deployment](infrastructure/README.md)
 - [DynamoDB Single Table](docs/dynamodb-single-table.md)
-- [Infrastructure: Contabo + R2](docs/infrastructure-contabo.md)
-- [Runtime Migration Plan](docs/runtime-migration-plan.md)
 - [Worker Deployment](docs/workers/README.md)

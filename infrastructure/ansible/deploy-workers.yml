@@ -13,7 +13,7 @@
     boxty_user: "boxty"
     boxty_group: "boxty"
     boxty_service_name: "boxty-worker"
-    cli_base_url: "https://cli.boxty.dev"
+    cli_base_url: "{{ boxty_cli_base_url | default('https://cli.boxty.dev') }}"
 
   tasks:
     # ═══════════════════════════════════════════════════════════
@@ -72,7 +72,7 @@
     - name: Construct download URL
       ansible.builtin.set_fact:
         boxty_binary_name: "boxty-{{ boxty_os }}-{{ boxty_arch }}"
-        boxty_download_url: "{{ cli_base_url }}/{{ boxty_version }}/boxty-{{ boxty_os }}-{{ boxty_arch }}"
+        boxty_download_url: "{{ cli_base_url }}/cli/{{ boxty_version }}/boxty-{{ boxty_os }}-{{ boxty_arch }}"
 
     - name: Download boxty CLI binary
       ansible.builtin.get_url:
@@ -92,6 +92,24 @@
       ansible.builtin.fail:
         msg: "Boxty binary not found at {{ boxty_install_dir }}/boxty"
       when: not boxty_binary_stat.stat.exists
+
+    - name: Download boxty CLI checksum
+      ansible.builtin.get_url:
+        url: "{{ boxty_download_url }}.sha256"
+        dest: "{{ boxty_install_dir }}/boxty.sha256"
+        mode: '0644'
+        owner: "{{ boxty_user }}"
+        group: "{{ boxty_group }}"
+      ignore_errors: true
+      notify: Restart boxty worker
+
+    - name: Verify checksum
+      ansible.builtin.command:
+        cmd: "sha256sum -c boxty.sha256"
+        chdir: "{{ boxty_install_dir }}"
+      when: boxty_binary_stat.stat.exists
+      changed_when: false
+      ignore_errors: true
 
     # ═══════════════════════════════════════════════════════════
     # 3. VERIFY SIGNATURE (if cosign.pub exists)

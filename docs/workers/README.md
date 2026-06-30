@@ -16,7 +16,7 @@ Ensure each VPS has:
 
 ### 2. Configure Inventory
 
-Edit `ansible/inventory.yml`:
+Edit `infrastructure/ansible/inventory.yml`:
 
 ```yaml
 boxty_workers:

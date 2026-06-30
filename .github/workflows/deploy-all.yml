@@ -1,0 +1,83 @@
+name: 🚀 Deploy All
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (e.g., 1.2.3)'
+        required: true
+        type: string
+      control_plane_ip:
+        description: 'Public IP of the existing control plane VPS'
+        required: true
+        type: string
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: production
+        type: choice
+        options:
+          - production
+          - staging
+      provision_infrastructure:
+        description: 'Run Terraform provisioning first'
+        required: true
+        type: boolean
+        default: true
+      publish_release:
+        description: 'Build and publish release artifacts first'
+        required: true
+        type: boolean
+        default: true
+      deploy_control_plane:
+        description: 'Deploy control plane'
+        required: true
+        type: boolean
+        default: true
+      deploy_workers:
+        description: 'Deploy worker fleet'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  provision:
+    if: github.event.inputs.provision_infrastructure == 'true'
+    uses: ./.github/workflows/provision-infrastructure.yml
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      control_plane_ip: ${{ github.event.inputs.control_plane_ip }}
+      terraform_action: apply
+    secrets: inherit
+
+  publish:
+    needs: [provision]
+    if: always() && github.event.inputs.publish_release == 'true' && (needs.provision.result == 'success' || needs.provision.result == 'skipped')
+    uses: ./.github/workflows/build-and-publish-release.yml
+    with:
+      version: ${{ github.event.inputs.version }}
+      publish_sdk_python: true
+      publish_sdk_js: true
+      publish_cli: true
+      publish_cli_client: true
+      deploy_web: true
+      web_environment: ${{ github.event.inputs.environment }}
+    secrets: inherit
+
+  deploy-control-plane:
+    needs: [publish]
+    if: always() && github.event.inputs.deploy_control_plane == 'true' && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    uses: ./.github/workflows/deploy-control-plane-contabo.yml
+    with:
+      environment: ${{ github.event.inputs.environment }}
+      inventory_path: infrastructure/ansible/inventory.yml
+    secrets: inherit
+
+  deploy-workers:
+    needs: [deploy-control-plane]
+    if: always() && github.event.inputs.deploy_workers == 'true' && (needs.deploy-control-plane.result == 'success' || needs.deploy-control-plane.result == 'skipped')
+    uses: ./.github/workflows/deploy-workers-contabo.yml
+    with:
+      inventory_path: infrastructure/ansible/inventory.yml
+      target_group: boxty_workers
+    secrets: inherit

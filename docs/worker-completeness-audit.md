@@ -8,7 +8,7 @@ Acest audit separa clar:
 ## Status curent
 
 - [x] Exista subcomanda Rust `boxty worker`
-- [x] Workerul citeste config JSON compatibil cu `ansible/templates/worker-config.json.j2`
+- [x] Workerul citeste config JSON compatibil cu `infrastructure/ansible/templates/worker-config.json.j2`
 - [x] Workerul foloseste token shared doar pentru enrollment, apoi token runtime per-provider emis de control plane
 - [x] Workerul se poate inregistra in control plane
 - [x] Workerul trimite heartbeat-uri periodice

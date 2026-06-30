@@ -27,7 +27,7 @@ pip install ansible
 
 ## Inventory Configuration
 
-Edit `ansible/inventory.yml` to match your VPS infrastructure:
+Edit `infrastructure/ansible/inventory.yml` to match your VPS infrastructure:
 
 ```yaml
 all:

@@ -1,12 +1,22 @@
 name: Deploy Workers Contabo
 
 on:
+  workflow_call:
+    inputs:
+      inventory_path:
+        description: Ansible inventory path
+        required: true
+        type: string
+      target_group:
+        description: Ansible target group
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       inventory_path:
         description: Ansible inventory path
         required: true
-        default: ansible/inventory.yml
+        default: infrastructure/ansible/inventory.yml
       target_group:
         description: Ansible target group
         required: true
@@ -38,6 +48,7 @@ jobs:
       - name: Deploy worker fleet
         env:
           ANSIBLE_HOST_KEY_CHECKING: "false"
+          BOXTY_VERSION: ${{ github.event.inputs.version || 'latest' }}
           BOXTY_CONTROL_PLANE_URL: ${{ secrets.BOXTY_CONTROL_PLANE_URL }}
           BOXTY_PROVIDER_SHARED_TOKEN: ${{ secrets.BOXTY_PROVIDER_SHARED_TOKEN }}
           BOXTY_R2_ACCOUNT_ID: ${{ secrets.BOXTY_R2_ACCOUNT_ID }}
@@ -50,4 +61,4 @@ jobs:
           BOXTY_NODE_KEY: ${{ secrets.BOXTY_NODE_KEY }}
           BOXTY_LLM_API_KEY: ${{ secrets.BOXTY_LLM_API_KEY }}
         run: |
-          ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-workers.yml --limit "${{ inputs.target_group }}"
+          ansible-playbook -i "${{ inputs.inventory_path }}" infrastructure/ansible/deploy-workers.yml --limit "${{ inputs.target_group }}"

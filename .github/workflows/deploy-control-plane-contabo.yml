@@ -1,16 +1,30 @@
 name: Deploy Control Plane Contabo
 
 on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        type: string
+      inventory_path:
+        description: Ansible inventory path
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       environment:
         description: Deployment environment
         required: true
         default: production
+        type: choice
+        options:
+          - production
+          - staging
       inventory_path:
         description: Ansible inventory path
         required: true
-        default: ansible/inventory.yml
+        default: infrastructure/ansible/inventory.yml
 
 jobs:
   deploy-control-plane:
@@ -32,8 +46,8 @@ jobs:
           CONTROL_PLANE_SSH_KEY: ${{ secrets.CONTROL_PLANE_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "$CONTROL_PLANE_SSH_KEY" > ~/.ssh/control_plane
-          chmod 600 ~/.ssh/control_plane
+          printf '%s\n' "$CONTROL_PLANE_SSH_KEY" > ~/.ssh/boxty_control_plane
+          chmod 600 ~/.ssh/boxty_control_plane
 
       - name: Deploy control plane
         env:
@@ -54,4 +68,4 @@ jobs:
           BOXTY_SMTP_PASSWORD: ${{ secrets.BOXTY_SMTP_PASSWORD }}
           BOXTY_INVITE_EMAIL_FROM: ${{ secrets.BOXTY_INVITE_EMAIL_FROM }}
         run: |
-          ansible-playbook -i "${{ inputs.inventory_path }}" ansible/deploy-control-plane.yml
+          ansible-playbook -i "${{ inputs.inventory_path }}" infrastructure/ansible/deploy-control-plane.yml

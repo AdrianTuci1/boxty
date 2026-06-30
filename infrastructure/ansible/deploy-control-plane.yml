@@ -1,5 +1,7 @@
 ---
-- name: Deploy Boxty Control Plane on Contabo
+# Deploy Boxty Control Plane on an existing VPS.
+# Usage: ansible-playbook -i inventory.yml deploy-control-plane.yml
+- name: Deploy Boxty Control Plane
   hosts: boxty_control_plane
   become: true
   vars:
@@ -7,7 +9,6 @@
     boxty_control_plane_user: "boxty"
     boxty_control_plane_group: "boxty"
     boxty_control_plane_service: "boxty-control-plane"
-    boxty_control_plane_version: "{{ lookup('env', 'BOXTY_CONTROL_PLANE_VERSION') | default('main', true) }}"
 
   tasks:
     - name: Ensure boxty user exists
@@ -32,11 +33,14 @@
           - git
           - python3
           - python3-venv
+          - nginx
+          - certbot
+          - python3-certbot-nginx
         state: present
 
     - name: Sync control plane source
       ansible.builtin.copy:
-        src: "../control_plane/"
+        src: "../../control_plane/"
         dest: "{{ boxty_control_plane_dir }}/app/"
         owner: "{{ boxty_control_plane_user }}"
         group: "{{ boxty_control_plane_group }}"
@@ -80,12 +84,43 @@
         - Reload systemd
         - Restart control plane
 
+    - name: Deploy nginx site configuration
+      ansible.builtin.template:
+        src: templates/nginx-boxty.conf.j2
+        dest: "/etc/nginx/sites-available/boxty-control-plane"
+        mode: "0644"
+      vars:
+        boxty_domain: "{{ boxty_domain | default('boxty.dev') }}"
+        boxty_control_plane_fqdn: "{{ boxty_control_plane_fqdn | default('control.boxty.dev') }}"
+      notify: Reload nginx
+
+    - name: Enable nginx site
+      ansible.builtin.file:
+        src: "/etc/nginx/sites-available/boxty-control-plane"
+        dest: "/etc/nginx/sites-enabled/boxty-control-plane"
+        state: link
+      notify: Reload nginx
+
     - name: Enable and start control plane
       ansible.builtin.systemd:
         name: "{{ boxty_control_plane_service }}"
         enabled: true
         state: started
         daemon_reload: true
+
+    - name: Obtain or renew TLS certificate for control plane
+      ansible.builtin.command:
+        cmd: "certbot --nginx -d {{ boxty_control_plane_fqdn | default('control.boxty.dev') }} --non-interactive --agree-tos -m {{ certbot_email | default('admin@' + boxty_domain | default('boxty.dev')) }}"
+      register: certbot_result
+      changed_when: "'Congratulations' in certbot_result.stdout or 'Renewal' in certbot_result.stdout"
+      ignore_errors: true
+
+    - name: Obtain wildcard TLS certificate
+      ansible.builtin.command:
+        cmd: "certbot --nginx -d '*.{{ boxty_domain | default('boxty.dev') }}' --non-interactive --agree-tos -m {{ certbot_email | default('admin@' + boxty_domain | default('boxty.dev')) }}"
+      register: certbot_wildcard_result
+      changed_when: "'Congratulations' in certbot_wildcard_result.stdout or 'Renewal' in certbot_wildcard_result.stdout"
+      ignore_errors: true
 
   handlers:
     - name: Reload systemd
@@ -96,3 +131,8 @@
       ansible.builtin.systemd:
         name: "{{ boxty_control_plane_service }}"
         state: restarted
+
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
