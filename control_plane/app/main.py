@@ -26,7 +26,7 @@ import base64
 import json
 import uuid
 
-from .store import issued_access_token, store
+from .store import issued_access_token, issued_access_token_inv, store
 
 app = FastAPI(title=settings.app_name)
 
@@ -84,6 +84,38 @@ def register_user(request: UserRegistrationRequest) -> UserRegistrationResponse:
         default_workspace_id=workspace.workspace_id,
         default_environment_id=environment.environment_id,
     )
+
+def _resolve_user_from_token(authorization: str | None = Header(default=None)) -> dict:
+    """Resolve the user context from a bearer token."""
+    token = (authorization or "").replace("Bearer ", "").strip()
+    if token:
+        external_user_id = issued_access_token_inv(token)
+        if external_user_id:
+            for user in store.users.values():
+                if user.external_user_id == external_user_id:
+                    account = store.accounts.get(user.user_id)
+                    # Find the default environment for this user's default workspace
+                    default_env = next(
+                        (e for e in store.environments.values() if e.workspace_id == user.default_workspace_id and e.is_default),
+                        None,
+                    )
+                    return {
+                        "user_id": user.user_id,
+                        "external_user_id": user.external_user_id,
+                        "email": user.email,
+                        "balance": account.balance_usd if account else 0.0,
+                        "workspace_id": user.default_workspace_id,
+                        "environment_id": default_env.environment_id if default_env else "",
+                        "workspaces": [w.model_dump(mode="json") for w in store.workspaces.values() if w.owner_id == user.user_id],
+                    }
+    # Dev fallback
+    return {"user_id": "dev-user", "email": "dev@boxty.local", "balance": 20.0, "workspace_id": "*", "workspaces": []}
+
+
+@app.get(f"{settings.api_prefix}/auth/me")
+def whoami(authorization: str | None = Header(default=None)) -> dict:
+    return _resolve_user_from_token(authorization)
+
 
 
 @app.get(f"{settings.api_prefix}/pricing")
@@ -346,6 +378,13 @@ def get_workload(workload_id: str) -> dict:
     return workload.model_dump(mode="json")
 
 
+@app.delete(f"{settings.api_prefix}/workloads/{{workload_id}}")
+def delete_workload(workload_id: str) -> dict:
+    if workload_id not in store.workloads:
+        raise HTTPException(status_code=404, detail="workload not found")
+    del store.workloads[workload_id]
+    return {"deleted": workload_id}
+
 @app.get(f"{settings.api_prefix}/workloads/{{workload_id}}/launch-spec")
 def get_workload_launch_spec(workload_id: str, _: str = Depends(require_provider_runtime_auth)) -> dict:
     try:
@@ -379,6 +418,11 @@ def publish_route(request: RoutePublishRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return route.model_dump(mode="json")
+
+@app.get(f"{settings.api_prefix}/routes")
+def list_routes() -> list[dict]:
+    return [route.model_dump(mode="json") for route in store.routes.values()]
+
 
 
 @app.post(f"{settings.api_prefix}/sandbox-sessions")

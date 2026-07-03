@@ -68,15 +68,49 @@ class Boxty:
         r.raise_for_status()
         return r.json()
 
-    def create_workspace(self, owner_id: str, name: str) -> dict[str, Any]:
-        r = self._http.post("/v1/workspaces", json={"owner_id": owner_id, "name": name})
+    def create_workspace(self, name: str | dict[str, Any], owner_id: str | None = None) -> dict[str, Any]:
+        """Create a workspace.
+
+        Supports both the documented ``client.create_workspace("name")`` form
+        and the low-level ``client.create_workspace({"owner_id": ..., "name": ...})`` form.
+        """
+        if isinstance(name, dict):
+            payload = name
+        else:
+            payload = {"owner_id": owner_id or self._default_user_id(), "name": name}
+        r = self._http.post("/v1/workspaces", json=payload)
         r.raise_for_status()
         return r.json()
+
+    def _default_user_id(self) -> str:
+        return os.environ.get("BOXTY_USER_ID", "")
+
 
     def environments(self, workspace_id: str) -> list[dict[str, Any]]:
         r = self._http.get(f"/v1/workspaces/{workspace_id}/environments")
         r.raise_for_status()
         return r.json()
+
+    def create_sandbox(self, image: str = "python:3.11", cpu: int = 1, memory: int = 512, timeout: int = 3600, **kwargs) -> dict[str, Any]:
+        """Create a sandbox workload.
+
+        Convenience wrapper around ``create_workload`` that mirrors the
+        documented quickstart API.
+        """
+        owner_id = kwargs.get("owner_id") or self._default_user_id()
+        workspace_id = kwargs.get("workspace_id") or os.environ.get("BOXTY_WORKSPACE_ID")
+        environment_id = kwargs.get("environment_id") or os.environ.get("BOXTY_ENVIRONMENT_ID")
+        if not owner_id or not workspace_id or not environment_id:
+            raise ValueError("owner_id, workspace_id, environment_id required for create_sandbox")
+        return self.create_workload(
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            kind="sandbox",
+            image=image,
+            cpu_cores=cpu,
+            memory_mb=memory,
+        )
 
     def create_environment(self, workspace_id: str, name: str) -> dict[str, Any]:
         r = self._http.post("/v1/environments", json={"workspace_id": workspace_id, "name": name})

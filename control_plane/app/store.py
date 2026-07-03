@@ -761,3 +761,13 @@ store = InMemoryStore()
 
 def issued_access_token(external_user_id: str) -> str:
     return f"boxty_{external_user_id}_{generated_id('tok')}"
+
+
+def issued_access_token_inv(token: str) -> str | None:
+    """Extract the external_user_id from a development access token."""
+    if not token.startswith("boxty_"):
+        return None
+    parts = token.split("_", 2)
+    if len(parts) < 3:
+        return None
+    return parts[1]
