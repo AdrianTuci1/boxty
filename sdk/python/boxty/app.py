@@ -129,8 +129,30 @@ class Secret:
     def from_name(cls, name: str, **kwargs: Any) -> Secret:
         return cls(name=name, **kwargs)
 
+    def set_env(self, name: str, value: str) -> None:
+        """Attach a key-value pair to this secret as an environment variable."""
+        self._env_name = name
+        self._env_value = value
+
     def to_manifest(self) -> dict[str, Any]:
-        return {"name": self.name, "createIfMissing": self.create_if_missing}
+        manifest = {"name": self.name, "createIfMissing": self.create_if_missing}
+        if hasattr(self, "_env_name"):
+            manifest["env_name"] = self._env_name
+            manifest["env_value"] = self._env_value
+        return manifest
+
+
+@dataclass
+class Database:
+    name: str
+    pk: str = "id"
+    sk: str | None = None
+
+    def to_manifest(self) -> dict[str, Any]:
+        manifest: dict[str, Any] = {"name": self.name, "pk": self.pk}
+        if self.sk:
+            manifest["sk"] = self.sk
+        return manifest
 
 
 class Image:
@@ -296,8 +318,9 @@ class App:
     that make up your application.
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str = "my-app", image: str | Image | None = None) -> None:
         self.name = name
+        self._image: Image | None = Image(image) if isinstance(image, str) else image
         self._functions: list[FunctionDef] = []
         self._endpoints: list[WebEndpointDef] = []
         self._volumes: dict[str, Volume] = {}
@@ -408,7 +431,7 @@ class App:
         """Serialize the entire app definition to a JSON-safe dict."""
         return {
             "name": self.name,
-            "image": None,  # global image if set across all fns; defer per-fn
+            "image": self._image.to_manifest() if self._image else None,
             "volumes": [v.to_manifest() for v in self._volumes.values()],
             "secrets": [s.to_manifest() for s in self._secrets],
             "functions": [f.to_manifest() for f in self._functions],

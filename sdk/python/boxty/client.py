@@ -19,34 +19,9 @@ class Boxty:
     development.
     """
 
-    def __init__(self, base_url: str | None = None, token: str | None = None) -> None:
+    def __init__(self, base_url: str | None = None) -> None:
         self._base = (base_url or os.environ.get("BOXTY_GATEWAY_URL") or "http://127.0.0.1:8080").rstrip("/")
-        self._token = token
         self._http = httpx.Client(base_url=self._base, timeout=30)
-        if self._token:
-            self._http.headers["Authorization"] = f"Bearer {self._token}"
-
-    # -- factory methods -------------------------------------------------------
-
-    @classmethod
-    def from_env(cls) -> Boxty:
-        """Create a client from environment variables.
-
-        Uses ``BOXTY_GATEWAY_URL`` for the base URL and
-        ``BOXTY_TOKEN`` for the auth token.
-        """
-        return cls(
-            base_url=os.environ.get("BOXTY_GATEWAY_URL"),
-            token=os.environ.get("BOXTY_TOKEN"),
-        )
-
-    @classmethod
-    def from_credentials(cls, email: str, password: str, base_url: str | None = None) -> Boxty:
-        """Create a client and authenticate with email/password."""
-        client = cls(base_url=base_url)
-        # Note: password auth not yet implemented in backend
-        # This is a placeholder for future implementation
-        return client
 
     # -- sub-clients ----------------------------------------------------------
 
@@ -62,135 +37,108 @@ class Boxty:
     def databases(self) -> DatabasesClient:
         return DatabasesClient(self._http, self._base)
 
-    # -- state -----------------------------------------------------------------
+    # -- app state ------------------------------------------------------------
 
     def state(self) -> dict[str, Any]:
         r = self._http.get("/api/cli/state")
         r.raise_for_status()
         return r.json()
 
-    # -- auth ------------------------------------------------------------------
+    # -- centralized control plane ------------------------------------------
 
     def signup(self, external_user_id: str, email: str | None = None, organization_id: str | None = None) -> dict[str, Any]:
-        payload = {
-            "external_user_id": external_user_id,
-            "email": email,
-            "organization_id": organization_id,
-        }
-        r = self._http.post("/v1/auth/register", json=payload)
+        r = self._http.post(
+            "/v1/auth/register",
+            json={
+                "external_user_id": external_user_id,
+                "email": email,
+                "organization_id": organization_id,
+            },
+        )
         r.raise_for_status()
         return r.json()
 
-    def login(self, external_user_id: str, email: str | None = None) -> dict[str, Any]:
-        r = self._http.post("/v1/auth/login", json={"external_user_id": external_user_id, "email": email})
-        r.raise_for_status()
-        return r.json()
-
-    def whoami(self, token: str | None = None) -> dict[str, Any]:
-        """Validate access token and return current user info."""
-        headers = {}
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-        r = self._http.get("/v1/auth/me", headers=headers or None)
-        r.raise_for_status()
-        return r.json()
-
-    # -- accounts / users ------------------------------------------------------
-
-    def get_account(self, user_id: str) -> dict[str, Any]:
+    def balance(self, user_id: str) -> dict[str, Any]:
         r = self._http.get(f"/v1/accounts/{user_id}")
         r.raise_for_status()
         return r.json()
 
-    def get_user(self, user_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/users/{user_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- workspaces -----------------------------------------------------------
-
     def workspaces(self, owner_id: str | None = None) -> list[dict[str, Any]]:
-        params = {"owner_id": owner_id} if owner_id else None
-        r = self._http.get("/v1/workspaces", params=params)
+        r = self._http.get("/v1/workspaces", params={"owner_id": owner_id} if owner_id else None)
         r.raise_for_status()
         return r.json()
 
-    def create_workspace(self, owner_id: str, name: str) -> dict[str, Any]:
-        r = self._http.post("/v1/workspaces", json={"owner_id": owner_id, "name": name})
+    def create_workspace(self, name: str | dict[str, Any], owner_id: str | None = None) -> dict[str, Any]:
+        """Create a workspace.
+
+        Supports both the documented ``client.create_workspace("name")`` form
+        and the low-level ``client.create_workspace({"owner_id": ..., "name": ...})`` form.
+        """
+        if isinstance(name, dict):
+            payload = name
+        else:
+            payload = {"owner_id": owner_id or self._default_user_id(), "name": name}
+        r = self._http.post("/v1/workspaces", json=payload)
         r.raise_for_status()
         return r.json()
 
-    def get_workspace(self, workspace_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/workspaces/{workspace_id}")
-        r.raise_for_status()
-        return r.json()
+    def _default_user_id(self) -> str:
+        return os.environ.get("BOXTY_USER_ID", "")
 
-    def update_workspace(self, workspace_id: str, **kwargs: Any) -> dict[str, Any]:
-        r = self._http.patch(f"/v1/workspaces/{workspace_id}", json=kwargs)
-        r.raise_for_status()
-        return r.json()
-
-    def delete_workspace(self, workspace_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/workspaces/{workspace_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- environments ---------------------------------------------------------
 
     def environments(self, workspace_id: str) -> list[dict[str, Any]]:
         r = self._http.get(f"/v1/workspaces/{workspace_id}/environments")
         r.raise_for_status()
         return r.json()
 
+    def create_sandbox(self, image: str = "python:3.11", cpu: int = 1, memory: int = 512, timeout: int = 3600, **kwargs) -> dict[str, Any]:
+        """Create a sandbox workload.
+
+        Convenience wrapper around ``create_workload`` that mirrors the
+        documented quickstart API.
+        """
+        owner_id = kwargs.get("owner_id") or self._default_user_id()
+        workspace_id = kwargs.get("workspace_id") or os.environ.get("BOXTY_WORKSPACE_ID")
+        environment_id = kwargs.get("environment_id") or os.environ.get("BOXTY_ENVIRONMENT_ID")
+        if not owner_id or not workspace_id or not environment_id:
+            raise ValueError("owner_id, workspace_id, environment_id required for create_sandbox")
+        return self.create_workload(
+            owner_id=owner_id,
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            kind="sandbox",
+            image=image,
+            cpu_cores=cpu,
+            memory_mb=memory,
+        )
+
     def create_environment(self, workspace_id: str, name: str) -> dict[str, Any]:
         r = self._http.post("/v1/environments", json={"workspace_id": workspace_id, "name": name})
         r.raise_for_status()
         return r.json()
 
-    def get_environment(self, environment_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/environments/{environment_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def update_environment(self, environment_id: str, **kwargs: Any) -> dict[str, Any]:
-        r = self._http.patch(f"/v1/environments/{environment_id}", json=kwargs)
-        r.raise_for_status()
-        return r.json()
-
-    def delete_environment(self, environment_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/environments/{environment_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- api keys -------------------------------------------------------------
-
     def api_keys(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
-        params = {"workspace_id": workspace_id} if workspace_id else None
-        r = self._http.get("/v1/api-keys", params=params)
+        r = self._http.get("/v1/api-keys", params={"workspace_id": workspace_id} if workspace_id else None)
         r.raise_for_status()
         return r.json()
 
     def create_api_key(self, owner_id: str, workspace_id: str, environment_id: str, name: str) -> dict[str, Any]:
-        r = self._http.post("/v1/api-keys", json={"owner_id": owner_id, "workspace_id": workspace_id, "environment_id": environment_id, "name": name})
+        r = self._http.post(
+            "/v1/api-keys",
+            json={
+                "owner_id": owner_id,
+                "workspace_id": workspace_id,
+                "environment_id": environment_id,
+                "name": name,
+            },
+        )
         r.raise_for_status()
         return r.json()
 
-    def get_api_key(self, api_key_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/api-keys/{api_key_id}")
+    def pricing(self) -> dict[str, Any]:
+        r = self._http.get("/v1/pricing")
         r.raise_for_status()
         return r.json()
-
-    def update_api_key(self, api_key_id: str, **kwargs: Any) -> dict[str, Any]:
-        r = self._http.patch(f"/v1/api-keys/{api_key_id}", json=kwargs)
-        r.raise_for_status()
-        return r.json()
-
-    def delete_api_key(self, api_key_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/api-keys/{api_key_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- workloads ------------------------------------------------------------
 
     def create_workload(
         self,
@@ -199,339 +147,68 @@ class Boxty:
         environment_id: str,
         kind: str,
         image: str,
+        *,
         command: list[str] | None = None,
-        env: dict[str, str] | None = None,
         region: str | None = None,
         pool: str | None = None,
         endpoint_name: str | None = None,
         requested_backend: str | None = None,
-        cpu_cores: int | None = None,
-        memory_mb: int | None = None,
-        disk_gb: int | None = None,
-        gpu_count: int | None = None,
+        cpu_cores: int = 1,
+        memory_mb: int = 512,
+        disk_gb: int = 2,
+        gpu_count: int = 0,
         gpu_type: str | None = None,
-        metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        payload: dict[str, Any] = {
-            "owner_id": owner_id,
-            "workspace_id": workspace_id,
-            "environment_id": environment_id,
-            "kind": kind,
-            "image": image,
-        }
-        if command is not None:
-            payload["command"] = command
-        if env is not None:
-            payload["env"] = env
-        if region is not None:
-            payload["region"] = region
-        if pool is not None:
-            payload["pool"] = pool
-        if endpoint_name is not None:
-            payload["endpoint_name"] = endpoint_name
-        if requested_backend is not None:
-            payload["requested_backend"] = requested_backend
-        if cpu_cores is not None:
-            payload["cpu_cores"] = cpu_cores
-        if memory_mb is not None:
-            payload["memory_mb"] = memory_mb
-        if disk_gb is not None:
-            payload["disk_gb"] = disk_gb
-        if gpu_count is not None:
-            payload["gpu_count"] = gpu_count
-        if gpu_type is not None:
-            payload["gpu_type"] = gpu_type
-        if metadata is not None:
-            payload["metadata"] = metadata
-        r = self._http.post("/v1/workloads", json=payload)
+        r = self._http.post(
+            "/v1/workloads",
+            json={
+                "owner_id": owner_id,
+                "workspace_id": workspace_id,
+                "environment_id": environment_id,
+                "kind": kind,
+                "image": image,
+                "command": command or [],
+                "region": region,
+                "pool": pool,
+                "endpoint_name": endpoint_name,
+                "requested_backend": requested_backend,
+                "resources": {
+                    "cpu_cores": cpu_cores,
+                    "memory_mb": memory_mb,
+                    "disk_gb": disk_gb,
+                    "gpu_count": gpu_count,
+                    "gpu_type": gpu_type,
+                },
+            },
+        )
         r.raise_for_status()
         return r.json()
 
-    def list_workloads(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[dict[str, Any]]:
-        params = {}
-        if workspace_id is not None:
-            params["workspace_id"] = workspace_id
-        if environment_id is not None:
-            params["environment_id"] = environment_id
-        r = self._http.get("/v1/workloads", params=params)
+    def list_workloads(self) -> list[dict[str, Any]]:
+        r = self._http.get("/v1/workloads")
         r.raise_for_status()
         return r.json()
 
-    def get_workload(self, workload_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/workloads/{workload_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def update_workload(self, workload_id: str, **kwargs: Any) -> dict[str, Any]:
-        r = self._http.patch(f"/v1/workloads/{workload_id}", json=kwargs)
-        r.raise_for_status()
-        return r.json()
-
-    def update_workload_status(self, workload_id: str, status: str, runtime_details: dict[str, Any] | None = None) -> dict[str, Any]:
-        payload = {"status": status}
-        if runtime_details is not None:
-            payload["runtime_details"] = runtime_details
-        r = self._http.post(f"/v1/workloads/{workload_id}/status", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def delete_workload(self, workload_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/workloads/{workload_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def get_workload_metrics(self, workload_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/workloads/{workload_id}/metrics")
-        r.raise_for_status()
-        return r.json()
-
-    def get_workload_logs(self, workload_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/workloads/{workload_id}/logs")
-        r.raise_for_status()
-        return r.json()
-
-    def get_workload_launch_spec(self, workload_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/workloads/{workload_id}/launch-spec")
-        r.raise_for_status()
-        return r.json()
-
-    # -- routes ---------------------------------------------------------------
-
-    def list_routes(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[dict[str, Any]]:
-        params = {}
-        if workspace_id is not None:
-            params["workspace_id"] = workspace_id
-        if environment_id is not None:
-            params["environment_id"] = environment_id
-        r = self._http.get("/v1/routes", params=params)
-        r.raise_for_status()
-        return r.json()
-
-    def create_route(
-        self,
-        workload_id: str,
-        endpoint_name: str | None = None,
-        *,
-        hostname: str | None = None,
-        path_prefix: str = "/",
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"workload_id": workload_id, "path_prefix": path_prefix}
-        if hostname is not None:
-            payload["hostname"] = hostname
-        if endpoint_name is not None:
-            payload["endpoint_name"] = endpoint_name
-        r = self._http.post("/v1/routes", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_route(self, route_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/routes/{route_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def delete_route(self, route_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/routes/{route_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- schedules ------------------------------------------------------------
-
-    def list_schedules(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[dict[str, Any]]:
-        params = {}
-        if workspace_id is not None:
-            params["workspace_id"] = workspace_id
-        if environment_id is not None:
-            params["environment_id"] = environment_id
-        r = self._http.get("/v1/schedules", params=params)
-        r.raise_for_status()
-        return r.json()
-
-    def create_schedule(self, name: str, schedule_type: str, schedule_value: str, function_name: str, workspace_id: str, environment_id: str, image: str | None = None, cpu: str | None = None, memory: str | None = None, gpu: str | None = None) -> dict[str, Any]:
-        payload = {
-            "name": name,
-            "schedule_type": schedule_type,
-            "schedule_value": schedule_value,
-            "function_name": function_name,
-            "workspace_id": workspace_id,
-            "environment_id": environment_id,
-        }
-        if image is not None:
-            payload["image"] = image
-        if cpu is not None:
-            payload["cpu"] = cpu
-        if memory is not None:
-            payload["memory"] = memory
-        if gpu is not None:
-            payload["gpu"] = gpu
-        r = self._http.post("/v1/schedules", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_schedule(self, schedule_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/schedules/{schedule_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def update_schedule(self, schedule_id: str, **kwargs: Any) -> dict[str, Any]:
-        r = self._http.patch(f"/v1/schedules/{schedule_id}", json=kwargs)
-        r.raise_for_status()
-        return r.json()
-
-    def delete_schedule(self, schedule_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/schedules/{schedule_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def trigger_schedule(self, schedule_id: str) -> dict[str, Any]:
-        r = self._http.post(f"/v1/schedules/{schedule_id}/trigger")
-        r.raise_for_status()
-        return r.json()
-
-    # -- images ---------------------------------------------------------------
-
-    def list_images(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
-        params = {"workspace_id": workspace_id} if workspace_id else None
-        r = self._http.get("/v1/images", params=params)
-        r.raise_for_status()
-        return r.json()
-
-    def build_image(
-        self,
-        name: str,
-        dockerfile: str | None = None,
-        base_image: str | None = None,
-        *,
-        workspace_id: str | None = None,
-        owner_id: str | None = None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {"name": name}
-        if dockerfile is not None:
-            payload["dockerfile"] = dockerfile
-        if base_image is not None:
-            payload["base_image"] = base_image
-        if workspace_id is not None:
-            payload["workspace_id"] = workspace_id
-        if owner_id is not None:
-            payload["owner_id"] = owner_id
-        r = self._http.post("/v1/images/build", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def invoke_workload(self, workload_id: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
-        r = self._http.post(f"/v1/workloads/{workload_id}/invoke", json={"payload": payload or {}})
-        r.raise_for_status()
-        return r.json()
-
-    def get_image(self, image_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/images/{image_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def delete_image(self, image_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/images/{image_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- dashboard ------------------------------------------------------------
-
-    def dashboard(self, workspace_id: str, environment_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/dashboard/{workspace_id}/{environment_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def dashboard_summary(self, workspace_id: str, environment_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/dashboard/{workspace_id}/{environment_id}/summary")
-        r.raise_for_status()
-        return r.json()
-
-    # -- billing --------------------------------------------------------------
-
-    def balance(self, user_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/billing/balance?user_id={user_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def billing_balance(self, user_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/billing/balance?user_id={user_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def billing_usage(self, user_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/billing/usage?user_id={user_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def billing_report(
-        self,
-        workspace_id: str | None = None,
-        environment_id: str | None = None,
-        period_start: str | None = None,
-        period_end: str | None = None,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if workspace_id:
-            payload["workspace_id"] = workspace_id
-        if environment_id:
-            payload["environment_id"] = environment_id
-        if period_start:
-            payload["period_start"] = period_start
-        if period_end:
-            payload["period_end"] = period_end
-        r = self._http.post("/v1/billing/report", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def workspace_billing_report(self, workspace_id: str) -> dict[str, Any]:
-        return self.billing_report(workspace_id=workspace_id)
-
-    def environment_billing_report(self, environment_id: str) -> dict[str, Any]:
-        return self.billing_report(environment_id=environment_id)
-
-    def add_credits(self, user_id: str, amount_usd: float) -> dict[str, Any]:
-        r = self._http.post("/v1/billing/credits", json={"user_id": user_id, "amount_usd": amount_usd})
-        r.raise_for_status()
-        return r.json()
-
-    def create_checkout(self, user_id: str, amount_usd: float, success_url: str | None = None, cancel_url: str | None = None) -> dict[str, Any]:
-        payload = {"user_id": user_id, "amount_usd": amount_usd}
-        if success_url is not None:
-            payload["success_url"] = success_url
-        if cancel_url is not None:
-            payload["cancel_url"] = cancel_url
-        r = self._http.post("/v1/billing/checkout", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_billing_history(self, user_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/billing/history?user_id={user_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def get_invoices(self, user_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/billing/invoices?user_id={user_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- usage ----------------------------------------------------------------
-
-    def list_usage(self, workload_id: str | None = None, owner_id: str | None = None) -> list[dict[str, Any]]:
-        params = {}
-        if workload_id is not None:
-            params["workload_id"] = workload_id
-        if owner_id is not None:
-            params["owner_id"] = owner_id
-        r = self._http.get("/v1/usage", params=params)
+    def create_sandbox_session(self, workload_id: str, requester_id: str, ttl_seconds: int = 900) -> dict[str, Any]:
+        r = self._http.post(
+            "/v1/sandbox-sessions",
+            json={
+                "workload_id": workload_id,
+                "requester_id": requester_id,
+                "ttl_seconds": ttl_seconds,
+            },
+        )
         r.raise_for_status()
         return r.json()
 
     def meter_usage(
         self,
         workload_id: str,
-        cpu_seconds: float = 0,
-        ram_gb_seconds: float = 0,
-        gpu_seconds: float = 0,
-        storage_gb_seconds: float = 0,
-        egress_gb: float = 0,
+        *,
+        cpu_seconds: float = 0.0,
+        ram_gb_seconds: float = 0.0,
+        gpu_seconds: float = 0.0,
+        storage_gb_seconds: float = 0.0,
     ) -> dict[str, Any]:
         r = self._http.post(
             "/v1/usage/meter",
@@ -541,340 +218,7 @@ class Boxty:
                 "ram_gb_seconds": ram_gb_seconds,
                 "gpu_seconds": gpu_seconds,
                 "storage_gb_seconds": storage_gb_seconds,
-                "egress_gb": egress_gb,
             },
         )
-        r.raise_for_status()
-        return r.json()
-
-    # -- invites --------------------------------------------------------------
-
-    def list_invites(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
-        params = {"workspace_id": workspace_id} if workspace_id else None
-        r = self._http.get("/v1/invites", params=params)
-        r.raise_for_status()
-        return r.json()
-
-    def create_invite(self, workspace_id: str, email: str, role: str = "viewer") -> dict[str, Any]:
-        r = self._http.post("/v1/invites", json={"workspace_id": workspace_id, "email": email, "role": role})
-        r.raise_for_status()
-        return r.json()
-
-    def accept_invite(self, token: str, email: str | None = None, password: str | None = None, name: str | None = None) -> dict[str, Any]:
-        payload = {"token": token}
-        if email:
-            payload["email"] = email
-        if password:
-            payload["password"] = password
-        if name:
-            payload["name"] = name
-        r = self._http.post("/v1/invites/accept", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_invite(self, invite_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/invites/{invite_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def delete_invite(self, invite_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/invites/{invite_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- workspace members (RBAC) ---------------------------------------------
-
-    def list_workspace_members(self, workspace_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/workspaces/{workspace_id}/members")
-        r.raise_for_status()
-        return r.json()
-
-    def add_workspace_member(self, workspace_id: str, user_id: str, role: str = "viewer", permissions: list[str] | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"user_id": user_id, "role": role}
-        if permissions:
-            payload["permissions"] = permissions
-        r = self._http.post(f"/v1/workspaces/{workspace_id}/members", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_workspace_member(self, workspace_id: str, member_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/workspaces/{workspace_id}/members/{member_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def update_workspace_member(self, workspace_id: str, member_id: str, role: str | None = None, permissions: list[str] | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if role is not None:
-            payload["role"] = role
-        if permissions is not None:
-            payload["permissions"] = permissions
-        r = self._http.patch(f"/v1/workspaces/{workspace_id}/members/{member_id}", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def remove_workspace_member(self, workspace_id: str, member_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/workspaces/{workspace_id}/members/{member_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- password reset --------------------------------------------------------
-
-    def request_password_reset(self, email: str) -> dict[str, Any]:
-        r = self._http.post("/v1/auth/password-reset", json={"email": email})
-        r.raise_for_status()
-        return r.json()
-
-    def confirm_password_reset(self, token: str, new_password: str) -> dict[str, Any]:
-        r = self._http.post("/v1/auth/password-reset/confirm", json={"token": token, "new_password": new_password})
-        r.raise_for_status()
-        return r.json()
-
-    # -- providers ------------------------------------------------------------
-
-    def list_providers(self) -> list[dict[str, Any]]:
-        r = self._http.get("/v1/providers")
-        r.raise_for_status()
-        return r.json()
-
-    def get_provider(self, provider_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/providers/{provider_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def register_provider(self, name: str, region: str, pool: str, total_slots: int) -> dict[str, Any]:
-        r = self._http.post("/v1/providers/register", json={"name": name, "region": region, "pool": pool, "total_slots": total_slots})
-        r.raise_for_status()
-        return r.json()
-
-    def delete_provider(self, provider_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/providers/{provider_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def claim_next_assignment(self, provider_id: str) -> dict[str, Any] | None:
-        r = self._http.post(f"/v1/providers/{provider_id}/assignments/next")
-        r.raise_for_status()
-        return r.json()
-
-    def provider_heartbeat(self, provider_id: str, available_slots: int = 0, running_workloads: int = 0, status: str = "online") -> dict[str, Any]:
-        r = self._http.post(f"/v1/providers/{provider_id}/heartbeat", json={"available_slots": available_slots, "running_workloads": running_workloads, "status": status})
-        r.raise_for_status()
-        return r.json()
-
-    # -- proxy tokens ----------------------------------------------------------
-
-    def list_proxy_tokens(self, workspace_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/proxy-tokens?workspace_id={workspace_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def create_proxy_token(self, workspace_id: str, name: str, allowed_providers: list[str] | None = None, ttl_seconds: int | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"workspace_id": workspace_id, "name": name}
-        if allowed_providers:
-            payload["allowed_providers"] = allowed_providers
-        if ttl_seconds:
-            payload["ttl_seconds"] = ttl_seconds
-        r = self._http.post("/v1/proxy-tokens", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_proxy_token(self, token_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/proxy-tokens/{token_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def update_proxy_token(self, token_id: str, status: str | None = None, allowed_providers: list[str] | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if status:
-            payload["status"] = status
-        if allowed_providers:
-            payload["allowed_providers"] = allowed_providers
-        r = self._http.patch(f"/v1/proxy-tokens/{token_id}", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def delete_proxy_token(self, token_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/proxy-tokens/{token_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- environment members (RBAC) --------------------------------------------
-
-    def list_environment_members(self, environment_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/environments/{environment_id}/members")
-        r.raise_for_status()
-        return r.json()
-
-    def add_environment_member(self, environment_id: str, user_id: str, role: str = "viewer", permissions: list[str] | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {"user_id": user_id, "role": role}
-        if permissions:
-            payload["permissions"] = permissions
-        r = self._http.post(f"/v1/environments/{environment_id}/members", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def get_environment_member(self, environment_id: str, member_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/environments/{environment_id}/members/{member_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def update_environment_member(self, environment_id: str, member_id: str, role: str | None = None, permissions: list[str] | None = None) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if role:
-            payload["role"] = role
-        if permissions:
-            payload["permissions"] = permissions
-        r = self._http.patch(f"/v1/environments/{environment_id}/members/{member_id}", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    def remove_environment_member(self, environment_id: str, member_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/environments/{environment_id}/members/{member_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- sandbox operations ----------------------------------------------------
-
-    def sandbox_exec(self, sandbox_id: str, command: list[str], timeout_seconds: int = 60) -> dict[str, Any]:
-        r = self._http.post(f"/v1/sandbox-sessions/{sandbox_id}/exec", json={"sandbox_id": sandbox_id, "command": command, "timeout_seconds": timeout_seconds})
-        r.raise_for_status()
-        return r.json()
-
-    def list_sandbox_tunnels(self, sandbox_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/sandbox-sessions/{sandbox_id}/tunnels")
-        r.raise_for_status()
-        return r.json()
-
-    def create_sandbox_tunnel(self, sandbox_id: str, port: int, protocol: str = "tcp") -> dict[str, Any]:
-        r = self._http.post(f"/v1/sandbox-sessions/{sandbox_id}/tunnels", json={"port": port, "protocol": protocol})
-        r.raise_for_status()
-        return r.json()
-
-    def list_sandbox_files(self, sandbox_id: str, path: str = "/") -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/sandbox-sessions/{sandbox_id}/filesystem?path={path}")
-        r.raise_for_status()
-        return r.json()
-
-    def copy_sandbox_files(self, sandbox_id: str, files: list[dict[str, Any]]) -> dict[str, Any]:
-        r = self._http.post(f"/v1/sandbox-sessions/{sandbox_id}/filesystem/copy", json={"files": files})
-        r.raise_for_status()
-        return r.json()
-
-    # -- volume operations -----------------------------------------------------
-
-    def list_volume_entries(self, volume_id: str, path: str = "") -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/volumes/{volume_id}/entries?path={path}")
-        r.raise_for_status()
-        return r.json()
-
-    def create_volume_entry(self, volume_id: str, path: str, size_bytes: int = 0, content_type: str = "application/octet-stream") -> dict[str, Any]:
-        r = self._http.post(f"/v1/volumes/{volume_id}/entries", json={"path": path, "size_bytes": size_bytes, "content_type": content_type})
-        r.raise_for_status()
-        return r.json()
-
-    def get_volume_entry(self, volume_id: str, entry_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/volumes/{volume_id}/entries/{entry_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def delete_volume_entry(self, volume_id: str, entry_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/volumes/{volume_id}/entries/{entry_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def create_volume_snapshot(self, volume_id: str, name: str = "snapshot") -> dict[str, Any]:
-        r = self._http.post(f"/v1/volumes/{volume_id}/snapshots", json={"name": name})
-        r.raise_for_status()
-        return r.json()
-
-    def list_volume_snapshots(self, volume_id: str) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/volumes/{volume_id}/snapshots")
-        r.raise_for_status()
-        return r.json()
-
-    def get_volume_snapshot(self, volume_id: str, snapshot_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/volumes/{volume_id}/snapshots/{snapshot_id}")
-        r.raise_for_status()
-        return r.json()
-
-    def delete_volume_snapshot(self, volume_id: str, snapshot_id: str) -> dict[str, Any]:
-        r = self._http.delete(f"/v1/volumes/{volume_id}/snapshots/{snapshot_id}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- function autoscaler & stats -------------------------------------------
-
-    def get_function_autoscaler(self, function_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/functions/{function_id}/autoscaler")
-        r.raise_for_status()
-        return r.json()
-
-    def update_function_autoscaler(self, function_id: str, min_containers: int = 0, max_containers: int = 10, target_concurrency: int = 1, scale_up_threshold: float = 0.8, scale_down_threshold: float = 0.3, cooldown_seconds: int = 60) -> dict[str, Any]:
-        r = self._http.post(f"/v1/functions/{function_id}/autoscaler", json={"min_containers": min_containers, "max_containers": max_containers, "target_concurrency": target_concurrency, "scale_up_threshold": scale_up_threshold, "scale_down_threshold": scale_down_threshold, "cooldown_seconds": cooldown_seconds})
-        r.raise_for_status()
-        return r.json()
-
-    def get_function_stats(self, function_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/functions/{function_id}/stats")
-        r.raise_for_status()
-        return r.json()
-
-    def list_function_invocations(self, function_id: str, limit: int = 100) -> list[dict[str, Any]]:
-        r = self._http.get(f"/v1/functions/{function_id}/invocations?limit={limit}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- database operations (complete) ----------------------------------------
-
-    def get_database_schema(self, database_id: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/databases/{database_id}/schema")
-        r.raise_for_status()
-        return r.json()
-
-    def batch_database_items(self, database_id: str, items: list[dict[str, Any]]) -> dict[str, Any]:
-        r = self._http.post(f"/v1/databases/{database_id}/batch", json={"items": items})
-        r.raise_for_status()
-        return r.json()
-
-    def database_transaction(self, database_id: str, operations: list[dict[str, Any]]) -> dict[str, Any]:
-        r = self._http.post(f"/v1/databases/{database_id}/transactions", json={"operations": operations})
-        r.raise_for_status()
-        return r.json()
-
-    def claim_next_assignment(self, provider_id: str) -> dict[str, Any] | None:
-        r = self._http.post(f"/v1/providers/{provider_id}/assignments/next")
-        r.raise_for_status()
-        return r.json()
-
-    # -- sandbox sessions ----------------------------------------------------
-
-    def create_sandbox_session(self, workload_id: str, requester_id: str, ttl_seconds: int = 900) -> dict[str, Any]:
-        r = self._http.post("/v1/sandbox-sessions", json={"workload_id": workload_id, "requester_id": requester_id, "ttl_seconds": ttl_seconds})
-        r.raise_for_status()
-        return r.json()
-
-    def verify_sandbox_session(self, token: str) -> dict[str, Any]:
-        r = self._http.get(f"/v1/sandbox-sessions/verify?token={token}")
-        r.raise_for_status()
-        return r.json()
-
-    # -- runpod ---------------------------------------------------------------
-
-    def dispatch_runpod(self, workload_id: str, template: str, gpu_type: str | None = None, gpu_count: int = 0, env: dict[str, str] | None = None) -> dict[str, Any]:
-        payload = {
-            "workload_id": workload_id,
-            "template": template,
-            "gpu_type": gpu_type,
-            "gpu_count": gpu_count,
-            "env": env or {},
-        }
-        r = self._http.post("/v1/runpod/dispatch", json=payload)
-        r.raise_for_status()
-        return r.json()
-
-    # -- pricing --------------------------------------------------------------
-
-    def pricing(self) -> dict[str, Any]:
-        r = self._http.get("/v1/pricing")
         r.raise_for_status()
         return r.json()

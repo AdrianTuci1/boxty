@@ -21,9 +21,13 @@ sdk-py/*.egg-info/
 *.swo
 
 cli/sdk/target
-infrastructure/scripts/.env
-infrastructure/terraform/.terraform
-infrastructure/terraform/*.tfstate
-infrastructure/terraform/*.tfstate.*
-infrastructure/terraform/terraform.tfvars
-infrastructure/terraform/.terraform.lock.hcl
+.venv/
+*.egg-info/
+.env.local
+.server.pid
+.web.pid
+.worker.pid
+/tmp/boxty-*.log
+/tmp/boxty-*.pid
+/tmp/boxty-runner-build/
+/tmp/e2e_doc_results*.json
