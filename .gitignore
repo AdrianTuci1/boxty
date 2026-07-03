@@ -21,3 +21,13 @@ sdk-py/*.egg-info/
 *.swo
 
 cli/sdk/target
+.venv/
+*.egg-info/
+.env.local
+.server.pid
+.web.pid
+.worker.pid
+/tmp/boxty-*.log
+/tmp/boxty-*.pid
+/tmp/boxty-runner-build/
+/tmp/e2e_doc_results*.json

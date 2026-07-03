@@ -80,39 +80,61 @@ class ContainerWorkerRuntime:
         command = workload.get("command") or []
         if not command:
             command = ["python", "-c", "print('boxty function completed')"]
-        result = self.runner.run(
-            [self.binary, "run", "--rm", "--name", self._workload_name(workload["workload_id"])]
-            + self._base_env_args(workload)
-            + [workload["image"]]
-            + command
-        )
-        return RuntimeLaunchResult(
-            status="completed",
-            runtime_details={
-                "container_runtime": self.binary,
-                "exit_code": result.returncode,
-                "stdout": result.stdout,
-            },
-        )
+        try:
+            result = self.runner.run(
+                [self.binary, "run", "--rm", "--name", self._workload_name(workload["workload_id"])]
+                + self._base_env_args(workload)
+                + [workload["image"]]
+                + command
+            )
+            return RuntimeLaunchResult(
+                status="completed",
+                runtime_details={
+                    "container_runtime": self.binary,
+                    "exit_code": result.returncode,
+                    "stdout": result.stdout,
+                },
+            )
+        except subprocess.CalledProcessError as exc:
+            return RuntimeLaunchResult(
+                status="failed",
+                runtime_details={
+                    "container_runtime": self.binary,
+                    "exit_code": exc.returncode,
+                    "stdout": exc.stdout,
+                    "stderr": exc.stderr,
+                },
+            )
 
     def _launch_sandbox(self, workload: dict) -> RuntimeLaunchResult:
         command = workload.get("command") or ["sleep", "infinity"]
-        result = self.runner.run(
-            [self.binary, "run", "-d", "--name", self._workload_name(workload["workload_id"])]
-            + self._base_env_args(workload)
-            + [workload["image"]]
-            + command
-        )
-        container_id = result.stdout.strip()
-        return RuntimeLaunchResult(
-            status="running",
-            runtime_details={
-                "container_runtime": self.binary,
-                "container_id": container_id,
-                "attach_command": f"{self.binary} exec -it {container_id} /bin/sh",
-                "ssh_mode": "sandbox_only",
-            },
-        )
+        try:
+            result = self.runner.run(
+                [self.binary, "run", "-d", "--name", self._workload_name(workload["workload_id"])]
+                + self._base_env_args(workload)
+                + [workload["image"]]
+                + command
+            )
+            container_id = result.stdout.strip()
+            return RuntimeLaunchResult(
+                status="running",
+                runtime_details={
+                    "container_runtime": self.binary,
+                    "container_id": container_id,
+                    "attach_command": f"{self.binary} exec -it {container_id} /bin/sh",
+                    "ssh_mode": "sandbox_only",
+                },
+            )
+        except subprocess.CalledProcessError as exc:
+            return RuntimeLaunchResult(
+                status="failed",
+                runtime_details={
+                    "container_runtime": self.binary,
+                    "exit_code": exc.returncode,
+                    "stdout": exc.stdout,
+                    "stderr": exc.stderr,
+                },
+            )
 
     def _launch_service(self, workload: dict) -> RuntimeLaunchResult:
         command = workload.get("command") or ["sleep", "infinity"]
