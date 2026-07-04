@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
 import { listSecrets, deleteSecret } from '../api/secrets'
-import { Plus } from 'lucide-react'
+import { Plus, Key } from 'lucide-react'
+import EmptyState from '../components/EmptyState'
 
 export default function SecretsPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
@@ -26,31 +27,32 @@ export default function SecretsPage() {
         </button>
       </div>
       {isLoading && <p className="text-sm text-gray-500">Loading...</p>}
-      <div className="overflow-x-auto rounded-xl border border-[#262626]">
-        <table className="min-w-full text-left text-xs">
-          <thead>
-            <tr className="bg-[#111111] border-b border-[#262626]">
-              <th className="px-4 py-2.5 text-gray-500 font-medium">Name</th>
-              <th className="px-4 py-2.5 text-gray-500 font-medium">Created</th>
-              <th className="px-4 py-2.5 text-gray-500 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#262626]">
-            {data && data.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No secrets yet.</td></tr>
-            )}
-            {data && data.map((s: any) => (
-              <tr key={s.name} className="bg-[#161616]">
-                <td className="px-4 py-3 text-white font-medium">{s.name}</td>
-                <td className="px-4 py-3 text-gray-500">{new Date(s.created_at).toLocaleString()}</td>
-                <td className="px-4 py-3">
-                  <button onClick={() => handleDelete(s.name)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Delete</button>
-                </td>
+      {data && data.length === 0 ? (
+        <EmptyState icon={Key} title="No secrets yet" subtitle="Create a secret to store sensitive configuration values." />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-[#262626]">
+          <table className="min-w-full text-left text-xs">
+            <thead>
+              <tr className="bg-[#111111] border-b border-[#262626]">
+                <th className="px-4 py-2.5 text-gray-500 font-medium">Name</th>
+                <th className="px-4 py-2.5 text-gray-500 font-medium">Created</th>
+                <th className="px-4 py-2.5 text-gray-500 font-medium">Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-[#262626]">
+              {data && data.map((s: any) => (
+                <tr key={s.name} className="bg-[#161616]">
+                  <td className="px-4 py-3 text-white font-medium">{s.name}</td>
+                  <td className="px-4 py-3 text-gray-500">{new Date(s.created_at).toLocaleString()}</td>
+                  <td className="px-4 py-3">
+                    <button onClick={() => handleDelete(s.name)} className="text-red-400 hover:text-red-300 text-xs transition-colors">Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
       </div>
     </div>
   )

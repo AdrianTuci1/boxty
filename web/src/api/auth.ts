@@ -6,12 +6,23 @@ export interface TokenResponse { user_id: string; access_token: string }
 export interface ApiKey { api_key_id: string; name: string; secret_preview: string; created_at: string }
 export interface ApiKeyCreated extends ApiKey { secret_token: string }
 
+export type OAuthProvider = 'google' | 'github'
+export interface OAuthUrlResponse { authorization_url: string; state: string }
+
 export function login(payload: LoginPayload) {
   return apiFetch<TokenResponse>('/auth/login', { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export function register(payload: RegisterPayload) {
   return apiFetch<TokenResponse>('/auth/register', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function getOAuthUrl(provider: OAuthProvider) {
+  return apiFetch<OAuthUrlResponse>(`/auth/oauth/${provider}`)
+}
+
+export function oauthCallback(provider: OAuthProvider, payload: { code: string; state: string }) {
+  return apiFetch<TokenResponse>(`/auth/oauth/${provider}/callback`, { method: 'POST', body: JSON.stringify(payload) })
 }
 
 export function listApiKeys(workspaceId?: string) {

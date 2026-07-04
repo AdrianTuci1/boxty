@@ -3,7 +3,7 @@ import { getBalance, listUsage, addCredits } from '../api/billing'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 export default function BillingPage() {
-  const userId = 'demo-user'
+  const userId = 'john-smith'
 
   const { data: balance } = useQuery({
     queryKey: ['balance', userId],

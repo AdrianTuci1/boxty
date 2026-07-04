@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { FileText, Copy, Plus } from 'lucide-react'
+import { FileText, Copy, Plus, LayoutDashboard } from 'lucide-react'
 import { listWorkspaces, createWorkspace, deleteWorkspace } from '../../api/workspaces'
+import EmptyState from '../../components/EmptyState'
 
 export default function WorkspacesListPage() {
   const { data, isLoading } = useQuery({ queryKey: ['workspaces'], queryFn: () => listWorkspaces() })
@@ -61,7 +62,13 @@ export default function WorkspacesListPage() {
           </div>
 
           {workspaces.length === 0 && (
-            <div className="px-4 py-8 text-center text-gray-600 text-xs">No workspaces yet.</div>
+            <div className="px-4 py-8">
+              <EmptyState
+                icon={LayoutDashboard}
+                title="No workspaces yet"
+                subtitle="Create a workspace to start organizing apps and environments."
+              />
+            </div>
           )}
 
           {workspaces.map((ws) => (

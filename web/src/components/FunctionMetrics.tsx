@@ -1,7 +1,9 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts'
+import { Activity } from 'lucide-react'
 import { getAppMetrics } from '../api/apps'
+import EmptyState from './EmptyState'
 
 interface MetricData {
   t: string
@@ -126,6 +128,16 @@ export default function FunctionMetrics({ appId }: { appId: string }) {
       value2: metrics.egress_gb || 0,
     }))
   }, [metrics])
+
+  if (!metrics) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="No metrics yet"
+        subtitle="Container metrics will appear here once the function starts receiving traffic."
+      />
+    )
+  }
 
   return (
     <div className="mt-6 grid grid-cols-2 gap-4">

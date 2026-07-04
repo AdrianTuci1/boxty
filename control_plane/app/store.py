@@ -255,6 +255,8 @@ class InMemoryStore:
         email: str | None = None,
         password: str | None = None,
         organization_id: str | None = None,
+        oauth_provider: str | None = None,
+        oauth_provider_user_id: str | None = None,
     ) -> tuple[UserRecord, AccountRecord, WorkspaceRecord, EnvironmentRecord]:
         default_workspace_name = external_user_id
         workspace = WorkspaceRecord(
@@ -274,6 +276,8 @@ class InMemoryStore:
             password_hash=self._hash_password(password) if password else None,
             organization_id=organization_id,
             default_workspace_id=workspace.workspace_id,
+            oauth_provider=oauth_provider,
+            oauth_provider_user_id=oauth_provider_user_id,
         )
         account = self.create_account(user_id, organization_id)
         self.users[user_id] = user
@@ -286,6 +290,33 @@ class InMemoryStore:
 
     def get_user(self, user_id: str) -> UserRecord:
         return self.users[user_id]
+
+    def find_or_create_oauth_user(
+        self,
+        provider: str,
+        provider_user_id: str,
+        email: str | None,
+        name: str | None,
+    ) -> tuple[UserRecord, AccountRecord, WorkspaceRecord, EnvironmentRecord]:
+        """Look up an OAuth user or create one with a default workspace and environment."""
+        for user in self.users.values():
+            if user.oauth_provider == provider and user.oauth_provider_user_id == provider_user_id:
+                workspace = self.workspaces[user.default_workspace_id]
+                environment = next(
+                    e for e in self.environments.values() if e.workspace_id == workspace.workspace_id
+                )
+                return (user, self.accounts[user.user_id], workspace, environment)
+
+        user_id = generated_id("usr")
+        external_user_id = f"{provider}:{provider_user_id}"
+        return self.register_user(
+            user_id=user_id,
+            external_user_id=external_user_id,
+            email=email,
+            password=None,
+            oauth_provider=provider,
+            oauth_provider_user_id=provider_user_id,
+        )
 
     def list_workspaces(self, owner_id: str | None = None) -> list[WorkspaceRecord]:
         items = list(self.workspaces.values())

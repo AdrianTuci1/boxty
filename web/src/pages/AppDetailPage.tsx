@@ -5,15 +5,16 @@ import { getAppMetrics, stopApp } from '../api/apps'
 import { useAppById } from '../hooks/useApps'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  AreaChart, Area, CartesianGrid,
+  CartesianGrid, LineChart, Line,
 } from 'recharts'
-import { Copy, Search, ExternalLink, MoreHorizontal } from 'lucide-react'
+import { Copy, Search, ExternalLink, MoreHorizontal, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import FunctionCallsTable from '../components/FunctionCallsTable'
 import FunctionMetrics from '../components/FunctionMetrics'
 import FunctionDetails from '../components/FunctionDetails'
 import FunctionFiles from '../components/FunctionFiles'
 import AppLogs from '../components/AppLogs'
 import SandboxMetrics from '../components/SandboxMetrics'
+import AppLogsChart from '../components/AppLogsChart'
 import { timeAgo } from '../core/utils/time-ago'
 
 const functionSubTabs = ['Function Calls', 'Containers', 'Metrics', 'Details', 'Files'] as const
@@ -42,7 +43,7 @@ export default function AppDetailPage() {
 
   const app = appQ.data
   const isSandbox = app?.kind === 'sandbox'
-  const functions = isSandbox ? [] : [app?.name || 'fastapi_app']
+  const functions = isSandbox ? [] : ((app as any)?.functions?.length ? (app as any).functions : ['fastapi_app'])
   const sandboxes = isSandbox ? [app?.name || 'sandbox'] : []
 
   const handleStop = async () => {
@@ -70,7 +71,7 @@ export default function AppDetailPage() {
 
   const fn = selectedFunction || functions[0]
   const appName = app?.name ?? 'App'
-  const ownerName = workspace || 'adrian-tucicovenco'
+  const ownerName = workspace || 'john-smith'
   const ownerInitial = ownerName[0].toUpperCase()
 
   const endpointUrl = app?.endpoint_name
@@ -258,19 +259,17 @@ export default function AppDetailPage() {
 
           {isFunctionView && (
             <>
-              <div className="flex items-center justify-between mb-4">
-                <h1 className="font-mono text-xl font-semibold text-white">{fn}</h1>
-                <div className="flex items-center gap-2">
-                  {functionSubTabs.map((tab) => (
-                    <button
-                      key={tab}
-                      onClick={() => setFunctionTab(tab)}
-                      className={classNames('px-3 py-1.5 rounded-md text-xs font-medium transition-colors', functionTab === tab ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white')}
-                    >
-                      {tab}
-                    </button>
-                  ))}
-                </div>
+              <AppLogsChart appId={appId} appName={appName} subtitle={fn} endpointUrl={endpointUrl} />
+              <div className="flex items-center gap-2 mb-4">
+                {functionSubTabs.map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => setFunctionTab(tab)}
+                    className={classNames('px-3 py-1.5 rounded-md text-xs font-medium transition-colors', functionTab === tab ? 'bg-[#1f1f1f] text-white' : 'text-gray-400 hover:text-white')}
+                  >
+                    {tab}
+                  </button>
+                ))}
               </div>
               {functionTab === 'Function Calls' && <FunctionCallsTable appId={appId!} />}
               {functionTab === 'Containers' && <FunctionMetrics appId={appId!} />}
@@ -292,20 +291,70 @@ export default function AppDetailPage() {
           {navTab === 'App Logs' && <AppLogs appName={appName} />}
 
           {navTab === 'Usage' && (
-            <div className="space-y-4">
-              <h2 className="text-base font-semibold text-white">Usage</h2>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={usageChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
-                    <XAxis dataKey="date" stroke="#555" tick={{ fontSize: 10 }} />
-                    <YAxis stroke="#555" tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={{ background: '#1f1f1f', border: '1px solid #262626', fontSize: 11 }} />
-                    <Area type="monotone" dataKey="cost" stroke="#34d399" fill="#34d399" fillOpacity={0.2} />
-                  </AreaChart>
-                </ResponsiveContainer>
+            <>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-semibold text-white">{appName} / Usage</h1>
+                <div className="flex items-center gap-1">
+                  <button className="p-1 text-gray-500 hover:text-white transition-colors">
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="flex items-center gap-1.5 bg-[#161616] border border-[#262626] rounded-md px-3 py-1 text-xs text-gray-300">
+                    <Calendar className="h-3.5 w-3.5 text-gray-500" />
+                    Billing Cycle: Jun 1 – Jul 1, 2026
+                  </div>
+                  <button className="p-1 text-gray-500 hover:text-white transition-colors">
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
+
+              {/* Total Usage */}
+              <div className="mt-6">
+                <p className="text-xs text-gray-400">Total Usage</p>
+                <p className="text-white font-bold text-4xl tracking-tight mt-1">$0</p>
+              </div>
+
+              {/* Resource Breakdown Chart */}
+              <div className="bg-[#161616] border border-[#262626] rounded-xl p-5 mt-4 min-h-[280px]">
+                <h3 className="text-sm font-semibold text-white mb-4">Resource Breakdown</h3>
+                <div className="h-52">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={usageChartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="" vertical={false} stroke="#262626" />
+                      <XAxis
+                        dataKey="date"
+                        stroke="#555"
+                        tick={{ fontSize: 11, fontFamily: 'monospace', fill: '#6b7280' }}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        domain={[0, 2.5]}
+                        ticks={[0, 1, 2]}
+                        stroke="#555"
+                        tick={{ fontSize: 11, fontFamily: 'monospace', fill: '#6b7280' }}
+                        tickFormatter={(v: number) => `$${v}`}
+                        axisLine={false}
+                        tickLine={false}
+                        width={30}
+                      />
+                      <Tooltip
+                        contentStyle={{ background: '#1f1f1f', border: '1px solid #262626', fontSize: 11 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cost"
+                        stroke="#34d399"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4, fill: '#34d399' }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </div>

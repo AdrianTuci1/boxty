@@ -67,5 +67,11 @@ jobs:
           BOXTY_SMTP_USERNAME: ${{ secrets.BOXTY_SMTP_USERNAME }}
           BOXTY_SMTP_PASSWORD: ${{ secrets.BOXTY_SMTP_PASSWORD }}
           BOXTY_INVITE_EMAIL_FROM: ${{ secrets.BOXTY_INVITE_EMAIL_FROM }}
+          BOXTY_GOOGLE_CLIENT_ID: ${{ secrets.BOXTY_GOOGLE_CLIENT_ID }}
+          BOXTY_GOOGLE_CLIENT_SECRET: ${{ secrets.BOXTY_GOOGLE_CLIENT_SECRET }}
+          BOXTY_GOOGLE_REDIRECT_URI: ${{ secrets.BOXTY_GOOGLE_REDIRECT_URI }}
+          BOXTY_GITHUB_CLIENT_ID: ${{ secrets.BOXTY_GITHUB_CLIENT_ID }}
+          BOXTY_GITHUB_CLIENT_SECRET: ${{ secrets.BOXTY_GITHUB_CLIENT_SECRET }}
+          BOXTY_GITHUB_REDIRECT_URI: ${{ secrets.BOXTY_GITHUB_REDIRECT_URI }}
         run: |
           ansible-playbook -i "${{ inputs.inventory_path }}" infrastructure/ansible/deploy-control-plane.yml

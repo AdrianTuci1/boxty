@@ -156,6 +156,8 @@ class UserRecord(BaseModel):
     password_hash: str | None = None
     organization_id: str | None = None
     default_workspace_id: str
+    oauth_provider: str | None = None
+    oauth_provider_user_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -512,6 +514,25 @@ class SingleTableItem(BaseModel):
 class LoginRequest(BaseModel):
     external_user_id: str
     email: str | None = None
+
+
+class OAuthProvider(str, Enum):
+    google = "google"
+    github = "github"
+
+
+class OAuthAuthorizationRequest(BaseModel):
+    provider: OAuthProvider
+
+
+class OAuthAuthorizationResponse(BaseModel):
+    authorization_url: str
+    state: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    state: str
 
 
 class LoginResponse(BaseModel):

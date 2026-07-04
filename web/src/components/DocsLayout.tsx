@@ -417,7 +417,7 @@ export default function DocsLayout({ children }: DocsLayoutProps) {
 
           {/* Dashboard Link */}
           <Link
-            to="/apps/adrian-tucicovenco/main"
+            to="/apps/john-smith/main"
             className="flex items-center gap-1.5 text-[13.5px] font-semibold text-[#34d399] hover:text-[#2bb882] transition-colors"
           >
             <Monitor className="h-3.5 w-3.5" strokeWidth={2} />

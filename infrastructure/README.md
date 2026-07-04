@@ -99,6 +99,12 @@ infrastructure/
 | `BOXTY_R2_PUBLIC_BASE_URL` | R2 public base URL |
 | `BOXTY_DYNAMODB_TABLE_NAME` | DynamoDB table name |
 | `BOXTY_DYNAMODB_REGION` | AWS region for DynamoDB |
+| `BOXTY_GOOGLE_CLIENT_ID` | Google OAuth client ID |
+| `BOXTY_GOOGLE_CLIENT_SECRET` | Google OAuth client secret |
+| `BOXTY_GOOGLE_REDIRECT_URI` | Google OAuth redirect URI (e.g. `https://app.boxty.dev/oauth/callback`). See `docs/google-oauth-setup.md`. |
+| `BOXTY_GITHUB_CLIENT_ID` | GitHub OAuth app client ID |
+| `BOXTY_GITHUB_CLIENT_SECRET` | GitHub OAuth app client secret |
+| `BOXTY_GITHUB_REDIRECT_URI` | GitHub OAuth redirect URI (e.g. `https://app.boxty.dev/oauth/callback`) |
 | `CLI_BASE_URL` | Base URL for CLI downloads (default: `https://cli.boxty.dev`) |
 | `PYPI_API_TOKEN` | PyPI API token for SDK/CLI publish |
 | `NPM_TOKEN` | npm token for JS SDK publish |

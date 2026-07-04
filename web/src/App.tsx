@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import PasswordResetPage from './pages/PasswordResetPage'
+import OAuthCallbackPage from './pages/OAuthCallbackPage'
 import AcceptInvitePage from './pages/AcceptInvitePage'
 import DashboardPage from './pages/DashboardPage'
 import WorkspacesPage from './pages/WorkspacesPage'
@@ -24,6 +25,13 @@ import WorkspacesListPage from './pages/settings/WorkspacesListPage'
 import EmailPage from './pages/settings/EmailPage'
 import UsagePage from './pages/settings/UsagePage'
 import APITokensPage from './pages/settings/APITokensPage'
+import ProxyTokensPage from './pages/settings/ProxyTokensPage'
+import DomainsPage from './pages/settings/DomainsPage'
+import ImageBuilderPage from './pages/settings/ImageBuilderPage'
+import ProxiesPage from './pages/settings/ProxiesPage'
+import AuditLogsPage from './pages/settings/AuditLogsPage'
+import MetricsIntegrationsPage from './pages/settings/MetricsIntegrationsPage'
+import SlackIntegrationPage from './pages/settings/SlackIntegrationPage'
 import DocsLayout from './components/DocsLayout'
 import DocsPage from './pages/DocsPage'
 import LandingPageWrapper from './landing/LandingPageWrapper'
@@ -51,6 +59,7 @@ function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/password-reset" element={<PasswordResetPage />} />
+      <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
       <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/apps/:workspace/:environment" element={<DashboardPage />} />
@@ -75,9 +84,16 @@ function AppRoutes() {
         <Route path="email" element={<EmailPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="api-tokens" element={<APITokensPage />} />
+        <Route path="proxy-tokens" element={<ProxyTokensPage />} />
+        <Route path="domains" element={<DomainsPage />} />
+        <Route path="image-builder" element={<ImageBuilderPage />} />
+        <Route path="proxies" element={<ProxiesPage />} />
+        <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="metrics-integrations" element={<MetricsIntegrationsPage />} />
+        <Route path="slack-integration" element={<SlackIntegrationPage />} />
         <Route path="*" element={<Navigate to="/settings/profile" replace />} />
       </Route>
-      <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
+      <Route path="*" element={<Navigate to="/apps/john-smith/main" replace />} />
     </Routes>
   )
 }

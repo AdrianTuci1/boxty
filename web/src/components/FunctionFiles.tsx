@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Copy, ChevronDown, ArrowUpDown, FileText, Folder } from 'lucide-react'
 import { listVolumeEntries, type VolumeEntry } from '../api/volumes'
+import EmptyState from './EmptyState'
 
 const sortOptions = ['Alphabetical', 'Size', 'Type'] as const
 
@@ -97,6 +98,12 @@ export default function FunctionFiles({ volumeName }: { volumeName?: string }) {
 
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading...</p>
+      ) : filtered.length === 0 ? (
+        <EmptyState
+          icon={Folder}
+          title="No files yet"
+          subtitle="Files uploaded for this function will appear here."
+        />
       ) : (
         <div className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden">
           <div className="flex bg-[#111111]/40 border-b border-[#262626] px-4 py-2.5 text-[11px] font-semibold tracking-wider text-gray-500">
@@ -105,10 +112,6 @@ export default function FunctionFiles({ volumeName }: { volumeName?: string }) {
             <span className="w-24">Size</span>
             <span className="w-10" />
           </div>
-
-          {filtered.length === 0 && (
-            <div className="px-4 py-8 text-center text-gray-600 text-xs">No files yet.</div>
-          )}
 
           {filtered.map((entry) => (
             <div key={entry.path} className="flex items-center px-4 py-3 border-b border-[#262626]/40 hover:bg-[#1f1f1f]/20 transition-colors text-xs">

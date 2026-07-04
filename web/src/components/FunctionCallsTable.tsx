@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, FileText } from 'lucide-react'
 import { getAppLogs } from '../api/apps'
+import EmptyState from './EmptyState'
 
 interface LogEntry {
   timestamp: string
@@ -77,7 +78,11 @@ export default function FunctionCallsTable({ appId }: { appId: string }) {
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading...</p>
       ) : filteredCalls.length === 0 ? (
-        <p className="text-sm text-gray-500 py-8 text-center">No logs yet.</p>
+        <EmptyState
+          icon={FileText}
+          title="No logs yet"
+          subtitle="Function call logs will appear here once calls are made."
+        />
       ) : (
         <div className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden">
           <div className="flex bg-[#111111]/40 border-b border-[#262626] px-4 py-2.5 text-[11px] font-semibold tracking-wider text-gray-500">

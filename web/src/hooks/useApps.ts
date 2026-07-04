@@ -35,14 +35,15 @@ export function useApps(workspaceId?: string, envId?: string) {
     queryFn: async () => {
       if (useMocks) {
         const allMocks = [...mockApps, ...mockSandboxApps]
-        return allMocks.map((m) => ({
-          ...m,
-          workload_id: m.id,
-          environment_id: m.environmentId,
-          deployer_name: m.deployerName,
-          created_at: m.createdAt.toISOString(),
-          updated_at: m.updatedAt.toISOString(),
-        })) as unknown as App[]
+      return allMocks.map((m) => ({
+        ...m,
+        kind: m.type,
+        workload_id: m.id,
+        environment_id: m.environmentId,
+        deployer_name: m.deployerName,
+        created_at: m.createdAt.toISOString(),
+        updated_at: m.updatedAt.toISOString(),
+      })) as unknown as App[]
       }
       const raw = await listApps(workspaceId, envId)
       return combineApps(raw)
@@ -63,14 +64,15 @@ export function useAppById(appId?: string) {
         const allMocks = [...mockApps, ...mockSandboxApps]
         const found = allMocks.find((m) => m.id === appId)
         if (found) {
-          return {
-            ...found,
-            workload_id: found.id,
-            environment_id: found.environmentId,
-            deployer_name: found.deployerName,
-            created_at: found.createdAt.toISOString(),
-            updated_at: found.updatedAt.toISOString(),
-          } as unknown as App
+        return {
+          ...found,
+          kind: found.type,
+          workload_id: found.id,
+          environment_id: found.environmentId,
+          deployer_name: found.deployerName,
+          created_at: found.createdAt.toISOString(),
+          updated_at: found.updatedAt.toISOString(),
+        } as unknown as App
         }
         throw new Error(`Mock app not found: ${appId}`)
       }

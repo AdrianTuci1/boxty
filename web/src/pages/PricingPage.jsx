@@ -55,7 +55,7 @@ export default function PricingPage() {
   };
 
   const handleDashboardRedirect = () => {
-    navigate('/apps/adrian-tucicovenco/main');
+    navigate('/apps/john-smith/main');
   };
 
   return (

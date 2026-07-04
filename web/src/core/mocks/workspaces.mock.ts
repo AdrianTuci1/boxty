@@ -13,7 +13,7 @@ export const mockWorkspaces: MockWorkspace[] = [
   {
     workspace_id: 'mock-ws-1',
     id: 'mock-ws-1',
-    name: 'personal',
+    name: 'john-smith',
     is_default: true,
     created_at: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
     environment_count: 3,

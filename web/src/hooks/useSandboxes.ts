@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listSandboxes, getSandbox, stopSandbox, type Sandbox } from '../api/sandboxes'
-import { useAuth } from './useAuth'
+import { shouldUseMocks } from '../core/services/mock-decider.service'
 
 const MOCK_SANDBOXES: Sandbox[] = [
   {
@@ -48,15 +48,15 @@ const MOCK_SANDBOXES: Sandbox[] = [
 ]
 
 export function useSandboxes(workspaceId?: string, environmentId?: string) {
-  const { devMode } = useAuth()
+  const useMocks = shouldUseMocks()
 
   return useQuery<Sandbox[]>({
     queryKey: ['sandboxes', workspaceId, environmentId],
     queryFn: () => {
-      if (devMode) return MOCK_SANDBOXES
+      if (useMocks) return MOCK_SANDBOXES
       return listSandboxes(workspaceId, environmentId)
     },
-    staleTime: devMode ? Infinity : 0,
+    staleTime: useMocks ? Infinity : 0,
   })
 }
 

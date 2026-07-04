@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listApiKeys, createApiKey, deleteApiKey } from '../../api/auth'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Copy, MoreHorizontal, Plus, FileText } from 'lucide-react'
+import { Copy, MoreHorizontal, Plus, FileText, Key } from 'lucide-react'
+import EmptyState from '../../components/EmptyState'
 
 export default function APITokensPage() {
   const { data } = useQuery({ queryKey: ['api-keys'], queryFn: () => listApiKeys('default') })
@@ -30,7 +31,7 @@ export default function APITokensPage() {
       {/* Breadcrumb header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white flex items-center gap-1.5">
-          adrian-tucicovenco <span className="text-gray-500">/</span> API Tokens
+          john-smith <span className="text-gray-500">/</span> API Tokens
         </h1>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-1.5 rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors">
@@ -57,7 +58,13 @@ export default function APITokensPage() {
         </div>
 
         {tokens.length === 0 ? (
-          <div className="px-4 py-8 text-center text-gray-600 text-xs">No tokens yet.</div>
+          <div className="px-4 py-8">
+            <EmptyState
+              icon={Key}
+              title="No API tokens yet"
+              subtitle="Create a token to authenticate with the Boxty API."
+            />
+          </div>
         ) : (
           tokens.map((k: any, i: number) => (
             <TokenRow

@@ -70,6 +70,13 @@ class Settings:
     ram_price_per_gb_hour_usd: float = _get_float("BOXTY_RAM_PRICE_PER_GB_HOUR_USD", 0.012)
     gpu_price_per_gpu_hour_usd: float = _get_float("BOXTY_GPU_PRICE_PER_GPU_HOUR_USD", 1.8)
     storage_price_per_gb_hour_usd: float = _get_float("BOXTY_STORAGE_PRICE_PER_GB_HOUR_USD", 0.0015)
+    # OAuth providers
+    google_client_id: str = os.environ.get("BOXTY_GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.environ.get("BOXTY_GOOGLE_CLIENT_SECRET", "")
+    google_redirect_uri: str = os.environ.get("BOXTY_GOOGLE_REDIRECT_URI", "http://localhost:5173/oauth/callback")
+    github_client_id: str = os.environ.get("BOXTY_GITHUB_CLIENT_ID", "")
+    github_client_secret: str = os.environ.get("BOXTY_GITHUB_CLIENT_SECRET", "")
+    github_redirect_uri: str = os.environ.get("BOXTY_GITHUB_REDIRECT_URI", "http://localhost:5173/oauth/callback")
 
 
 settings = Settings()

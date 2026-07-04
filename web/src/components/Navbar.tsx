@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { useCommandPalette } from './CommandPalette'
 
-const workspaceItems = ['adrian-tucicovenco']
+const workspaceItems = ['john-smith']
 const environments = ['main', 'staging', 'production']
 
 export default function Navbar() {
@@ -17,7 +17,7 @@ export default function Navbar() {
   // Parse workspace/environment and current page from URL
   const match = location.pathname.match(/^\/(apps|logs|secrets|storage)(\/([^/]+)\/([^/]+))/)
   const currentPage = match ? match[1] : 'apps'
-  const currentWorkspace = match ? match[3] : 'adrian-tucicovenco'
+  const currentWorkspace = match ? match[3] : 'john-smith'
   const currentEnv = match ? match[4] : 'main'
 
   const goToPage = (workspace: string, env: string) => {

@@ -16,7 +16,7 @@ export default function LandingPageWrapper() {
   }
 
   function handleDashboard() {
-    navigate('/apps/adrian-tucicovenco/main')
+    navigate('/apps/john-smith/main')
   }
 
   return (

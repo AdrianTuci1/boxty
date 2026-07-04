@@ -19,6 +19,10 @@ from .models import (
     ImageCreateRequest,
     InviteCreateRequest,
     LoginRequest,
+    LoginResponse,
+    OAuthAuthorizationResponse,
+    OAuthCallbackRequest,
+    OAuthProvider,
     PasswordResetConfirm,
     PasswordResetRequest,
     ProxyToken,
@@ -49,7 +53,7 @@ from .models import (
     generated_id,
     utc_now,
 )
-from .runpod import runpod_adapter
+from .oauth import build_authorization_url, exchange_code, fetch_profile, _missing_config
 import asyncio
 import base64
 import json
@@ -566,6 +570,43 @@ def login(request: LoginRequest) -> dict:
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="user not found") from exc
     return result.model_dump(mode="json")
+
+
+@app.get(f"{settings.api_prefix}/auth/oauth/{{provider}}")
+async def oauth_authorize(provider: OAuthProvider) -> dict:
+    missing = _missing_config(provider.value)
+    if missing:
+        raise HTTPException(status_code=503, detail=missing)
+    authorization_url, state = build_authorization_url(provider.value)
+    return OAuthAuthorizationResponse(authorization_url=authorization_url, state=state).model_dump(mode="json")
+
+
+@app.post(f"{settings.api_prefix}/auth/oauth/{{provider}}/callback", response_model=LoginResponse)
+async def oauth_callback(provider: OAuthProvider, request: OAuthCallbackRequest) -> LoginResponse:
+    missing = _missing_config(provider.value)
+    if missing:
+        raise HTTPException(status_code=503, detail=missing)
+    try:
+        access_token = await exchange_code(provider.value, request.code)
+        profile = await fetch_profile(provider.value, access_token)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"OAuth provider error: {exc}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not profile.email:
+        raise HTTPException(status_code=400, detail="OAuth provider did not return an email")
+
+    user, _, _, _ = store.find_or_create_oauth_user(
+        provider=profile.provider,
+        provider_user_id=profile.provider_user_id,
+        email=profile.email,
+        name=profile.name,
+    )
+    return LoginResponse(
+        user_id=user.user_id,
+        access_token=issued_access_token(user.external_user_id),
+    )
 
 
 @app.get(f"{settings.api_prefix}/auth/me")

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { register } from '../api/auth'
+import { register, getOAuthUrl, type OAuthProvider } from '../api/auth'
 
 export default function RegisterPage() {
   const [name, setName] = useState('')
@@ -19,6 +19,16 @@ export default function RegisterPage() {
     }
   }
 
+  const startOAuth = async (provider: OAuthProvider) => {
+    try {
+      sessionStorage.setItem('oauth_provider', provider)
+      const res = await getOAuthUrl(provider)
+      window.location.href = res.authorization_url
+    } catch (err) {
+      setError((err as Error).message)
+    }
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#111111]">
       <form onSubmit={handleSubmit} className="w-full max-w-sm rounded-xl border border-[#262626] bg-[#161616] p-6 shadow-2xl">
@@ -31,6 +41,29 @@ export default function RegisterPage() {
         <label className="mb-1 block text-xs text-gray-400">External User ID</label>
         <input required className="mb-4 w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" value={externalUserId} onChange={(e) => setExternalUserId(e.target.value)} />
         <button type="submit" className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Register</button>
+        <div className="mt-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="h-px flex-1 bg-[#262626]" />
+            <span className="text-[10px] text-gray-500">or continue with</span>
+            <div className="h-px flex-1 bg-[#262626]" />
+          </div>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => startOAuth('google')}
+              className="w-full rounded-md border border-[#262626] bg-[#111111] py-2 text-xs font-medium text-white hover:bg-[#1a1a1a] transition-colors"
+            >
+              Google
+            </button>
+            <button
+              type="button"
+              onClick={() => startOAuth('github')}
+              className="w-full rounded-md border border-[#262626] bg-[#111111] py-2 text-xs font-medium text-white hover:bg-[#1a1a1a] transition-colors"
+            >
+              GitHub
+            </button>
+          </div>
+        </div>
         <p className="mt-3 text-center text-xs text-gray-500">
           Have an account? <Link to="/login" className="text-mint hover:underline">Login</Link>
         </p>

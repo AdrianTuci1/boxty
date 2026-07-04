@@ -124,7 +124,7 @@ export default function StoppedApps() {
                   <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-pink-400 to-purple-500 text-[10px] font-bold text-white">
                     A
                   </div>
-                  <span className="text-gray-300 text-sm">adrian-tucicovenco</span>
+                  <span className="text-gray-300 text-sm">john-smith</span>
                   <span className="text-gray-500 text-sm">{app.updated_at ? new Date(app.updated_at).toLocaleDateString() : '—'}</span>
                 </div>
               </div>

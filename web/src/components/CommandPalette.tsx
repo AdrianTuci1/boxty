@@ -104,7 +104,7 @@ function CommandPaletteOverlay({ open, onClose }: { open: boolean; onClose: () =
       icon: <Cloud className="h-4 w-4 text-gray-400" />,
       action: () => {
         const m = location.pathname.match(/^\/apps\/([^/]+)\/([^/]+)/)
-        navigate(`/apps/${m?.[1] || 'adrian-tucicovenco'}/${m?.[2] || 'main'}`)
+        navigate(`/apps/${m?.[1] || 'john-smith'}/${m?.[2] || 'main'}`)
       },
     },
     {
@@ -114,7 +114,7 @@ function CommandPaletteOverlay({ open, onClose }: { open: boolean; onClose: () =
       icon: <FileText className="h-4 w-4 text-gray-400" />,
       action: () => {
         const m = location.pathname.match(/^\/(?:apps|logs|secrets|storage)\/([^/]+)\/([^/]+)/)
-        navigate(`/logs/${m?.[1] || 'adrian-tucicovenco'}/${m?.[2] || 'main'}`)
+        navigate(`/logs/${m?.[1] || 'john-smith'}/${m?.[2] || 'main'}`)
       },
     },
     {
@@ -131,7 +131,7 @@ function CommandPaletteOverlay({ open, onClose }: { open: boolean; onClose: () =
       icon: <Key className="h-4 w-4 text-gray-400" />,
       action: () => {
         const m = location.pathname.match(/^\/(?:apps|logs|secrets|storage)\/([^/]+)\/([^/]+)/)
-        navigate(`/secrets/${m?.[1] || 'adrian-tucicovenco'}/${m?.[2] || 'main'}`)
+        navigate(`/secrets/${m?.[1] || 'john-smith'}/${m?.[2] || 'main'}`)
       },
     },
     {
@@ -141,7 +141,7 @@ function CommandPaletteOverlay({ open, onClose }: { open: boolean; onClose: () =
       icon: <Database className="h-4 w-4 text-gray-400" />,
       action: () => {
         const m = location.pathname.match(/^\/(?:apps|logs|secrets|storage)\/([^/]+)\/([^/]+)/)
-        navigate(`/storage/${m?.[1] || 'adrian-tucicovenco'}/${m?.[2] || 'main'}`)
+        navigate(`/storage/${m?.[1] || 'john-smith'}/${m?.[2] || 'main'}`)
       },
     },
     {
