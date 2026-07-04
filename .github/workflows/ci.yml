@@ -62,9 +62,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - run: pip install build pytest
+      - run: python -m build cli/
+      - run: pip install cli/dist/*.whl
+      - run: python -c "import boxty_cli.main; print('cli import OK')"
+      - run: pip install pytest pytest-mock respx
+      - run: python -m pytest cli/tests
+
+  cli-worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo check
-        working-directory: cli/sdk
+        working-directory: cli-worker
 
   ansible:
     runs-on: ubuntu-latest

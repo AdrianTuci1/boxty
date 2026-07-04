@@ -6,7 +6,7 @@
 - [x] Backend: POST /v1/auth/register
 - [x] Backend: POST /v1/auth/login
 - [x] Backend: GET /v1/auth/me
-- [x] CLI: `boxty auth login` (implemented in cli-client/boxty_cli/main.py)
+- [x] CLI: `boxty auth login` (implemented in cli/boxty_cli/auth.py)
 - [x] CLI: `boxty auth logout` (implemented)
 - [x] CLI: `boxty auth whoami` (implemented)
 - [x] CLI: Token storage in ~/.boxty/config.json
@@ -168,10 +168,10 @@
 - [ ] CLI: `boxty database create` (not implemented)
 
 ## 21. INFRASTRUCTURE
-- [x] CLI: Python project structure (cli-client/)
+- [x] CLI: Python project structure (cli/)
 - [x] CLI: HTTP client layer (httpx in deps)
 - [x] CLI: Config file management (~/.boxty/config.json)
-- [x] CLI: Table output formatting (custom print_table)
+- [x] CLI: Table output formatting (rich tables)
 - [ ] CLI: Progress bars for long operations
 - [ ] CLI: Error handling with helpful messages
 - [ ] CLI: Auto-completion (bash/zsh/fish)

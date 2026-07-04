@@ -121,66 +121,60 @@
 
 ---
 
-## 4. CLI CLIENT (cli-client/)
+## 4. CLI CLIENT (cli/)
 
-### Status: ⚠️ PARTIAL - Comenzi există dar unele sunt stub
+### Status: ✅ COMPLET - Toate comenzile Modal-style sunt implementate
 
-| Comandă | Status | Probleme |
+|| Comandă | Status | Probleme |
 |---------|--------|----------|
-| auth login | ✅ Funcțional | Real - apelează backend API |
-| auth logout | ✅ Funcțional | Real - șterge token local |
-| auth whoami | ✅ Funcțional | Real - apelează backend API |
-| workspace list | ✅ Funcțional | Real - apelează backend API |
-| workspace create | ✅ Funcțional | Real - apelează backend API |
-| workspace delete | ✅ Funcțional | Real - apelează backend API |
-| workspace switch | ✅ Funcțional | Real - salvează în config |
-| workspace show | ✅ Funcțional | Real - citește din config |
-| env list | ✅ Funcțional | Real - apelează backend API |
-| env create | ✅ Funcțional | Real - apelează backend API |
-| env delete | ✅ Funcțional | Real - apelează backend API |
-| env switch | ✅ Funcțional | Real - salvează în config |
-| app list | ✅ Funcțional | Real - apelează backend API |
-| app deploy | ✅ Funcțional | Real - apelează backend API |
-| app stop | ✅ Funcțional | Real - apelează backend API |
-| app logs | ✅ Funcțional | Real - apelează backend API |
-| app metrics | ✅ Funcțional | Real - apelează backend API |
-| volume list | ✅ Funcțional | Real - apelează backend API |
-| volume create | ✅ Funcțional | Real - apelează backend API |
-| volume delete | ✅ Funcțional | Real - apelează backend API |
-| secret list | ✅ Funcțional | Real - apelează backend API |
-| secret create | ✅ Funcțional | Real - apelează backend API |
-| secret delete | ✅ Funcțional | Real - apelează backend API |
-| billing balance | ✅ Funcțional | Real - apelează backend API |
-| billing usage | ✅ Funcțional | Real - apelează backend API |
-| billing buy | ✅ Funcțional | Real - apelează backend API |
-| route list | ✅ Funcțional | Real - apelează backend API |
-| route create | ✅ Funcțional | Real - apelează backend API |
-| route delete | ✅ Funcțional | Real - apelează backend API |
-| schedule list | ✅ Funcțional | Real - apelează backend API |
-| schedule create | ✅ Funcțional | Real - apelează backend API |
-| schedule delete | ✅ Funcțional | Real - apelează backend API |
-| schedule trigger | ✅ Funcțional | Real - apelează backend API |
-| image list | ✅ Funcțional | Real - apelează backend API |
-| image build | ✅ Funcțional | Real - apelează backend API |
-| invite list | ✅ Funcțional | Real - apelează backend API |
-| invite create | ✅ Funcțional | Real - apelează backend API |
-| invite accept | ✅ Funcțional | Real - apelează backend API |
-| provider list | ✅ Funcțional | Real - apelează backend API |
-| provider register | ✅ Funcțional | Real - apelează backend API |
-| provider delete | ✅ Funcțional | Real - apelează backend API |
-| config set | ✅ Funcțional | Real - salvează în fișier |
-| config get | ✅ Funcțional | Real - citește din fișier |
-| config list | ✅ Funcțional | Real - citește din fișier |
-| context | ✅ Funcțional | Real - citește din config |
-| status | ✅ Funcțional | Real - apelează backend API |
-| status --watch | ✅ Funcțional | Real - polling loop |
+|| auth login | ✅ Funcțional | Real - apelează backend API |
+|| auth logout | ✅ Funcțional | Real - șterge token local |
+|| auth whoami | ✅ Funcțional | Real - apelează backend API |
+|| workspace list | ✅ Funcțional | Real - apelează backend API |
+|| workspace create | ✅ Funcțional | Real - apelează backend API |
+|| workspace delete | ✅ Funcțional | Real - apelează backend API |
+|| workspace switch | ✅ Funcțional | Real - salvează în config |
+|| env list | ✅ Funcțional | Real - apelează backend API |
+|| env create | ✅ Funcțional | Real - apelează backend API |
+|| env delete | ✅ Funcțional | Real - apelează backend API |
+|| env switch | ✅ Funcțional | Real - salvează în config |
+|| app deploy | ✅ Funcțional | Real - apelează backend API |
+|| app serve | ✅ Funcțional | Real - apelează backend API |
+|| app run | ✅ Funcțional | Real - apelează backend API |
+|| app list | ✅ Funcțional | Real - apelează backend API |
+|| app logs | ✅ Funcțional | Real - apelează backend API |
+|| app stop | ✅ Funcțional | Real - apelează backend API |
+|| app delete | ✅ Funcțional | Real - apelează backend API |
+|| app rollback | ✅ Funcțional | Real - apelează backend API |
+|| app history | ✅ Funcțional | Real - apelează backend API |
+|| container list | ✅ Funcțional | Real - apelează backend API |
+|| container logs | ✅ Funcțional | Real - apelează backend API |
+|| container exec | ✅ Funcțional | Real - apelează backend API |
+|| container stop | ✅ Funcțional | Real - apelează backend API |
+|| volume list | ✅ Funcțional | Real - apelează backend API |
+|| volume create | ✅ Funcțional | Real - apelează backend API |
+|| volume delete | ✅ Funcțional | Real - apelează backend API |
+|| volume get/ls/put/rm/cp | ✅ Funcțional | Real - apelează backend API |
+|| secret list | ✅ Funcțional | Real - apelează backend API |
+|| secret create | ✅ Funcțional | Real - apelează backend API |
+|| secret delete | ✅ Funcțional | Real - apelează backend API |
+|| token set | ✅ Funcțional | Real - salvează în config |
+|| token new | ✅ Funcțional | Real - apelează backend API |
+|| profile list | ✅ Funcțional | Real - citește din config |
+|| profile activate | ✅ Funcțional | Real - salvează în config |
+|| profile current | ✅ Funcțional | Real - citește din config |
+|| config show | ✅ Funcțional | Real - citește din config |
+|| config set-environment | ✅ Funcțional | Real - salvează în config |
+|| environment list | ✅ Funcțional | Real - apelează backend API |
+|| environment create | ✅ Funcțional | Real - apelează backend API |
+|| environment delete | ✅ Funcțional | Real - apelează backend API |
+|| launch <template> | ✅ Funcțional | Real - apelează backend API |
+|| shell <app> | ✅ Funcțional | Real - apelează backend API |
 
 ### Probleme CLI Client:
-1. **owner_id hardcoded** - folosește "cli-user" în loc să ia din auth
-2. **Error handling** - minimal, doar afișează eroarea
-3. **Progress bars** - nu există
-4. **Auto-completion** - nu există
-5. **Output formatting** - simplu, doar tabele text
+1. Error handling - minimal, doar afișează eroarea
+2. Progress bars - parțiale pentru deploy/run
+3. Auto-completion - nu există
 
 ---
 

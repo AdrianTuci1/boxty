@@ -19,6 +19,19 @@ TEMPLATES: dict[str, str] = {
 }
 
 
+@launch_app.command()
+def launch(
+    template: str = typer.Argument(..., help="Template name"),
+    output: str = typer.Option("app.py", "--output", "-o", help="Output file"),
+) -> None:
+    """Launch a new app from a template."""
+    if template not in TEMPLATES:
+        err_console.print(f"[red]Unknown template: {template}[/red]")
+        err_console.print(f"[dim]Available templates: {', '.join(TEMPLATES)}[/dim]")
+        raise typer.Exit(1)
+    launch_new(template, output=output)
+
+
 @launch_app.command("list")
 def launch_list() -> None:
     """List available launch templates."""
@@ -29,9 +42,9 @@ def launch_list() -> None:
 @launch_app.command("new")
 def launch_new(
     template: str = typer.Argument(..., help="Template name"),
-    output: str = typer.Option("app.py", "--output", help="Output file"),
+    output: str = typer.Option("app.py", "--output", "-o", help="Output file"),
 ) -> None:
-    """Create a new app from a template."""
+    """Create a new app from a template (alias for launch)."""
     if template not in TEMPLATES:
         err_console.print(f"[red]Unknown template: {template}[/red]")
         raise typer.Exit(1)
