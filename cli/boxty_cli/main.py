@@ -17,6 +17,7 @@ from .containers import container_app
 from .launch import launch_app
 from .shell import shell_app
 from .config_cmd import config_app
+from .profile import profile_app
 
 app = typer.Typer(
     name="boxty",
@@ -34,6 +35,7 @@ app.add_typer(container_app)
 app.add_typer(launch_app)
 app.add_typer(shell_app)
 app.add_typer(config_app)
+app.add_typer(profile_app)
 
 console = Console()
 

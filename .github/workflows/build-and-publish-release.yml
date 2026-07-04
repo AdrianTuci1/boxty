@@ -22,8 +22,8 @@ on:
         required: true
         type: boolean
         default: true
-      publish_cli_client:
-        description: 'Publish Python CLI client to PyPI'
+      publish_cli_python:
+        description: 'Publish Python Modal-style CLI (boxty-cli) to PyPI'
         required: true
         type: boolean
         default: true
@@ -131,32 +131,32 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-  cli-client-build:
+  cli-python-build:
     needs: validate
-    if: github.event.inputs.publish_cli_client == 'true'
+    if: github.event.inputs.publish_cli_python == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: cli-client
+        working-directory: cli
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
-      - run: pip install build
-      - run: sed -i 's/version=".*"/version="${{ env.VERSION }}"/' setup.py
+      - run: pip install build hatch
+      - run: sed -i 's/^version = ".*"/version = "${{ env.VERSION }}"/' pyproject.toml
       - run: python -m build
       - uses: actions/upload-artifact@v4
         with:
-          name: cli-client-dist
-          path: cli-client/dist/
+          name: cli-python-dist
+          path: cli/dist/
 
-  cli-client-publish:
-    needs: cli-client-build
+  cli-python-publish:
+    needs: cli-python-build
     runs-on: ubuntu-latest
     environment: pypi
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: cli-client-dist, path: dist }
+        with: { name: cli-python-dist, path: dist }
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
@@ -336,7 +336,7 @@ jobs:
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
 
   summary:
-    needs: [sdk-python-publish, sdk-js-publish, cli-client-publish, cli-release, web-deploy]
+    needs: [sdk-python-publish, sdk-js-publish, cli-python-publish, cli-release, web-deploy]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -348,7 +348,7 @@ jobs:
           echo "╠══════════════════════════════════════════════════════════════╣"
           echo "║  Python SDK (PyPI):    ${{ needs.sdk-python-publish.result == 'success' && 'OK' || 'FAIL' }}                               ║"
           echo "║  JS SDK (npm):         ${{ needs.sdk-js-publish.result == 'success' && 'OK' || 'FAIL' }}                               ║"
-          echo "║  CLI Client (PyPI):    ${{ needs.cli-client-publish.result == 'success' && 'OK' || 'FAIL' }}                               ║"
+          echo "║  Python CLI (PyPI):    ${{ needs.cli-python-publish.result == 'success' && 'OK' || 'FAIL' }}                               ║"
           echo "║  CLI Binaries:         ${{ needs.cli-release.result == 'success' && 'OK' || 'FAIL' }}                               ║"
           echo "║  Web (Cloudflare):     ${{ needs.web-deploy.result == 'success' && 'OK' || 'FAIL' }}                               ║"
           echo "║  Web Environment:      ${{ github.event.inputs.web_environment }}                            ║"
@@ -356,5 +356,6 @@ jobs:
           echo ""
           echo "Install:"
           echo "  pip install boxty==${{ env.VERSION }}"
+          echo "  pip install boxty-cli==${{ env.VERSION }}"
           echo "  npm install @boxty/sdk@${{ env.VERSION }}"
           echo "  curl -fsSL https://cli.boxty.dev/install.sh | sh"

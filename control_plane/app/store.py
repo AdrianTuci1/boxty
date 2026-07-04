@@ -1162,12 +1162,65 @@ class InMemoryStore:
             return True
         return False
 
-    def trigger_schedule(self, schedule_id: str) -> ScheduleRecord:
-        schedule = self.schedules[schedule_id]
-        schedule.last_run_at = utc_now()
+    def trigger_schedule(self, schedule_id: str) -> tuple[ScheduleRecord, WorkloadRecord]:
+        """Trigger a schedule manually and create a real workload from it.
+
+        Uses the same implementation as the automatic scheduler loop so that
+        both manual and scheduled triggers produce identical behavior.
+        """
+        return self._trigger_schedule_workload(schedule_id, force=True)
+
+    def _build_workload_from_schedule(self, schedule: ScheduleRecord) -> WorkloadCreateRequest:
+        """Build a WorkloadCreateRequest from the schedule's linked workload."""
+        template = self.workloads.get(schedule.workload_id)
+        if template is None:
+            raise ValueError(f"template workload {schedule.workload_id} not found")
+        return WorkloadCreateRequest(
+            owner_id=schedule.owner_id,
+            workspace_id=schedule.workspace_id,
+            environment_id=schedule.environment_id,
+            kind=template.kind,
+            image=template.image,
+            command=list(template.command),
+            env=dict(template.env),
+            region=template.region,
+            pool=template.pool,
+            endpoint_name=template.endpoint_name,
+            requested_backend=template.requested_backend,
+            allow_runpod_fallback=True,
+            secret_names=list(template.secret_names),
+            volume_mounts=[vm.model_copy() for vm in template.volume_mounts],
+            resources=template.resources.model_copy() if hasattr(template.resources, "model_copy") else template.resources,
+            metadata={**template.metadata, **schedule.payload, "triggered_by_schedule": schedule.schedule_id},
+        )
+
+    def _trigger_schedule_workload(
+        self, schedule_id: str, force: bool = False
+    ) -> tuple[ScheduleRecord, WorkloadRecord]:
+        """Create a workload from a schedule and return the updated schedule + workload.
+
+        This is the single trigger implementation used by both the automatic
+        scheduler loop and the manual ``POST /schedules/{id}/trigger`` endpoint.
+        When ``force`` is True, the schedule is triggered regardless of the cron or
+        interval constraints. The schedule must be ``active`` unless ``force`` is True.
+        """
+        schedule = self.schedules.get(schedule_id)
+        if schedule is None:
+            raise KeyError(f"schedule {schedule_id} not found")
+        if not force and schedule.status != "active":
+            raise ValueError("schedule is not active")
+
+        now = utc_now()
+        request = self._build_workload_from_schedule(schedule)
+        workload = self.create_workload(request)
+        schedule.last_run_at = now
         schedule.next_run_at = None
-        schedule.updated_at = utc_now()
-        return schedule
+        schedule.updated_at = now
+        self.add_workload_log(
+            workload.workload_id, "info",
+            f"Triggered by schedule {schedule.schedule_id} ({schedule.name})"
+        )
+        return schedule, workload
 
     def create_image(self, request: ImageCreateRequest) -> ImageRecord:
         source_content = request.source_file_content

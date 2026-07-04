@@ -974,10 +974,15 @@ def delete_schedule(schedule_id: str) -> dict:
 @app.post(f"{settings.api_prefix}/schedules/{{schedule_id}}/trigger")
 def trigger_schedule(schedule_id: str) -> dict:
     try:
-        schedule = store.trigger_schedule(schedule_id)
+        schedule, workload = store.trigger_schedule(schedule_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return schedule.model_dump(mode="json")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "schedule": schedule.model_dump(mode="json"),
+        "workload": workload.model_dump(mode="json"),
+    }
 
 
 @app.get(f"{settings.api_prefix}/images")

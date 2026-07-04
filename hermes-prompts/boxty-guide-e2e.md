@@ -32,7 +32,7 @@ Run all of this before testing the guides:
    ```
 4. Install the Python CLI (`boxty`):
    ```bash
-   cd ~/boxty/cli-client
+   cd ~/boxty/cli
    pip install -e .
    ```
 5. Expose these environment variables for every shell/process you use:
