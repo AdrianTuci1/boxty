@@ -48,9 +48,10 @@ Functions are **serverless one-shot** workloads and do not get a public route. O
 
 ## CLI changes
 
-- New package `cli-client/` with unified `boxty` CLI covering onboarding, deployments, storage, and configuration.
-- Inline source execution via base64+gzip for Python/Node.
-- Default Python images mapped to local `boxty-python-runner`.
+- New package `cli/` with unified `boxty` Python CLI covering onboarding, deployments, storage, and configuration.
+- Replaces the old `cli-client/` JavaScript CLI.
+- Config in `~/.boxty/config.json` with precedence: CLI flags > env vars > config file.
+- Entry point: `boxty = boxty_cli.main:app`.
 
 ## Control plane changes
 

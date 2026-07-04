@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "boxty-cli"
+version = "1.0.0"
+description = "Boxty client CLI — a Modal-style command-line interface for the Boxty serverless GPU platform."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Boxty Team" }
+]
+keywords = ["boxty", "cli", "serverless", "gpu", "modal"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+    "httpx>=0.27.0",
+    "pydantic>=2.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "respx>=0.22.0",
+    "build>=1.2.0",
+    "ruff>=0.5.0",
+]
+
+[project.scripts]
+boxty = "boxty_cli.main:app"
+
+[project.urls]
+Homepage = "https://github.com/AdrianTuci1/boxty"
+Repository = "https://github.com/AdrianTuci1/boxty"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["boxty_cli*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.ruff.format]
+quote-style = "double"
