@@ -18,6 +18,7 @@ from app.models import (
     ProviderRegistrationRequest,
     RoutePublishRequest,
     SandboxSessionRequest,
+    ScheduleCreateRequest,
     SecretCreateRequest,
     UsageMeterRequest,
     VolumeCreateRequest,
@@ -347,6 +348,36 @@ class ControlPlaneStoreTests(unittest.TestCase):
         # Store should remain empty after failed scan
         self.assertEqual(len(store.users), 0)
 
+
+    def test_trigger_schedule_creates_workload(self) -> None:
+        self._register_provider()
+        workload = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="function",
+                image="alpine:latest",
+                command=["echo", "hello"],
+            )
+        )
+        schedule = self.store.create_schedule(
+            ScheduleCreateRequest(
+                name="test-schedule",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                owner_id="usr_test",
+                workload_id=workload.workload_id,
+                interval_seconds=60,
+            )
+        )
+        schedule_id = schedule.schedule_id
+        schedule, triggered_workload = self.store.trigger_schedule(schedule_id)
+        self.assertIsNotNone(triggered_workload)
+        self.assertNotEqual(triggered_workload.workload_id, workload.workload_id)
+        self.assertEqual(triggered_workload.status.value, "scheduled")
+        self.assertEqual(schedule.workload_id, workload.workload_id)
+        self.assertIsNotNone(schedule.last_run_at)
 
 if __name__ == "__main__":
     unittest.main()

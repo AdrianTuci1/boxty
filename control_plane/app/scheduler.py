@@ -62,32 +62,6 @@ def _should_trigger(schedule: ScheduleRecord, now: datetime) -> bool:
 _last_trigger_minute: dict[str, datetime] = {}
 
 
-def _get_workload_template(schedule: ScheduleRecord) -> WorkloadCreateRequest:
-    """Build a WorkloadCreateRequest from the schedule's linked workload."""
-    template = store.workloads.get(schedule.workload_id)
-    if template is None:
-        raise ValueError(f"template workload {schedule.workload_id} not found")
-    # Derive a new workload with same parameters but fresh metadata
-    return WorkloadCreateRequest(
-        owner_id=schedule.owner_id,
-        workspace_id=schedule.workspace_id,
-        environment_id=schedule.environment_id,
-        kind=template.kind,
-        image=template.image,
-        command=list(template.command),
-        env=dict(template.env),
-        region=template.region,
-        pool=template.pool,
-        endpoint_name=template.endpoint_name,
-        requested_backend=template.requested_backend,
-        allow_runpod_fallback=True,
-        secret_names=list(template.secret_names),
-        volume_mounts=[vm.model_copy() for vm in template.volume_mounts],
-        resources=template.resources.model_copy() if hasattr(template.resources, "model_copy") else template.resources,
-        metadata={**template.metadata, **schedule.payload, "triggered_by_schedule": schedule.schedule_id},
-    )
-
-
 async def _run_scheduler_tick() -> None:
     now = utc_now()
     for schedule in list(store.schedules.values()):
@@ -100,15 +74,7 @@ async def _run_scheduler_tick() -> None:
                 continue
             _last_trigger_minute[schedule.schedule_id] = now
         try:
-            request = _get_workload_template(schedule)
-            workload = store.create_workload(request)
-            schedule.last_run_at = now
-            schedule.next_run_at = None
-            schedule.updated_at = now
-            store.add_workload_log(
-                workload.workload_id, "info",
-                f"Triggered by schedule {schedule.schedule_id} ({schedule.name})"
-            )
+            store._trigger_schedule_workload(schedule.schedule_id, force=False)
         except Exception as exc:
             # Log failure but keep scheduler alive
             store.add_workload_log(

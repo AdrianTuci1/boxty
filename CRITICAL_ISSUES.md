@@ -46,15 +46,17 @@ Worker-ul ARE execuție reală Docker, dar NU în comenzile client!
 **Impact:** MEDIUM - funcționează dar nu poate fi folosit direct de client
 **Soluție:** Clarifică documentația - worker e doar pentru VPS, nu pentru client
 
-### 5. ❌ IMAGE BUILD
-**Status:** Doar schimbă statusul, nu face build real
-**Impact:** MEDIUM - utilizatorul nu poate build imagini custom
-**Soluție:** Implementează build Docker real sau integrare cu registry
+### 5. ✅ IMAGE BUILD (REZOLVAT)
+**Status:** `store.build_image()` rulează `docker build` real într-un director temporar
+**Impact:** HIGH - utilizatorul poate build imagini custom
+**Detalii:** Tag-ul imaginii este `boxty/{workspace_id}/{name}:latest` și rămâne local pe control plane.
 
-### 6. ❌ SCHEDULE TRIGGER
-**Status:** Doar updatează timestamp, nu execută workload
-**Impact:** MEDIUM - cron jobs nu funcționează
-**Soluție:** Implementează scheduler real (cron job sau background task)
+### 6. ✅ SCHEDULE TRIGGER (REZOLVAT)
+**Status:** Atât scheduler-ul automat cât și trigger-ul manual creează un workload real
+**Impact:** HIGH - cron jobs și trigger-ele manuale funcționează
+**Detalii:**
+- `scheduler.py` rulează loop la fiecare 30 secunde și creează workload-uri atunci când schedule-urile sunt due
+- `POST /v1/schedules/{id}/trigger` creează acum un workload real și returnează `{schedule, workload}`
 
 ---
 
