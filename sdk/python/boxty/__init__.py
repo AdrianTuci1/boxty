@@ -2,6 +2,15 @@ import os
 
 from .client import Boxty
 from .app import App, Database, Image, Mount, Secret, Volume
+from .exceptions import (
+    BoxtyAPIError,
+    BoxtyAuthError,
+    BoxtyConnectionError,
+    BoxtyError,
+    BoxtyNotFoundError,
+    BoxtyTimeoutError,
+    BoxtyValidationError,
+)
 
 class Client(Boxty):
     """Convenience alias for Boxty."""
@@ -12,4 +21,20 @@ class Client(Boxty):
             os.environ["BOXTY_TOKEN"] = api_key
 
 __version__ = "1.0.0"
-__all__ = ["App", "Boxty", "Client", "Database", "Image", "Mount", "Secret", "Volume"]
+__all__ = [
+    "App",
+    "Boxty",
+    "BoxtyAPIError",
+    "BoxtyAuthError",
+    "BoxtyConnectionError",
+    "BoxtyError",
+    "BoxtyNotFoundError",
+    "BoxtyTimeoutError",
+    "BoxtyValidationError",
+    "Client",
+    "Database",
+    "Image",
+    "Mount",
+    "Secret",
+    "Volume",
+]

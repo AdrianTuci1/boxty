@@ -40,6 +40,11 @@ class SecretsClient:
         r.raise_for_status()
         return r.json()
 
+    def rename(self, workspace_id: str, old_name: str, new_name: str) -> dict[str, Any]:
+        r = self._http.patch(f"/v1/secrets/{workspace_id}/{old_name}", json={"new_name": new_name})
+        r.raise_for_status()
+        return r.json()
+
     # -- delete ---------------------------------------------------------------
 
     def delete(self, workspace_id: str, secret_name: str) -> bool:
