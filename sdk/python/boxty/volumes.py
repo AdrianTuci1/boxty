@@ -10,7 +10,7 @@ class VolumesClient:
         self._http = http
         self._base = base
 
-    # -- list / create / delete -----------------------------------------------
+    # -- list / create / delete / get -----------------------------------------
 
     def list(self, workspace_id: str | None = None) -> list[dict[str, Any]]:
         params = {"workspace_id": workspace_id} if workspace_id else None
@@ -75,6 +75,25 @@ class VolumesClient:
         r = self._http.get(f"/v1/volumes/{locator}/blob", params={"path": path})
         r.raise_for_status()
         return r.content
+
+    def delete_blob(self, locator: str, path: str) -> bool:
+        r = self._http.delete(f"/v1/volumes/{locator}/blob", params={"path": path})
+        r.raise_for_status()
+        return r.json().get("deleted", False)
+
+    # -- helpers for CLI cp/rm/ls --------------------------------------------
+
+    def cp(self, src_locator: str, src_path: str, dst_locator: str, dst_path: str) -> dict[str, Any]:
+        r = self._http.post(
+            f"/v1/volumes/{src_locator}/copy",
+            json={
+                "source_path": src_path,
+                "destination_volume_id": dst_locator,
+                "destination_path": dst_path,
+            },
+        )
+        r.raise_for_status()
+        return r.json()
 
     # -- public object URL ----------------------------------------------------
 

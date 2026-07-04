@@ -469,7 +469,16 @@ class App:
             print("Error: no web endpoints defined in app", file=sys.stderr)
             sys.exit(1)
 
-    def deploy(self, *, workspace: str | None = None, environment: str | None = None) -> dict[str, Any]:
+    def deploy(
+        self,
+        *,
+        workspace: str | None = None,
+        environment: str | None = None,
+        workspace_id: str | None = None,
+        environment_id: str | None = None,
+        app_name: str | None = None,
+        client: Any | None = None,
+    ) -> dict[str, Any]:
         """Deploy the app to Boxty.
 
         Builds images, creates function/endpoint workloads, and publishes
@@ -482,25 +491,26 @@ class App:
             return {}
 
         config = _load_config()
-        token = os.environ.get("BOXTY_TOKEN") or config.get("token")
-        base_url = os.environ.get("BOXTY_API_URL") or config.get("api_url")
-        client = Boxty(base_url=base_url, token=token)
+
+        if client is None:
+            token = os.environ.get("BOXTY_TOKEN") or config.get("token")
+            base_url = os.environ.get("BOXTY_API_URL") or config.get("api_url")
+            client = Boxty(base_url=base_url, token=token)
 
         # Resolve owner
         owner_id: str | None = None
-        if token:
-            try:
-                me = client.whoami(token)
-                owner_id = me.get("user_id")
-            except Exception:
-                owner_id = None
+        try:
+            me = client.whoami()
+            owner_id = me.get("user_id")
+        except Exception:
+            owner_id = os.environ.get("BOXTY_USER_ID") or config.get("user_id")
         if not owner_id:
             raise RuntimeError(
                 "Unable to determine owner. Log in with 'boxty auth login' or set BOXTY_TOKEN."
             )
 
         # Resolve workspace
-        workspace_id = workspace or config.get("active_workspace_id")
+        workspace_id = workspace_id or workspace or config.get("workspace_id") or config.get("active_workspace_id")
         if not workspace_id:
             workspaces = client.workspaces(owner_id=owner_id)
             if workspaces:
@@ -509,13 +519,15 @@ class App:
             raise RuntimeError("No workspace found. Create one with 'boxty workspace create'.")
 
         # Resolve environment
-        environment_id = environment or config.get("active_environment_id")
+        environment_id = environment_id or environment or config.get("environment_id") or config.get("active_environment_id")
         if not environment_id:
             envs = client.environments(workspace_id)
             if envs:
                 environment_id = envs[0].get("environment_id")
         if not environment_id:
-            raise RuntimeError("No environment found. Create one with 'boxty env create'.")
+            raise RuntimeError("No environment found. Create one with 'boxty environment create'.")
+
+        name = app_name or self.name
 
         # Collect unique images
         image_manifests: dict[str, Image] = {}
