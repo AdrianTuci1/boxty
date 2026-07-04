@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, get_args, get_origin, get_type_hints
 from uuid import uuid4
@@ -134,6 +134,8 @@ class SessionAccessMode(str, Enum):
 class UserRegistrationRequest(BaseModel):
     external_user_id: str
     email: str | None = None
+    password: str | None = None
+    name: str | None = None
     organization_id: str | None = None
 
 
@@ -151,8 +153,11 @@ class UserRecord(BaseModel):
     user_id: str
     external_user_id: str
     email: str | None = None
+    password_hash: str | None = None
     organization_id: str | None = None
     default_workspace_id: str
+    oauth_provider: str | None = None
+    oauth_provider_user_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -163,8 +168,29 @@ class AccountRecord(BaseModel):
     balance_usd: float
     credit_grants_usd: float
     total_spend_usd: float = 0.0
+    stripe_customer_id: str | None = None
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
+
+
+class PaymentRecord(BaseModel):
+    payment_id: str = Field(default_factory=lambda: generated_id("pay"))
+    user_id: str
+    stripe_session_id: str | None = None
+    stripe_payment_intent_id: str | None = None
+    amount_usd: float
+    status: str = "pending"  # pending, completed, failed, refunded
+    created_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+
+
+class BillingHistoryRecord(BaseModel):
+    history_id: str = Field(default_factory=lambda: generated_id("bhi"))
+    user_id: str
+    type: str  # credit_purchase, usage_charge, refund
+    amount_usd: float
+    description: str
+    created_at: datetime = Field(default_factory=utc_now)
 
 
 class PricingRate(BaseModel):
@@ -216,7 +242,11 @@ class ApiKeyRecord(BaseModel):
     environment_id: str
     name: str
     secret_preview: str
-    secret_token: str
+    secret_token_hash: str = ""
+    secret_token_salt: str = ""
+    # Deprecated: plaintext storage kept for data migration only.
+    # New keys use secret_token_hash + secret_token_salt.
+    secret_token: str = ""
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -295,6 +325,7 @@ class ProviderRecord(BaseModel):
     labels: dict[str, str]
     capabilities: ProviderCapabilities
     auth_token_hash: str = ""
+    auth_token_salt: str = ""
     status: ProviderStatus = ProviderStatus.online
     available_slots: int = 0
     running_workloads: int = 0
@@ -478,3 +509,362 @@ class SingleTableItem(BaseModel):
     sk: str
     entity_type: str
     attributes: dict[str, Any]
+
+
+class LoginRequest(BaseModel):
+    external_user_id: str
+    email: str | None = None
+
+
+class OAuthProvider(str, Enum):
+    google = "google"
+    github = "github"
+
+
+class OAuthAuthorizationRequest(BaseModel):
+    provider: OAuthProvider
+
+
+class OAuthAuthorizationResponse(BaseModel):
+    authorization_url: str
+    state: str
+
+
+class OAuthCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+
+class LoginResponse(BaseModel):
+    user_id: str
+    token_type: str = "bearer"
+    access_token: str
+
+
+class BillingBalanceResponse(BaseModel):
+    user_id: str
+    balance_usd: float
+    credit_grants_usd: float
+    total_spend_usd: float
+
+
+class BillingUsageResponse(BaseModel):
+    user_id: str
+    total_spend_usd: float
+    period_start: datetime
+    period_end: datetime
+
+
+class BillingCreditsRequest(BaseModel):
+    user_id: str
+    amount_usd: float
+    success_url: str | None = None
+    cancel_url: str | None = None
+
+
+class BillingCreditsResponse(BaseModel):
+    user_id: str
+    amount_usd: float
+    new_balance_usd: float
+
+
+class UsageRecord(BaseModel):
+    usage_id: str = Field(default_factory=lambda: generated_id("usg"))
+    workload_id: str
+    owner_id: str
+    cpu_seconds: float
+    ram_gb_seconds: float
+    gpu_seconds: float
+    storage_gb_seconds: float
+    egress_gb: float
+    incremental_cost_usd: float
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class DashboardSummary(BaseModel):
+    workspace_id: str
+    environment_id: str
+    total_workloads: int
+    running_workloads: int
+    failed_workloads: int
+    total_routes: int
+    total_api_keys: int
+    total_secrets: int
+    total_volumes: int
+    balance_usd: float
+
+
+class WorkloadMetrics(BaseModel):
+    workload_id: str
+    cpu_seconds: float
+    ram_gb_seconds: float
+    gpu_seconds: float
+    storage_gb_seconds: float
+    egress_gb: float
+    accrued_cost_usd: float
+
+
+class WorkloadLogEntry(BaseModel):
+    log_id: str = Field(default_factory=lambda: generated_id("log"))
+    workload_id: str
+    timestamp: datetime = Field(default_factory=utc_now)
+    level: str = "info"
+    message: str
+
+
+class ScheduleCreateRequest(BaseModel):
+    name: str
+    workspace_id: str
+    environment_id: str
+    owner_id: str
+    workload_id: str
+    cron_expression: str | None = None
+    interval_seconds: int | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ScheduleRecord(BaseModel):
+    schedule_id: str = Field(default_factory=lambda: generated_id("sch"))
+    name: str
+    workspace_id: str
+    environment_id: str
+    owner_id: str
+    workload_id: str
+    cron_expression: str | None = None
+    interval_seconds: int | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+    status: str = "active"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    last_run_at: datetime | None = None
+    next_run_at: datetime | None = None
+
+
+class ImageCreateRequest(BaseModel):
+    name: str
+    workspace_id: str
+    owner_id: str
+    base_image: str
+    dockerfile: str | None = None
+    build_args: dict[str, str] = Field(default_factory=dict)
+    source_file_content: str | None = None  # base64 encoded source file
+    source_filename: str | None = None
+
+
+class ImageRecord(BaseModel):
+    image_id: str = Field(default_factory=lambda: generated_id("img"))
+    name: str
+    workspace_id: str
+    owner_id: str
+    base_image: str
+    dockerfile: str | None = None
+    build_args: dict[str, str] = Field(default_factory=dict)
+    source_file_content: str | None = None  # decoded plain text
+    source_filename: str | None = None
+    status: str = "pending"
+    build_log: str = ""
+    image_ref: str = ""
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    built_at: datetime | None = None
+
+
+class FunctionInvocationRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)
+    sync: bool = True
+    timeout_seconds: int = Field(default=300, ge=1)
+
+
+class FunctionInvocationResponse(BaseModel):
+    invocation_id: str = Field(default_factory=lambda: generated_id("inv"))
+    status: str = "pending"
+    workload_id: str | None = None
+    result: dict[str, Any] | None = None
+    error: str | None = None
+    started_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+
+
+class WorkloadInvokeRequest(BaseModel):
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkloadInvokeResponse(BaseModel):
+    workload_id: str
+    stdout: str
+    stderr: str
+    return_code: int
+
+
+class BillingReportRequest(BaseModel):
+    workspace_id: str | None = None
+    environment_id: str | None = None
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+
+
+class BillingReport(BaseModel):
+    report_id: str = Field(default_factory=lambda: generated_id("rpt"))
+    workspace_id: str | None = None
+    environment_id: str | None = None
+    period_start: datetime
+    period_end: datetime
+    total_spend_usd: float
+    total_workloads: int
+    total_compute_seconds: float
+    total_storage_gb: float
+    total_egress_gb: float
+    breakdown: list[dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class ProxyToken(BaseModel):
+    token_id: str = Field(default_factory=lambda: generated_id("pxy"))
+    workspace_id: str
+    name: str
+    token_hash: str
+    status: str = "active"
+    allowed_providers: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime | None = None
+
+
+class ProxyTokenCreateRequest(BaseModel):
+    workspace_id: str
+    name: str
+    allowed_providers: list[str] = Field(default_factory=list)
+    ttl_seconds: int | None = None
+
+
+class EnvironmentMember(BaseModel):
+    member_id: str = Field(default_factory=lambda: generated_id("mbr"))
+    environment_id: str
+    user_id: str
+    role: str = "viewer"
+    permissions: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class EnvironmentMemberUpdateRequest(BaseModel):
+    role: str | None = None
+    permissions: list[str] | None = None
+
+
+class WorkspaceMember(BaseModel):
+    member_id: str = Field(default_factory=lambda: generated_id("wsm"))
+    workspace_id: str
+    user_id: str
+    role: str = "viewer"  # owner, admin, developer, viewer
+    permissions: list[str] = Field(default_factory=list)
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class WorkspaceMemberCreateRequest(BaseModel):
+    user_id: str
+    role: str = "viewer"
+    permissions: list[str] = Field(default_factory=list)
+
+
+class WorkspaceMemberUpdateRequest(BaseModel):
+    role: str | None = None
+    permissions: list[str] | None = None
+
+
+class PasswordResetRequest(BaseModel):
+    email: str
+
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
+
+class PasswordResetRecord(BaseModel):
+    reset_id: str = Field(default_factory=lambda: generated_id("rst"))
+    user_id: str
+    email: str
+    token: str = Field(default_factory=lambda: uuid4().hex)
+    status: str = "pending"  # pending, used, expired
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+    expires_at: datetime = Field(default_factory=lambda: utc_now() + timedelta(hours=24))
+
+
+class AcceptInviteRequest(BaseModel):
+    token: str
+    email: str
+    password: str
+    name: str | None = None
+
+
+class SandboxExecRequest(BaseModel):
+    sandbox_id: str
+    command: list[str]
+    timeout_seconds: int = 60
+
+
+class SandboxExecResponse(BaseModel):
+    exec_id: str = Field(default_factory=lambda: generated_id("exc"))
+    sandbox_id: str
+    command: list[str]
+    exit_code: int
+    stdout: str
+    stderr: str
+    duration_ms: int
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class SandboxTunnel(BaseModel):
+    tunnel_id: str = Field(default_factory=lambda: generated_id("tun"))
+    sandbox_id: str
+    port: int
+    protocol: str = "tcp"
+    url: str | None = None
+    status: str = "active"
+    created_at: datetime = Field(default_factory=utc_now)
+
+
+class VolumeEntry(BaseModel):
+    entry_id: str = Field(default_factory=lambda: generated_id("ent"))
+    volume_id: str
+    path: str
+    size_bytes: int = 0
+    content_type: str = "application/octet-stream"
+    created_at: datetime = Field(default_factory=utc_now)
+    updated_at: datetime = Field(default_factory=utc_now)
+
+
+class VolumeSnapshot(BaseModel):
+    snapshot_id: str = Field(default_factory=lambda: generated_id("snp"))
+    volume_id: str
+    name: str
+    size_bytes: int = 0
+    status: str = "pending"
+    created_at: datetime = Field(default_factory=utc_now)
+    completed_at: datetime | None = None
+
+
+class FunctionAutoscalerConfig(BaseModel):
+    function_id: str
+    min_containers: int = 0
+    max_containers: int = 10
+    target_concurrency: int = 1
+    scale_up_threshold: float = 0.8
+    scale_down_threshold: float = 0.3
+    cooldown_seconds: int = 60
+
+
+class FunctionStats(BaseModel):
+    function_id: str
+    total_invocations: int = 0
+    total_errors: int = 0
+    avg_latency_ms: float = 0.0
+    p95_latency_ms: float = 0.0
+    p99_latency_ms: float = 0.0
+    current_containers: int = 0
+    pending_invocations: int = 0
+    period_start: datetime = Field(default_factory=utc_now)
+    period_end: datetime = Field(default_factory=utc_now)

@@ -13,7 +13,7 @@ export default function Sidebar() {
   const { workspace, environment } = useMemo(() => {
     const m = location.pathname.match(/^\/(?:apps|logs|secrets|storage)\/([^/]+)\/([^/]+)/)
     return {
-      workspace: m?.[1] || 'adrian-tucicovenco',
+      workspace: m?.[1] || 'john-smith',
       environment: m?.[2] || 'main',
     }
   }, [location.pathname])

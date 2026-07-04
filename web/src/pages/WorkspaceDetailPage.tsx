@@ -24,7 +24,7 @@ export default function WorkspaceDetailPage() {
 
   const handleCreateEnv = async () => {
     if (!id || !envName) return
-    await createEnvironment(id, envName)
+    await createEnvironment({ workspace_id: id, name: envName })
     setEnvName('')
     setOpen(false)
     qc.invalidateQueries({ queryKey: ['environments', id] })
@@ -42,11 +42,11 @@ export default function WorkspaceDetailPage() {
       <h1 className="text-xl font-bold text-white">{workspace?.name ?? 'Workspace'}</h1>
       <div className="flex items-center gap-2 flex-wrap">
         {environments?.map((env) => (
-          <div key={env.id} className="flex items-center gap-1">
+          <div key={env.environment_id} className="flex items-center gap-1">
             <button
-              onClick={() => setActiveEnv(env.id)}
+              onClick={() => setActiveEnv(env.environment_id)}
               className={`rounded-md border px-3 py-1 text-xs transition-colors ${
-                activeEnv === env.id
+                activeEnv === env.environment_id
                   ? 'bg-[#142920] text-[#34d399] border-[#1e3f31]'
                   : 'bg-[#1f1f1f] text-gray-400 border-[#333] hover:text-white'
               }`}
@@ -54,7 +54,7 @@ export default function WorkspaceDetailPage() {
               {env.name}
             </button>
             <button
-              onClick={() => handleDeleteEnv(env.id)}
+              onClick={() => handleDeleteEnv(env.environment_id)}
               className="text-gray-600 hover:text-red-400 text-xs px-1"
             >
               ×

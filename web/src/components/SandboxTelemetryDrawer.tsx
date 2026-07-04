@@ -210,7 +210,7 @@ function DetailsTab() {
       <DetailRow label="Cluster" value="boxty-prod-1" />
       <DetailRow label="Task ID" value="task-abcd1234" />
       <DetailRow label="Environment" value="main" />
-      <DetailRow label="Workspace" value="adrian-tucicovenco" />
+      <DetailRow label="Workspace" value="john-smith" />
     </div>
   )
 }

@@ -4,13 +4,16 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 import hashlib
 import secrets as secrets_lib
+from typing import Any
 
 from .config import settings
 from .dynamo import (
     account_item,
     api_key_item,
+    billing_history_item,
     environment_item,
     invite_item,
+    payment_item,
     provider_item,
     route_item,
     secret_item,
@@ -19,49 +22,74 @@ from .dynamo import (
     workload_item,
     workspace_item,
 )
-from .integrations import dynamo_mirror, invite_email_sender
+from .integrations import dynamo_mirror, invite_email_sender, password_reset_email_sender
 from .models import (
     AccountRecord,
     ApiKeyCreateRequest,
     ApiKeyRecord,
+    BillingBalanceResponse,
+    BillingCreditsResponse,
+    BillingHistoryRecord,
+    BillingUsageResponse,
+    DashboardSummary,
     EnvironmentCreateRequest,
+    EnvironmentMember,
     EnvironmentRecord,
     ExecutionBackend,
+    FunctionAutoscalerConfig,
+    FunctionInvocationResponse,
+    FunctionStats,
+    ImageCreateRequest,
+    ImageRecord,
     InviteCreateRequest,
     InviteRecord,
+    LoginResponse,
+    PasswordResetRecord,
+    PaymentRecord,
     PricingRate,
-    SecretCreateRequest,
-    SecretRecord,
     ProviderHeartbeatRequest,
     ProviderRecord,
     ProviderRegistrationRequest,
     ProviderRegistrationResponse,
     ProviderStatus,
+    ProxyToken,
     RoutePublishRequest,
     RouteRecord,
     SandboxSessionRecord,
     SandboxSessionRequest,
+    ScheduleCreateRequest,
+    ScheduleRecord,
+    SecretCreateRequest,
+    SecretRecord,
     SingleTableItem,
     UsageMeterRequest,
     UsageMeterResponse,
+    UsageRecord,
     UserRecord,
-    WorkloadLaunchSpec,
-    WorkloadCreateRequest,
-    WorkloadKind,
-    WorkloadRecord,
-    WorkloadStatusUpdateRequest,
-    WorkerAssignmentRecord,
-    WorkloadStatus,
-    WorkspaceCreateRequest,
-    WorkspaceRecord,
     VolumeCreateRequest,
+    VolumeEntry,
     VolumeEntryRecord,
     VolumeMount,
     VolumeRecord,
+    VolumeSnapshot,
+    WorkloadCreateRequest,
+    WorkloadInvokeRequest,
+    WorkloadKind,
+    WorkloadLaunchSpec,
+    WorkloadLogEntry,
+    WorkloadMetrics,
+    WorkloadRecord,
+    WorkloadStatus,
+    WorkloadStatusUpdateRequest,
+    WorkerAssignmentRecord,
+    WorkspaceCreateRequest,
+    WorkspaceMember,
+    WorkspaceRecord,
     generated_id,
     utc_now,
 )
 from .secret_crypto import secret_cipher
+from .security_tokens import generate_salt, generate_token, hash_token, verify_token
 from .integrations import r2_storage_client
 
 
@@ -70,6 +98,8 @@ class InMemoryStore:
     users: dict[str, UserRecord] = field(default_factory=dict)
     accounts: dict[str, AccountRecord] = field(default_factory=dict)
     workspaces: dict[str, WorkspaceRecord] = field(default_factory=dict)
+    schedules: dict[str, ScheduleRecord] = field(default_factory=dict)
+    images: dict[str, ImageRecord] = field(default_factory=dict)
     environments: dict[str, EnvironmentRecord] = field(default_factory=dict)
     api_keys: dict[str, ApiKeyRecord] = field(default_factory=dict)
     secrets: dict[str, SecretRecord] = field(default_factory=dict)
@@ -79,6 +109,19 @@ class InMemoryStore:
     workloads: dict[str, WorkloadRecord] = field(default_factory=dict)
     routes: dict[str, RouteRecord] = field(default_factory=dict)
     sessions: dict[str, SandboxSessionRecord] = field(default_factory=dict)
+    usages: dict[str, UsageRecord] = field(default_factory=dict)
+    proxy_tokens: dict[str, Any] = field(default_factory=dict)
+    environment_members: dict[str, Any] = field(default_factory=dict)
+    workspace_members: dict[str, Any] = field(default_factory=dict)
+    password_resets: dict[str, Any] = field(default_factory=dict)
+    volume_entries: dict[str, Any] = field(default_factory=dict)
+    volume_snapshots: dict[str, Any] = field(default_factory=dict)
+    function_autoscalers: dict[str, Any] = field(default_factory=dict)
+    function_stats: dict[str, Any] = field(default_factory=dict)
+    invocations: dict[str, FunctionInvocationResponse] = field(default_factory=dict)
+    logs: dict[str, WorkloadLogEntry] = field(default_factory=dict)
+    payments: dict[str, PaymentRecord] = field(default_factory=dict)
+    billing_history: dict[str, BillingHistoryRecord] = field(default_factory=dict)
 
     def _put_item(self, item: SingleTableItem) -> None:
         try:
@@ -91,6 +134,54 @@ class InMemoryStore:
             dynamo_mirror.delete_item(pk, sk)
         except Exception as exc:  # pragma: no cover - external integration
             print(f"[DynamoMirror] delete failed: {exc}")
+
+    def load_from_dynamodb(self) -> None:
+        """Load all items from DynamoDB into the in-memory store."""
+        try:
+            raw_items = dynamo_mirror.scan_all()
+        except Exception as exc:  # pragma: no cover - external integration
+            print(f"[DynamoMirror] scan failed: {exc}")
+            return
+
+        for raw in raw_items:
+            entity_type = raw.get("entity_type")
+            attrs = {k: v for k, v in raw.items() if k not in ("pk", "sk", "entity_type")}
+            try:
+                if entity_type == "User":
+                    record = UserRecord(**attrs)
+                    self.users[record.user_id] = record
+                elif entity_type == "Account":
+                    record = AccountRecord(**attrs)
+                    self.accounts[record.user_id] = record
+                elif entity_type == "Workspace":
+                    record = WorkspaceRecord(**attrs)
+                    self.workspaces[record.workspace_id] = record
+                elif entity_type == "Environment":
+                    record = EnvironmentRecord(**attrs)
+                    self.environments[record.environment_id] = record
+                elif entity_type == "ApiKey":
+                    record = ApiKeyRecord(**attrs)
+                    self.api_keys[record.api_key_id] = record
+                elif entity_type == "Secret":
+                    record = SecretRecord(**attrs)
+                    self.secrets[record.secret_id] = record
+                elif entity_type == "Invite":
+                    record = InviteRecord(**attrs)
+                    self.invites[record.invite_id] = record
+                elif entity_type == "Provider":
+                    record = ProviderRecord(**attrs)
+                    self.providers[record.provider_id] = record
+                elif entity_type == "Volume":
+                    record = VolumeRecord(**attrs)
+                    self.volumes[record.volume_id] = record
+                elif entity_type == "Workload":
+                    record = WorkloadRecord(**attrs)
+                    self.workloads[record.workload_id] = record
+                elif entity_type == "Route":
+                    record = RouteRecord(**attrs)
+                    self.routes[record.route_id] = record
+            except Exception as exc:  # pragma: no cover - data migration edge cases
+                print(f"[DynamoMirror] load failed for {entity_type}: {exc}")
 
     def _provider_is_stale(self, provider: ProviderRecord) -> bool:
         age = utc_now() - provider.updated_at
@@ -153,12 +244,19 @@ class InMemoryStore:
     def get_account(self, user_id: str) -> AccountRecord:
         return self.accounts[user_id]
 
+    def _hash_password(self, password: str) -> str:
+        import hashlib
+        return hashlib.sha256(password.encode()).hexdigest()
+
     def register_user(
         self,
         user_id: str,
         external_user_id: str,
         email: str | None = None,
+        password: str | None = None,
         organization_id: str | None = None,
+        oauth_provider: str | None = None,
+        oauth_provider_user_id: str | None = None,
     ) -> tuple[UserRecord, AccountRecord, WorkspaceRecord, EnvironmentRecord]:
         default_workspace_name = external_user_id
         workspace = WorkspaceRecord(
@@ -175,8 +273,11 @@ class InMemoryStore:
             user_id=user_id,
             external_user_id=external_user_id,
             email=email,
+            password_hash=self._hash_password(password) if password else None,
             organization_id=organization_id,
             default_workspace_id=workspace.workspace_id,
+            oauth_provider=oauth_provider,
+            oauth_provider_user_id=oauth_provider_user_id,
         )
         account = self.create_account(user_id, organization_id)
         self.users[user_id] = user
@@ -189,6 +290,33 @@ class InMemoryStore:
 
     def get_user(self, user_id: str) -> UserRecord:
         return self.users[user_id]
+
+    def find_or_create_oauth_user(
+        self,
+        provider: str,
+        provider_user_id: str,
+        email: str | None,
+        name: str | None,
+    ) -> tuple[UserRecord, AccountRecord, WorkspaceRecord, EnvironmentRecord]:
+        """Look up an OAuth user or create one with a default workspace and environment."""
+        for user in self.users.values():
+            if user.oauth_provider == provider and user.oauth_provider_user_id == provider_user_id:
+                workspace = self.workspaces[user.default_workspace_id]
+                environment = next(
+                    e for e in self.environments.values() if e.workspace_id == workspace.workspace_id
+                )
+                return (user, self.accounts[user.user_id], workspace, environment)
+
+        user_id = generated_id("usr")
+        external_user_id = f"{provider}:{provider_user_id}"
+        return self.register_user(
+            user_id=user_id,
+            external_user_id=external_user_id,
+            email=email,
+            password=None,
+            oauth_provider=provider,
+            oauth_provider_user_id=provider_user_id,
+        )
 
     def list_workspaces(self, owner_id: str | None = None) -> list[WorkspaceRecord]:
         items = list(self.workspaces.values())
@@ -244,18 +372,35 @@ class InMemoryStore:
             raise ValueError("workspace not found")
         if not environment or environment.workspace_id != request.workspace_id:
             raise ValueError("environment not found")
-        token = f"bx_{generated_id('secret')}_{generated_id('key')}"
+        token = generate_token("bx_", 32)
+        salt = generate_salt()
         api_key = ApiKeyRecord(
             owner_id=request.owner_id,
             workspace_id=request.workspace_id,
             environment_id=request.environment_id,
             name=request.name,
             secret_preview=f"{token[:12]}...",
-            secret_token=token,
+            secret_token_hash=hash_token(token, salt),
+            secret_token_salt=salt,
+            secret_token="",
         )
         self.api_keys[api_key.api_key_id] = api_key
         self._put_item(api_key_item(api_key))
         return api_key
+
+    def verify_api_key(self, api_key_id: str, token: str) -> ApiKeyRecord | None:
+        """Verify an API key token against its stored hash."""
+        api_key = self.api_keys.get(api_key_id)
+        if not api_key or not token:
+            return None
+        if api_key.secret_token_salt:
+            if verify_token(token, api_key.secret_token_salt, api_key.secret_token_hash):
+                return api_key
+            return None
+        # Backward compatibility: legacy plaintext tokens.
+        if api_key.secret_token and api_key.secret_token == token:
+            return api_key
+        return None
 
     def list_api_keys(self, workspace_id: str | None = None) -> list[ApiKeyRecord]:
         items = list(self.api_keys.values())
@@ -451,7 +596,8 @@ class InMemoryStore:
         return items
 
     def register_provider(self, request: ProviderRegistrationRequest) -> ProviderRegistrationResponse:
-        provider_token = f"bwp_{secrets_lib.token_urlsafe(24)}"
+        provider_token = generate_token("bwp_", 24)
+        salt = generate_salt()
         provider = ProviderRecord(
             provider_name=request.provider_name,
             region=request.region,
@@ -461,7 +607,8 @@ class InMemoryStore:
             session_access_mode=request.session_access_mode,
             labels=request.labels,
             capabilities=request.capabilities,
-            auth_token_hash=self._hash_provider_token(provider_token),
+            auth_token_hash=hash_token(provider_token, salt),
+            auth_token_salt=salt,
         )
         self.providers[provider.provider_id] = provider
         self._put_item(provider_item(provider))
@@ -477,6 +624,11 @@ class InMemoryStore:
         provider = self.providers.get(provider_id)
         if not provider or not token:
             return False
+        if provider.auth_token_salt:
+            return verify_token(token, provider.auth_token_salt, provider.auth_token_hash)
+        # Backward compatibility: legacy providers registered without a salt
+        # used plain SHA256. This path can be removed once all providers are
+        # migrated to salted HMAC hashes.
         return provider.auth_token_hash == self._hash_provider_token(token)
 
     def heartbeat_provider(self, provider_id: str, request: ProviderHeartbeatRequest) -> ProviderRecord:
@@ -754,6 +906,645 @@ class InMemoryStore:
         items.extend(workload_item(record) for record in self.workloads.values())
         items.extend(route_item(record) for record in self.routes.values())
         return items
+
+    def login(self, external_user_id: str, email: str | None = None) -> LoginResponse:
+        user = next((u for u in self.users.values() if u.external_user_id == external_user_id), None)
+        if not user:
+            raise KeyError("user not found")
+        return LoginResponse(user_id=user.user_id, access_token=issued_access_token(external_user_id))
+
+    def delete_api_key(self, api_key_id: str) -> bool:
+        if api_key_id not in self.api_keys:
+            return False
+        del self.api_keys[api_key_id]
+        self._delete_item(f"APIKEY#{api_key_id}", "PROFILE")
+        return True
+
+    def delete_workload(self, workload_id: str) -> bool:
+        if workload_id not in self.workloads:
+            return False
+        workload = self.workloads[workload_id]
+        if workload.assigned_provider_id and workload.assigned_provider_id in self.providers:
+            provider = self.providers[workload.assigned_provider_id]
+            provider.available_slots += 1
+            provider.running_workloads = max(0, provider.running_workloads - 1)
+            provider.updated_at = utc_now()
+            self.providers[provider.provider_id] = provider
+            self._put_item(provider_item(provider))
+        del self.workloads[workload_id]
+        self._delete_item(f"WORKLOAD#{workload_id}", "PROFILE")
+        return True
+
+    def list_routes(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[RouteRecord]:
+        items = list(self.routes.values())
+        if workspace_id or environment_id:
+            workload_ids = {w.workload_id for w in self.workloads.values() if (not workspace_id or w.workspace_id == workspace_id) and (not environment_id or w.environment_id == environment_id)}
+            items = [route for route in items if route.workload_id in workload_ids]
+        return items
+
+    def delete_route(self, route_id: str) -> bool:
+        if route_id not in self.routes:
+            return False
+        del self.routes[route_id]
+        self._delete_item(f"ROUTE#{route_id}", "PROFILE")
+        return True
+
+    def list_usage(self, workload_id: str | None = None, owner_id: str | None = None) -> list[UsageRecord]:
+        items = list(self.usages.values())
+        if workload_id:
+            items = [u for u in items if u.workload_id == workload_id]
+        if owner_id:
+            items = [u for u in items if u.owner_id == owner_id]
+        return items
+
+    def billing_balance(self, user_id: str) -> BillingBalanceResponse:
+        account = self.accounts[user_id]
+        return BillingBalanceResponse(
+            user_id=user_id,
+            balance_usd=account.balance_usd,
+            credit_grants_usd=account.credit_grants_usd,
+            total_spend_usd=account.total_spend_usd,
+        )
+
+    def billing_usage(self, user_id: str) -> BillingUsageResponse:
+        account = self.accounts[user_id]
+        now = utc_now()
+        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return BillingUsageResponse(
+            user_id=user_id,
+            total_spend_usd=account.total_spend_usd,
+            period_start=start,
+            period_end=now,
+        )
+
+    def add_credits(self, user_id: str, amount_usd: float) -> BillingCreditsResponse:
+        account = self.accounts[user_id]
+        account.balance_usd = round(account.balance_usd + amount_usd, 6)
+        account.credit_grants_usd = round(account.credit_grants_usd + amount_usd, 6)
+        account.updated_at = utc_now()
+        self.accounts[user_id] = account
+        self._put_item(account_item(account))
+        
+        # Add billing history entry
+        history = BillingHistoryRecord(
+            user_id=user_id,
+            type="credit_purchase",
+            amount_usd=amount_usd,
+            description=f"Added ${amount_usd:.2f} credits",
+        )
+        self.billing_history[history.history_id] = history
+        self._put_item(billing_history_item(history))
+        
+        return BillingCreditsResponse(
+            user_id=user_id,
+            amount_usd=amount_usd,
+            new_balance_usd=account.balance_usd,
+        )
+
+    def update_account_stripe_customer(self, user_id: str, stripe_customer_id: str) -> AccountRecord:
+        account = self.accounts[user_id]
+        account.stripe_customer_id = stripe_customer_id
+        account.updated_at = utc_now()
+        self.accounts[user_id] = account
+        self._put_item(account_item(account))
+        return account
+
+    def create_pending_payment(self, user_id: str, stripe_session_id: str, amount_usd: float) -> PaymentRecord:
+        payment = PaymentRecord(
+            user_id=user_id,
+            stripe_session_id=stripe_session_id,
+            amount_usd=amount_usd,
+            status="pending",
+        )
+        self.payments[payment.payment_id] = payment
+        self._put_item(payment_item(payment))
+        return payment
+
+    def get_pending_payment_by_session(self, stripe_session_id: str) -> PaymentRecord | None:
+        for payment in self.payments.values():
+            if payment.stripe_session_id == stripe_session_id and payment.status == "pending":
+                return payment
+        return None
+
+    def mark_payment_completed(self, payment_id: str, stripe_payment_intent_id: str) -> PaymentRecord:
+        payment = self.payments[payment_id]
+        payment.status = "completed"
+        payment.stripe_payment_intent_id = stripe_payment_intent_id
+        payment.completed_at = utc_now()
+        self.payments[payment_id] = payment
+        self._put_item(payment_item(payment))
+        
+        # Add billing history
+        history = BillingHistoryRecord(
+            user_id=payment.user_id,
+            type="credit_purchase",
+            amount_usd=payment.amount_usd,
+            description=f"Credit purchase via Stripe (${payment.amount_usd:.2f})",
+        )
+        self.billing_history[history.history_id] = history
+        self._put_item(billing_history_item(history))
+        
+        return payment
+
+    def get_billing_history(self, user_id: str) -> list[BillingHistoryRecord]:
+        if user_id not in self.accounts:
+            raise KeyError(user_id)
+        return [h for h in self.billing_history.values() if h.user_id == user_id]
+
+    def add_usage_charge(self, user_id: str, amount_usd: float, description: str) -> BillingHistoryRecord:
+        history = BillingHistoryRecord(
+            user_id=user_id,
+            type="usage_charge",
+            amount_usd=-amount_usd,
+            description=description,
+        )
+        self.billing_history[history.history_id] = history
+        self._put_item(billing_history_item(history))
+        return history
+
+    def list_workloads_filtered(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[WorkloadRecord]:
+        items = list(self.workloads.values())
+        if workspace_id:
+            items = [w for w in items if w.workspace_id == workspace_id]
+        if environment_id:
+            items = [w for w in items if w.environment_id == environment_id]
+        return items
+
+    def dashboard_summary(self, workspace_id: str, environment_id: str) -> DashboardSummary:
+        workloads = [w for w in self.workloads.values() if w.workspace_id == workspace_id and w.environment_id == environment_id]
+        running = sum(1 for w in workloads if w.status == WorkloadStatus.running)
+        failed = sum(1 for w in workloads if w.status == WorkloadStatus.failed)
+        routes = len(self.list_routes(workspace_id=workspace_id, environment_id=environment_id))
+        api_keys = len([k for k in self.api_keys.values() if k.workspace_id == workspace_id and k.environment_id == environment_id])
+        secrets = len([s for s in self.secrets.values() if s.workspace_id == workspace_id])
+        volumes = len([v for v in self.volumes.values() if v.workspace_id == workspace_id])
+        balance = 0.0
+        if workloads:
+            owner_id = workloads[0].owner_id
+            account = self.accounts.get(owner_id)
+            if account:
+                balance = account.balance_usd
+        return DashboardSummary(
+            workspace_id=workspace_id,
+            environment_id=environment_id,
+            total_workloads=len(workloads),
+            running_workloads=running,
+            failed_workloads=failed,
+            total_routes=routes,
+            total_api_keys=api_keys,
+            total_secrets=secrets,
+            total_volumes=volumes,
+            balance_usd=balance,
+        )
+
+    def workload_metrics(self, workload_id: str) -> WorkloadMetrics:
+        workload = self.workloads[workload_id]
+        usage_items = [u for u in self.usages.values() if u.workload_id == workload_id]
+        cpu_seconds = sum(u.cpu_seconds for u in usage_items)
+        ram_gb_seconds = sum(u.ram_gb_seconds for u in usage_items)
+        gpu_seconds = sum(u.gpu_seconds for u in usage_items)
+        storage_gb_seconds = sum(u.storage_gb_seconds for u in usage_items)
+        egress_gb = sum(u.egress_gb for u in usage_items)
+        return WorkloadMetrics(
+            workload_id=workload_id,
+            cpu_seconds=cpu_seconds,
+            ram_gb_seconds=ram_gb_seconds,
+            gpu_seconds=gpu_seconds,
+            storage_gb_seconds=storage_gb_seconds,
+            egress_gb=egress_gb,
+            accrued_cost_usd=workload.accrued_cost_usd,
+        )
+
+    def workload_logs(self, workload_id: str) -> list[WorkloadLogEntry]:
+        return [log for log in self.logs.values() if log.workload_id == workload_id]
+
+    def add_workload_log(self, workload_id: str, level: str, message: str) -> WorkloadLogEntry:
+        log = WorkloadLogEntry(workload_id=workload_id, level=level, message=message)
+        self.logs[log.log_id] = log
+        return log
+
+    def create_schedule(self, request: ScheduleCreateRequest) -> ScheduleRecord:
+        schedule = ScheduleRecord(
+            name=request.name,
+            workspace_id=request.workspace_id,
+            environment_id=request.environment_id,
+            owner_id=request.owner_id,
+            workload_id=request.workload_id,
+            cron_expression=request.cron_expression,
+            interval_seconds=request.interval_seconds,
+            payload=request.payload,
+        )
+        self.schedules[schedule.schedule_id] = schedule
+        return schedule
+
+    def list_schedules(self, workspace_id: str | None = None, environment_id: str | None = None) -> list[ScheduleRecord]:
+        items = list(self.schedules.values())
+        if workspace_id:
+            items = [s for s in items if s.workspace_id == workspace_id]
+        if environment_id:
+            items = [s for s in items if s.environment_id == environment_id]
+        return items
+
+    def get_schedule(self, schedule_id: str) -> ScheduleRecord:
+        return self.schedules[schedule_id]
+
+    def update_schedule(self, schedule_id: str, payload: dict[str, Any]) -> ScheduleRecord:
+        schedule = self.schedules[schedule_id]
+        for key, value in payload.items():
+            if hasattr(schedule, key):
+                setattr(schedule, key, value)
+        schedule.updated_at = utc_now()
+        return schedule
+
+    def delete_schedule(self, schedule_id: str) -> bool:
+        if schedule_id in self.schedules:
+            del self.schedules[schedule_id]
+            return True
+        return False
+
+    def trigger_schedule(self, schedule_id: str) -> ScheduleRecord:
+        schedule = self.schedules[schedule_id]
+        schedule.last_run_at = utc_now()
+        schedule.next_run_at = None
+        schedule.updated_at = utc_now()
+        return schedule
+
+    def create_image(self, request: ImageCreateRequest) -> ImageRecord:
+        source_content = request.source_file_content
+        if source_content:
+            import base64
+            try:
+                source_content = base64.b64decode(source_content, validate=True).decode("utf-8")
+            except Exception:
+                # If decoding fails, treat as plain text for backwards compatibility
+                pass
+        image = ImageRecord(
+            name=request.name,
+            workspace_id=request.workspace_id,
+            owner_id=request.owner_id,
+            base_image=request.base_image,
+            dockerfile=request.dockerfile,
+            build_args=request.build_args,
+            source_file_content=source_content,
+            source_filename=request.source_filename,
+        )
+        self.images[image.image_id] = image
+        return image
+
+    def list_images(self, workspace_id: str | None = None) -> list[ImageRecord]:
+        items = list(self.images.values())
+        if workspace_id:
+            items = [i for i in items if i.workspace_id == workspace_id]
+        return items
+
+    def get_image(self, image_id: str) -> ImageRecord:
+        return self.images[image_id]
+
+    def delete_image(self, image_id: str) -> bool:
+        if image_id in self.images:
+            del self.images[image_id]
+            return True
+        return False
+
+    def build_image(self, image_id: str) -> ImageRecord:
+        import subprocess
+        import tempfile
+        import os
+
+        image = self.images.get(image_id)
+        if image is None:
+            raise KeyError(f"image {image_id} not found")
+
+        image.status = "building"
+        image.updated_at = utc_now()
+        self.images[image_id] = image
+
+        # Tag is deterministic per workspace/image
+        tag = f"boxty/{image.workspace_id}/{image.name}:latest"
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            dockerfile_path = os.path.join(tmpdir, "Dockerfile")
+
+            if image.dockerfile:
+                dockerfile_content = image.dockerfile
+            elif image.source_filename and image.source_filename.endswith(".py"):
+                dockerfile_content = "FROM python:3.11-slim\nWORKDIR /app\nCOPY main.py /app/main.py\nCMD [\"python\", \"/app/main.py\"]\n"
+            else:
+                dockerfile_content = f"FROM {image.base_image or 'alpine:latest'}\n"
+
+            with open(dockerfile_path, "w") as f:
+                f.write(dockerfile_content)
+
+            # Save source file into build context when available
+            if image.source_filename and image.source_file_content:
+                source_path = os.path.join(tmpdir, image.source_filename)
+                try:
+                    os.makedirs(os.path.dirname(source_path) or tmpdir, exist_ok=True)
+                except OSError:
+                    pass
+                # Normalize Python source to be copied as main.py when generating Dockerfile
+                if image.source_filename.endswith(".py") and not image.dockerfile:
+                    source_path = os.path.join(tmpdir, "main.py")
+                with open(source_path, "w") as f:
+                    f.write(image.source_file_content)
+
+            build_args = image.build_args or {}
+            args_list = []
+            for key, value in build_args.items():
+                args_list.extend(["--build-arg", f"{key}={value}"])
+
+            try:
+                result = subprocess.run(
+                    ["docker", "build", "-t", tag, "."] + args_list,
+                    cwd=tmpdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                )
+                image.build_log = result.stdout + result.stderr
+                if result.returncode == 0:
+                    image.status = "ready"
+                    image.image_ref = tag
+                    image.built_at = utc_now()
+                else:
+                    image.status = "failed"
+            except subprocess.TimeoutExpired:
+                image.status = "failed"
+                image.build_log = "Build timed out after 5 minutes"
+            except FileNotFoundError:
+                image.status = "failed"
+                image.build_log = "Docker not found. Please install Docker."
+            except Exception as e:
+                image.status = "failed"
+                image.build_log = f"Build error: {str(e)}"
+
+        image.updated_at = utc_now()
+        self.images[image_id] = image
+        return image
+
+    def _select_backend_for_workload(self, workload: WorkloadRecord) -> tuple[ExecutionBackend, str | None]:
+        """Mirror of select_backend using an existing workload record."""
+        self.expire_stale_providers()
+        self.reclaim_expired_assignments()
+        gpu_needed = workload.resources.gpu_count > 0
+        if workload.requested_backend:
+            if workload.requested_backend == ExecutionBackend.runpod_serverless:
+                return ExecutionBackend.runpod_serverless, None
+
+        eligible = [
+            provider
+            for provider in self.providers.values()
+            if provider.status == ProviderStatus.online
+            and provider.pool == (workload.pool or settings.default_provider_pool)
+            and provider.region == (workload.region or provider.region)
+            and provider.available_slots > 0
+            and provider.capabilities.cpu_cores >= workload.resources.cpu_cores
+            and provider.capabilities.memory_mb >= workload.resources.memory_mb
+            and provider.capabilities.disk_gb >= workload.resources.disk_gb
+            and provider.capabilities.gpu_count >= workload.resources.gpu_count
+            and (not gpu_needed or provider.capabilities.gpu_type == workload.resources.gpu_type or workload.resources.gpu_type is None)
+            and (
+                workload.kind != WorkloadKind.endpoint
+                or provider.capabilities.supports_endpoint_serving
+            )
+        ]
+        if eligible:
+            selected = sorted(eligible, key=lambda provider: (-provider.available_slots, provider.updated_at))[0]
+            return ExecutionBackend.provider, selected.provider_id
+
+        if settings.runpod_enabled:
+            return ExecutionBackend.runpod_serverless, None
+
+        raise ValueError("no eligible backend available")
+
+    def invoke_workload_sync(
+        self,
+        workload_id: str,
+        request: WorkloadInvokeRequest,
+        timeout_seconds: int = 300,
+    ) -> FunctionInvocationResponse:
+        workload = self.workloads.get(workload_id)
+        if workload is None:
+            raise KeyError(f"workload {workload_id} not found")
+        if workload.kind != WorkloadKind.function:
+            raise ValueError("invoke_sync is only supported for function workloads")
+
+        invocation = FunctionInvocationResponse(
+            workload_id=workload_id,
+            status=WorkloadStatus.pending.value,
+        )
+        self.invocations[invocation.invocation_id] = invocation
+
+        # Encode payload into the workload env so the worker can pass it to the container
+        if request.payload:
+            import json as _json
+            workload.env["BOXTY_INVOCATION_PAYLOAD"] = _json.dumps(request.payload)
+        workload.env["BOXTY_INVOCATION_ID"] = invocation.invocation_id
+        workload.env["BOXTY_SYNC_TIMEOUT"] = str(timeout_seconds)
+
+        # Assign a backend if the workload is not already scheduled to a provider
+        if not workload.assigned_provider_id:
+            backend, provider_id = self._select_backend_for_workload(workload)
+            workload.selected_backend = backend
+            workload.assigned_provider_id = provider_id
+            if provider_id and provider_id in self.providers:
+                provider = self.providers[provider_id]
+                provider.available_slots = max(0, provider.available_slots - 1)
+                provider.running_workloads += 1
+                provider.updated_at = utc_now()
+                self.providers[provider_id] = provider
+                self._put_item(provider_item(provider))
+
+        workload.status = WorkloadStatus.scheduled
+        workload.updated_at = utc_now()
+        self.workloads[workload_id] = workload
+        self._put_item(workload_item(workload))
+
+        invocation.status = WorkloadStatus.scheduled.value
+        return invocation
+
+    def get_invocation(self, invocation_id: str) -> FunctionInvocationResponse:
+        return self.invocations[invocation_id]
+
+    # -- proxy tokens ----------------------------------------------------------
+
+    def create_proxy_token(self, token: ProxyToken) -> ProxyToken:
+        self.proxy_tokens[token.token_id] = token
+        return token
+
+    def list_proxy_tokens(self, workspace_id: str) -> list[ProxyToken]:
+        return [t for t in self.proxy_tokens.values() if t.workspace_id == workspace_id]
+
+    def get_proxy_token(self, token_id: str) -> ProxyToken:
+        return self.proxy_tokens[token_id]
+
+    def update_proxy_token(self, token_id: str, payload: dict[str, Any]) -> ProxyToken:
+        token = self.proxy_tokens[token_id]
+        if "status" in payload:
+            token.status = payload["status"]
+        if "allowed_providers" in payload:
+            token.allowed_providers = payload["allowed_providers"]
+        token.updated_at = utc_now()
+        return token
+
+    def delete_proxy_token(self, token_id: str) -> bool:
+        if token_id in self.proxy_tokens:
+            del self.proxy_tokens[token_id]
+            return True
+        return False
+
+    # -- environment members (RBAC) --------------------------------------------
+
+    def create_environment_member(self, member: EnvironmentMember) -> EnvironmentMember:
+        self.environment_members[member.member_id] = member
+        return member
+
+    def list_environment_members(self, environment_id: str) -> list[EnvironmentMember]:
+        return [m for m in self.environment_members.values() if m.environment_id == environment_id]
+
+    def get_environment_member(self, member_id: str) -> EnvironmentMember:
+        return self.environment_members[member_id]
+
+    def update_environment_member(self, member_id: str, payload: dict[str, Any]) -> EnvironmentMember:
+        member = self.environment_members[member_id]
+        if "role" in payload:
+            member.role = payload["role"]
+        if "permissions" in payload:
+            member.permissions = payload["permissions"]
+        member.updated_at = utc_now()
+        return member
+
+    def delete_environment_member(self, member_id: str) -> bool:
+        if member_id in self.environment_members:
+            del self.environment_members[member_id]
+            return True
+        return False
+
+    # -- workspace members (RBAC) ------------------------------------------------
+
+    def create_workspace_member(self, member: WorkspaceMember) -> WorkspaceMember:
+        self.workspace_members[member.member_id] = member
+        return member
+
+    def list_workspace_members(self, workspace_id: str) -> list[WorkspaceMember]:
+        return [m for m in self.workspace_members.values() if m.workspace_id == workspace_id]
+
+    def get_workspace_member(self, member_id: str) -> WorkspaceMember:
+        return self.workspace_members[member_id]
+
+    def update_workspace_member(self, member_id: str, payload: dict[str, Any]) -> WorkspaceMember:
+        member = self.workspace_members[member_id]
+        if "role" in payload:
+            member.role = payload["role"]
+        if "permissions" in payload:
+            member.permissions = payload["permissions"]
+        member.updated_at = utc_now()
+        return member
+
+    def delete_workspace_member(self, member_id: str) -> bool:
+        if member_id in self.workspace_members:
+            del self.workspace_members[member_id]
+            return True
+        return False
+
+    # -- password reset ----------------------------------------------------------
+
+    def create_password_reset(self, user_id: str, email: str) -> PasswordResetRecord:
+        reset = PasswordResetRecord(user_id=user_id, email=email)
+        self.password_resets[reset.reset_id] = reset
+        return reset
+
+    def get_password_reset_by_token(self, token: str) -> PasswordResetRecord | None:
+        for reset in self.password_resets.values():
+            if reset.token == token and reset.status == "pending":
+                if reset.expires_at > utc_now():
+                    return reset
+        return None
+
+    def use_password_reset(self, token: str) -> PasswordResetRecord | None:
+        reset = self.get_password_reset_by_token(token)
+        if reset:
+            reset.status = "used"
+            reset.updated_at = utc_now()
+        return reset
+
+    # -- invite acceptance -------------------------------------------------------
+
+    def get_invite_by_token(self, token: str) -> InviteRecord | None:
+        for invite in self.invites.values():
+            if invite.token == token and invite.status == "pending":
+                return invite
+        return None
+
+    def accept_invite(self, token: str, user_id: str) -> InviteRecord:
+        invite = self.get_invite_by_token(token)
+        if not invite:
+            raise ValueError("invite not found or already used")
+        invite.status = "accepted"
+        invite.updated_at = utc_now()
+        # Create workspace member
+        member = WorkspaceMember(
+            workspace_id=invite.workspace_id,
+            user_id=user_id,
+            role=invite.role,
+        )
+        self.workspace_members[member.member_id] = member
+        return invite
+
+    # -- volume entries --------------------------------------------------------
+
+    def create_volume_entry(self, entry: VolumeEntry) -> VolumeEntry:
+        self.volume_entries[entry.entry_id] = entry
+        return entry
+
+    def list_volume_entries(self, volume_id: str, path: str = "") -> list[VolumeEntry]:
+        entries = [e for e in self.volume_entries.values() if e.volume_id == volume_id]
+        if path:
+            entries = [e for e in entries if e.path.startswith(path)]
+        return entries
+
+    def get_volume_entry(self, entry_id: str) -> VolumeEntry:
+        return self.volume_entries[entry_id]
+
+    def delete_volume_entry(self, entry_id: str) -> bool:
+        if entry_id in self.volume_entries:
+            del self.volume_entries[entry_id]
+            return True
+        return False
+
+    # -- volume snapshots ------------------------------------------------------
+
+    def create_volume_snapshot(self, snapshot: VolumeSnapshot) -> VolumeSnapshot:
+        self.volume_snapshots[snapshot.snapshot_id] = snapshot
+        return snapshot
+
+    def list_volume_snapshots(self, volume_id: str) -> list[VolumeSnapshot]:
+        return [s for s in self.volume_snapshots.values() if s.volume_id == volume_id]
+
+    def get_volume_snapshot(self, snapshot_id: str) -> VolumeSnapshot:
+        return self.volume_snapshots[snapshot_id]
+
+    def delete_volume_snapshot(self, snapshot_id: str) -> bool:
+        if snapshot_id in self.volume_snapshots:
+            del self.volume_snapshots[snapshot_id]
+            return True
+        return False
+
+    # -- function autoscaler & stats -------------------------------------------
+
+    def update_function_autoscaler(self, config: FunctionAutoscalerConfig) -> FunctionAutoscalerConfig:
+        self.function_autoscalers[config.function_id] = config
+        return config
+
+    def get_function_autoscaler(self, function_id: str) -> FunctionAutoscalerConfig:
+        return self.function_autoscalers[function_id]
+
+    def get_function_stats(self, function_id: str) -> FunctionStats:
+        return self.function_stats.get(function_id, FunctionStats(function_id=function_id))
+
+    def update_function_stats(self, function_id: str, stats: FunctionStats) -> FunctionStats:
+        self.function_stats[function_id] = stats
+        return stats
 
 
 store = InMemoryStore()

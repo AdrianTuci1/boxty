@@ -11,7 +11,7 @@ export default function WorkspacesPage() {
 
   const handleCreate = async () => {
     if (!name) return
-    await create.mutateAsync(name)
+    await create.mutateAsync({ owner_id: 'default', name })
     setName('')
     setOpen(false)
   }

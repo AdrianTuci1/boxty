@@ -8,7 +8,7 @@ export const mockApps: AppModel[] = [
     environmentId: 'main',
     status: 'active',
     type: 'function',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: ['fastapi_app'],
     instances: [
       {
@@ -36,7 +36,7 @@ export const mockApps: AppModel[] = [
     environmentId: 'main',
     status: 'active',
     type: 'function',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: ['fastapi_app'],
     instances: [
       {
@@ -64,7 +64,7 @@ export const mockApps: AppModel[] = [
     environmentId: 'main',
     status: 'active',
     type: 'function',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: ['api_predict', 'predict_cli', 'run_prediction'],
     instances: [
       {
@@ -121,7 +121,7 @@ export const mockApps: AppModel[] = [
     environmentId: 'main',
     status: 'active',
     type: 'function',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: ['fastapi_app', 'web_endpoint', 'background_task'],
     instances: [
       { id: 'inst-1', appId: 'app-1', name: 'fastapi_app', cpu: 1, memory: 512, gpu: null, minContainers: 0, maxContainers: 10, scaledownWindow: 60, runningContainers: 2, status: 'active', createdAt: new Date('2026-06-01T10:00:00Z') },
@@ -138,7 +138,7 @@ export const mockApps: AppModel[] = [
     environmentId: 'main',
     status: 'active',
     type: 'function',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: ['process_data', 'generate_report'],
     instances: [
       { id: 'inst-4', appId: 'app-2', name: 'process_data', cpu: 2, memory: 1024, gpu: null, minContainers: 0, maxContainers: 5, scaledownWindow: 60, runningContainers: 1, status: 'active', createdAt: new Date('2026-06-03T14:00:00Z') },
@@ -154,7 +154,7 @@ export const mockApps: AppModel[] = [
     environmentId: 'main',
     status: 'stopped',
     type: 'function',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: ['predict', 'train_model'],
     instances: [
       { id: 'inst-6', appId: 'app-3', name: 'predict', cpu: 4, memory: 8192, gpu: 'T4', minContainers: 0, maxContainers: 2, scaledownWindow: 120, runningContainers: 0, status: 'stopped', createdAt: new Date('2026-05-20T09:00:00Z') },
@@ -174,7 +174,7 @@ export const mockSandboxApps: AppModel[] = [
     environmentId: 'main',
     status: 'active',
     type: 'sandbox',
-    deployerName: 'adrian-tucicovenco',
+    deployerName: 'john-smith',
     functions: [],
     instances: [
       {

@@ -1,57 +1,7 @@
 import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Cloud, XCircle, Box, Search, ChevronDown } from 'lucide-react'
-
-interface StoppedApp {
-  id: string
-  name: string
-  user: {
-    name: string
-    initials: string
-    gradient: string
-  }
-  stoppedAt: string
-  category: string
-  hasSparkline: boolean
-}
-
-const mockStoppedApps: StoppedApp[] = [
-  {
-    id: '1',
-    name: 'hermes-agent',
-    user: {
-      name: 'adrian-tucicovenco',
-      initials: 'A',
-      gradient: 'from-pink-400 to-purple-500',
-    },
-    stoppedAt: 'about 19 hours ago',
-    category: 'Sandboxes',
-    hasSparkline: true,
-  },
-  {
-    id: '2',
-    name: 'hermes-agent',
-    user: {
-      name: 'adrian-tucicovenco',
-      initials: 'A',
-      gradient: 'from-pink-400 to-purple-500',
-    },
-    stoppedAt: 'about 20 hours ago',
-    category: 'Sandboxes',
-    hasSparkline: true,
-  },
-  {
-    id: '3',
-    name: 'hermes-agent',
-    user: {
-      name: 'adrian-tucicovenco',
-      initials: 'A',
-      gradient: 'from-pink-400 to-purple-500',
-    },
-    stoppedAt: '1 day ago',
-    category: 'Sandboxes',
-    hasSparkline: true,
-  },
-]
+import { listApps } from '../api/apps'
 
 function Sparkline() {
   return (
@@ -72,7 +22,15 @@ export default function StoppedApps() {
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy] = useState('Most recent')
 
-  const filteredApps = mockStoppedApps.filter((app) =>
+  const { data: apps, isLoading } = useQuery({
+    queryKey: ['apps'],
+    queryFn: () => listApps(),
+  })
+
+  const stoppedApps = (apps || []).filter((app) => app.status === 'stopped')
+  const liveApps = (apps || []).filter((app) => app.status !== 'stopped')
+
+  const filteredApps = (activeTab === 'stopped' ? stoppedApps : liveApps).filter((app) =>
     app.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -102,7 +60,7 @@ export default function StoppedApps() {
           <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
             activeTab === 'live' ? 'bg-[#333] text-white' : 'bg-[#262626] text-gray-500'
           }`}>
-            3
+            {liveApps.length}
           </span>
         </button>
         <button
@@ -118,7 +76,7 @@ export default function StoppedApps() {
           <span className={`ml-1 px-2 py-0.5 rounded-full text-xs ${
             activeTab === 'stopped' ? 'bg-[#1e3f31] text-[#34d399]' : 'bg-[#262626] text-gray-500'
           }`}>
-            52
+            {stoppedApps.length}
           </span>
         </button>
       </div>
@@ -147,36 +105,43 @@ export default function StoppedApps() {
       </div>
 
       {/* App Cards */}
-      <div className="space-y-3">
-        {filteredApps.map((app) => (
-          <div
-            key={app.id}
-            className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden hover:border-[#333] transition-colors"
-          >
-            {/* Top Section */}
-            <div className="p-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-white">{app.name}</h3>
-              <div className="flex items-center gap-3">
-                <div className={`flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br ${app.user.gradient} text-[10px] font-bold text-white`}>
-                  {app.user.initials}
+      {isLoading ? (
+        <p className="text-sm text-gray-500">Loading...</p>
+      ) : (
+        <div className="space-y-3">
+          {filteredApps.length === 0 && (
+            <div className="text-center text-gray-600 py-8 text-sm">No {activeTab} apps.</div>
+          )}
+          {filteredApps.map((app) => (
+            <div
+              key={app.id}
+              className="bg-[#161616] border border-[#262626] rounded-xl overflow-hidden hover:border-[#333] transition-colors"
+            >
+              {/* Top Section */}
+              <div className="p-4 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-white">{app.name}</h3>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-pink-400 to-purple-500 text-[10px] font-bold text-white">
+                    A
+                  </div>
+                  <span className="text-gray-300 text-sm">john-smith</span>
+                  <span className="text-gray-500 text-sm">{app.updated_at ? new Date(app.updated_at).toLocaleDateString() : '—'}</span>
                 </div>
-                <span className="text-gray-300 text-sm">{app.user.name}</span>
-                <span className="text-gray-500 text-sm">{app.stoppedAt}</span>
+              </div>
+              {/* Divider */}
+              <div className="border-t border-[#262626]" />
+              {/* Bottom Section */}
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Box className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-300 text-sm">{app.kind}</span>
+                </div>
+                <Sparkline />
               </div>
             </div>
-            {/* Divider */}
-            <div className="border-t border-[#262626]" />
-            {/* Bottom Section */}
-            <div className="p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Box className="h-4 w-4 text-gray-500" />
-                <span className="text-gray-300 text-sm">{app.category}</span>
-              </div>
-              {app.hasSparkline && <Sparkline />}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

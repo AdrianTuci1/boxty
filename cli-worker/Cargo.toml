@@ -1,0 +1,34 @@
+[package]
+name = "boxty-worker"
+version = "1.0.0"
+edition = "2021"
+authors = ["Adrian Tucicovenco"]
+description = "Boxty Worker CLI - Decentralized P2P compute node"
+license = "MIT"
+repository = "https://github.com/AdrianTuci1/boxty"
+
+[[bin]]
+name = "boxty-worker"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.35", features = ["full"] }
+clap = { version = "4.4", features = ["derive"] }
+libp2p = { version = "0.52.0", features = ["tokio", "tcp", "noise", "yamux", "kad", "gossipsub", "identify", "macros"] }
+wasmtime = "23.0"
+crossterm = "0.27"
+ratatui = "0.26"
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+futures = "0.3"
+ed25519-dalek = { version = "2.1", features = ["rand_core"] }
+automerge = "0.5"
+tokio-stream = "0.1"
+chrono = "0.4"
+bs58 = "0.5"
+reqwest = { version = "0.11", features = ["json"] }
+local-ip-address = "0.6"
+base64 = "0.21"
+tokio-tungstenite = "0.21"
+

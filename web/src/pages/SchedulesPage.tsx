@@ -1,39 +1,41 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listSchedules, createSchedule, updateSchedule, deleteSchedule, triggerSchedule, type Schedule } from '../api/schedules'
+import { listApps } from '../api/apps'
+import { useAuth } from '../hooks/useAuth'
 import StatusBadge from '../components/StatusBadge'
 import { X, Plus } from 'lucide-react'
 
 export default function SchedulesPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['schedules'], queryFn: listSchedules })
+  const { devMode } = useAuth()
+  const [workspaceId] = useState('ws-1')
+  const [environmentId] = useState('env-1')
+  const { data: schedules, isLoading } = useQuery({ 
+    queryKey: ['schedules', workspaceId, environmentId], 
+    queryFn: () => listSchedules(workspaceId, environmentId),
+    enabled: !!workspaceId && !!environmentId,
+  })
+  const { data: apps } = useQuery({
+    queryKey: ['apps', workspaceId, environmentId],
+    queryFn: () => listApps(workspaceId, environmentId),
+    enabled: devMode,
+  })
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: '',
-    schedule_type: 'cron' as 'cron' | 'period',
-    schedule_value: '',
-    function_name: '',
-    image: '',
-    cpu: '',
-    memory: '',
-    gpu: '',
-    timeout: '',
-    secrets: '',
+    workload_id: '',
+    cron_expression: '',
+    interval_seconds: '',
   })
   const qc = useQueryClient()
 
   const reset = () => {
     setForm({
       name: '',
-      schedule_type: 'cron',
-      schedule_value: '',
-      function_name: '',
-      image: '',
-      cpu: '',
-      memory: '',
-      gpu: '',
-      timeout: '',
-      secrets: '',
+      workload_id: '',
+      cron_expression: '',
+      interval_seconds: '',
     })
     setEditId(null)
     setOpen(false)
@@ -42,16 +44,13 @@ export default function SchedulesPage() {
   const handleSave = async () => {
     const payload: any = {
       name: form.name,
-      schedule_type: form.schedule_type,
-      schedule_value: form.schedule_value,
-      function_name: form.function_name,
+      workspace_id: workspaceId,
+      environment_id: environmentId,
+      owner_id: 'user-1', // TODO: get from auth context
+      workload_id: form.workload_id,
     }
-    if (form.image) payload.image = form.image
-    if (form.cpu) payload.cpu = Number(form.cpu)
-    if (form.memory) payload.memory = Number(form.memory)
-    if (form.gpu) payload.gpu = form.gpu
-    if (form.timeout) payload.timeout = Number(form.timeout)
-    if (form.secrets) payload.secrets = form.secrets.split(',').map((s) => s.trim())
+    if (form.cron_expression) payload.cron_expression = form.cron_expression
+    if (form.interval_seconds) payload.interval_seconds = Number(form.interval_seconds)
 
     if (editId) {
       await updateSchedule(editId, payload)
@@ -63,18 +62,12 @@ export default function SchedulesPage() {
   }
 
   const handleEdit = (s: Schedule) => {
-    setEditId(s.id)
+    setEditId(s.schedule_id)
     setForm({
       name: s.name,
-      schedule_type: s.schedule_type,
-      schedule_value: s.schedule_value,
-      function_name: s.function_name,
-      image: s.image || '',
-      cpu: s.cpu ? String(s.cpu) : '',
-      memory: s.memory ? String(s.memory) : '',
-      gpu: s.gpu || '',
-      timeout: s.timeout ? String(s.timeout) : '',
-      secrets: s.secrets ? s.secrets.join(', ') : '',
+      workload_id: s.workload_id,
+      cron_expression: s.cron_expression || '',
+      interval_seconds: s.interval_seconds ? String(s.interval_seconds) : '',
     })
     setOpen(true)
   }
@@ -105,30 +98,30 @@ export default function SchedulesPage() {
           <thead>
             <tr className="bg-[#111111] border-b border-[#262626]">
               <th className="px-4 py-2.5 text-gray-500 font-medium">Name</th>
-              <th className="px-4 py-2.5 text-gray-500 font-medium">Type</th>
-              <th className="px-4 py-2.5 text-gray-500 font-medium">Value</th>
-              <th className="px-4 py-2.5 text-gray-500 font-medium">Function</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Workload</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Cron</th>
+              <th className="px-4 py-2.5 text-gray-500 font-medium">Interval</th>
               <th className="px-4 py-2.5 text-gray-500 font-medium">Next Run</th>
               <th className="px-4 py-2.5 text-gray-500 font-medium">Status</th>
               <th className="px-4 py-2.5 text-gray-500 font-medium">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#262626]">
-            {data?.length === 0 && (
+            {schedules?.length === 0 && (
               <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No schedules yet.</td></tr>
             )}
-            {data?.map((s) => (
-              <tr key={s.id} className="bg-[#161616]">
+            {schedules?.map((s) => (
+              <tr key={s.schedule_id} className="bg-[#161616]">
                 <td className="px-4 py-3 text-white font-medium">{s.name}</td>
-                <td className="px-4 py-3 text-gray-300">{s.schedule_type}</td>
-                <td className="px-4 py-3 font-mono text-gray-300">{s.schedule_value}</td>
-                <td className="px-4 py-3 font-mono text-gray-300">{s.function_name}</td>
-                <td className="px-4 py-3 text-gray-500">{new Date(s.next_run).toLocaleString()}</td>
+                <td className="px-4 py-3 font-mono text-gray-300">{s.workload_id}</td>
+                <td className="px-4 py-3 font-mono text-gray-300">{s.cron_expression || '-'}</td>
+                <td className="px-4 py-3 text-gray-300">{s.interval_seconds ? `${s.interval_seconds}s` : '-'}</td>
+                <td className="px-4 py-3 text-gray-500">{s.next_run_at ? new Date(s.next_run_at).toLocaleString() : '-'}</td>
                 <td className="px-4 py-3"><StatusBadge status={s.status} /></td>
                 <td className="px-4 py-3 flex gap-2">
                   <button onClick={() => handleEdit(s)} className="text-xs text-mint hover:underline">Edit</button>
-                  <button onClick={() => handleTrigger(s.id)} className="text-xs text-mint hover:underline">Trigger</button>
-                  <button onClick={() => handleDelete(s.id)} className="text-xs text-red-400 hover:underline">Delete</button>
+                  <button onClick={() => handleTrigger(s.schedule_id)} className="text-xs text-mint hover:underline">Trigger</button>
+                  <button onClick={() => handleDelete(s.schedule_id)} className="text-xs text-red-400 hover:underline">Delete</button>
                 </td>
               </tr>
             ))}
@@ -146,20 +139,14 @@ export default function SchedulesPage() {
             </div>
             <div className="space-y-3">
               <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <select className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" value={form.schedule_type} onChange={(e) => setForm({ ...form, schedule_type: e.target.value as 'cron' | 'period' })}>
-                <option value="cron">Cron</option>
-                <option value="period">Period (seconds)</option>
+              <select className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" value={form.workload_id} onChange={(e) => setForm({ ...form, workload_id: e.target.value })}>
+                <option value="">Select workload</option>
+                {apps?.map((app) => (
+                  <option key={app.id} value={app.id}>{app.name}</option>
+                ))}
               </select>
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder={form.schedule_type === 'cron' ? 'Cron expression (e.g. 0 * * * *)' : 'Period in seconds'} value={form.schedule_value} onChange={(e) => setForm({ ...form, schedule_value: e.target.value })} />
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Function name to run" value={form.function_name} onChange={(e) => setForm({ ...form, function_name: e.target.value })} />
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Image (optional)" value={form.image} onChange={(e) => setForm({ ...form, image: e.target.value })} />
-              <div className="flex gap-2">
-                <input type="number" className="flex-1 rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="CPU (optional)" value={form.cpu} onChange={(e) => setForm({ ...form, cpu: e.target.value })} />
-                <input type="number" className="flex-1 rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Memory MB (optional)" value={form.memory} onChange={(e) => setForm({ ...form, memory: e.target.value })} />
-              </div>
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="GPU (optional)" value={form.gpu} onChange={(e) => setForm({ ...form, gpu: e.target.value })} />
-              <input type="number" className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Timeout seconds (optional)" value={form.timeout} onChange={(e) => setForm({ ...form, timeout: e.target.value })} />
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Secrets (comma-separated, optional)" value={form.secrets} onChange={(e) => setForm({ ...form, secrets: e.target.value })} />
+              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Cron expression (e.g. 0 * * * *)" value={form.cron_expression} onChange={(e) => setForm({ ...form, cron_expression: e.target.value })} />
+              <input type="number" className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Interval in seconds (alternative to cron)" value={form.interval_seconds} onChange={(e) => setForm({ ...form, interval_seconds: e.target.value })} />
               <button onClick={handleSave} className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Save</button>
             </div>
           </div>

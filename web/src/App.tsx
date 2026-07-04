@@ -1,8 +1,11 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import Layout from './components/Layout'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import PasswordResetPage from './pages/PasswordResetPage'
+import OAuthCallbackPage from './pages/OAuthCallbackPage'
+import AcceptInvitePage from './pages/AcceptInvitePage'
 import DashboardPage from './pages/DashboardPage'
 import WorkspacesPage from './pages/WorkspacesPage'
 import WorkspaceDetailPage from './pages/WorkspaceDetailPage'
@@ -22,6 +25,17 @@ import WorkspacesListPage from './pages/settings/WorkspacesListPage'
 import EmailPage from './pages/settings/EmailPage'
 import UsagePage from './pages/settings/UsagePage'
 import APITokensPage from './pages/settings/APITokensPage'
+import ProxyTokensPage from './pages/settings/ProxyTokensPage'
+import DomainsPage from './pages/settings/DomainsPage'
+import ImageBuilderPage from './pages/settings/ImageBuilderPage'
+import ProxiesPage from './pages/settings/ProxiesPage'
+import AuditLogsPage from './pages/settings/AuditLogsPage'
+import MetricsIntegrationsPage from './pages/settings/MetricsIntegrationsPage'
+import SlackIntegrationPage from './pages/settings/SlackIntegrationPage'
+import DocsLayout from './components/DocsLayout'
+import DocsPage from './pages/DocsPage'
+import LandingPageWrapper from './landing/LandingPageWrapper'
+import PricingPage from './pages/PricingPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, devMode } = useAuth()
@@ -29,11 +43,24 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function AppRoutes() {
+  const location = useLocation()
+  console.log('AppRoutes matching pathname:', location.pathname)
+
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
+      <Route path="/" element={<LandingPageWrapper />} />
+      <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/docs" element={<Navigate to="/docs/guide/introduction" replace />} />
+      <Route path="/docs/guide/:slug" element={<DocsLayout><DocsPage /></DocsLayout>} />
+      <Route path="/docs/examples" element={<Navigate to="/docs/guide/introduction" replace />} />
+      <Route path="/docs/reference" element={<Navigate to="/docs/reference/reference" replace />} />
+      <Route path="/docs/reference/:slug" element={<DocsLayout><DocsPage /></DocsLayout>} />
+      <Route path="/playground" element={<Navigate to="/docs/guide/introduction" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/password-reset" element={<PasswordResetPage />} />
+      <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
+      <Route path="/accept-invite" element={<AcceptInvitePage />} />
       <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
         <Route path="/apps/:workspace/:environment" element={<DashboardPage />} />
         <Route path="/apps/:workspace/:environment/:appId" element={<AppDetailPage />} />
@@ -49,7 +76,6 @@ function AppRoutes() {
         <Route path="/billing" element={<BillingPage />} />
         <Route path="/images/:workspace/:environment" element={<ImagesPage />} />
         <Route path="/schedules/:workspace/:environment" element={<SchedulesPage />} />
-        <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
       </Route>
       <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
         <Route index element={<Navigate to="/settings/profile" replace />} />
@@ -58,9 +84,16 @@ function AppRoutes() {
         <Route path="email" element={<EmailPage />} />
         <Route path="usage" element={<UsagePage />} />
         <Route path="api-tokens" element={<APITokensPage />} />
+        <Route path="proxy-tokens" element={<ProxyTokensPage />} />
+        <Route path="domains" element={<DomainsPage />} />
+        <Route path="image-builder" element={<ImageBuilderPage />} />
+        <Route path="proxies" element={<ProxiesPage />} />
+        <Route path="audit-logs" element={<AuditLogsPage />} />
+        <Route path="metrics-integrations" element={<MetricsIntegrationsPage />} />
+        <Route path="slack-integration" element={<SlackIntegrationPage />} />
         <Route path="*" element={<Navigate to="/settings/profile" replace />} />
       </Route>
-      <Route path="*" element={<Navigate to="/apps/adrian-tucicovenco/main" replace />} />
+      <Route path="*" element={<Navigate to="/apps/john-smith/main" replace />} />
     </Routes>
   )
 }

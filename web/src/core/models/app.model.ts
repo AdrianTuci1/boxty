@@ -34,21 +34,23 @@ export interface InstanceConfigModel {
 
 export function mapAppFromApi(raw: Record<string, any>): AppModel {
   return {
-    id: raw.id,
-    name: raw.name,
+    id: raw.workload_id ?? raw.app_id ?? raw.id ?? '',
+    name: raw.name ?? '',
     workspaceId: raw.workspace_id ?? raw.workspaceId ?? '',
     environmentId: raw.environment_id ?? raw.environmentId ?? raw.env_id ?? '',
     status: (raw.status as AppStatus) ?? 'active',
-    type: (raw.type as AppType) ?? 'function',
-    deployerName: raw.deployer_name ?? raw.deployerName ?? '',
+    type: (raw.kind as AppType) ?? (raw.type as AppType) ?? 'function',
+    deployerName: raw.owner_id ?? raw.deployer_name ?? raw.deployerName ?? '',
     image: raw.image ?? raw.image_url ?? raw.base_image,
-    url: raw.url,
+    url: raw.endpoint_name ? `https://${raw.endpoint_name}.boxty.dev` : raw.url,
     functions: (raw.functions && raw.functions.length > 0)
       ? raw.functions
       : (raw.endpoints && raw.endpoints.length > 0)
       ? raw.endpoints
       : (raw.instances && raw.instances.length > 0)
       ? raw.instances.map((i: any) => i.name)
+      : raw.command && raw.command.length > 0
+      ? [raw.command[0]]
       : [],
     instances: (raw.instances ?? []).map(mapInstanceFromApi),
     createdAt: new Date(raw.created_at ?? raw.createdAt ?? Date.now()),
@@ -58,9 +60,9 @@ export function mapAppFromApi(raw: Record<string, any>): AppModel {
 
 export function mapInstanceFromApi(raw: Record<string, any>): InstanceConfigModel {
   return {
-    id: raw.id,
-    appId: raw.app_id ?? raw.appId ?? '',
-    name: raw.name,
+    id: raw.instance_id ?? raw.id ?? '',
+    appId: raw.app_id ?? raw.workload_id ?? raw.appId ?? '',
+    name: raw.name ?? '',
     cpu: raw.cpu ?? 1,
     memory: raw.memory ?? 512,
     gpu: raw.gpu ?? null,

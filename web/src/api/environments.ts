@@ -1,23 +1,23 @@
 import { apiFetch } from './client'
 
 export interface Environment {
-  id: string
+  environment_id: string
   workspace_id: string
   name: string
   created_at: string
 }
 
 export function listEnvironments(workspaceId: string) {
-  return apiFetch<Environment[]>(`/environments?workspace_id=${workspaceId}`)
+  return apiFetch<Environment[]>(`/workspaces/${workspaceId}/environments`)
 }
 
-export function createEnvironment(workspaceId: string, name: string, type?: string) {
+export function createEnvironment(payload: { workspace_id: string; name: string }) {
   return apiFetch<Environment>('/environments', {
     method: 'POST',
-    body: JSON.stringify({ workspace_id: workspaceId, name, type }),
+    body: JSON.stringify(payload),
   })
 }
 
-export function deleteEnvironment(envId: string) {
-  return apiFetch<void>(`/environments/${envId}`, { method: 'DELETE' })
+export function deleteEnvironment(environmentId: string) {
+  return apiFetch<void>(`/environments/${environmentId}`, { method: 'DELETE' })
 }

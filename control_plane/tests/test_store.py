@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -77,14 +78,19 @@ class ControlPlaneStoreTests(unittest.TestCase):
             self.store.delete_environment(self.environment.environment_id)
 
     def test_create_api_key_and_invite(self) -> None:
-        api_key = self.store.create_api_key(
-            ApiKeyCreateRequest(
-                owner_id="usr_test",
-                workspace_id=self.workspace.workspace_id,
-                environment_id=self.environment.environment_id,
-                name="ci-key",
+        with patch.object(
+            sys.modules["app.store"],
+            "generate_token",
+            return_value="bx_knownapitokenvalue",
+        ):
+            api_key = self.store.create_api_key(
+                ApiKeyCreateRequest(
+                    owner_id="usr_test",
+                    workspace_id=self.workspace.workspace_id,
+                    environment_id=self.environment.environment_id,
+                    name="ci-key",
+                )
             )
-        )
         invite = self.store.create_invite(
             InviteCreateRequest(
                 inviter_user_id="usr_test",
@@ -92,7 +98,12 @@ class ControlPlaneStoreTests(unittest.TestCase):
                 email="teammate@example.com",
             )
         )
-        self.assertTrue(api_key.secret_token.startswith("bx_"))
+        self.assertTrue(api_key.secret_preview.startswith("bx_"))
+        self.assertTrue(api_key.secret_token_hash)
+        self.assertTrue(api_key.secret_token_salt)
+        self.assertFalse(api_key.secret_token)
+        self.assertIsNone(self.store.verify_api_key(api_key.api_key_id, "wrong-token"))
+        self.assertIsNotNone(self.store.verify_api_key(api_key.api_key_id, "bx_knownapitokenvalue"))
         self.assertEqual(invite.email, "teammate@example.com")
 
     def test_secret_is_resolved_only_in_launch_spec(self) -> None:
@@ -250,6 +261,91 @@ class ControlPlaneStoreTests(unittest.TestCase):
         entries = self.store.list_volume_entries(volume.volume_id)
         self.assertEqual(entries[0].path, "models/config.json")
         self.assertEqual(self.store.read_volume_blob(volume.volume_id, "models/config.json"), b'{"ok":true}')
+
+    def test_load_from_dynamodb_populates_store(self) -> None:
+        """Test that load_from_dynamodb correctly reconstructs records from raw DynamoDB items."""
+        # Set up a fresh store and populate it with data
+        store1 = InMemoryStore()
+        store1.register_user(
+            user_id="usr_test",
+            external_user_id="adrian",
+            email="adrian@example.com",
+        )
+        
+        # Export the items as they would appear in DynamoDB
+        exported = store1.export_single_table_items()
+        
+        # Simulate raw DynamoDB items by flattening pk/sk/entity_type with attributes
+        raw_items = []
+        for item in exported:
+            raw = {
+                "pk": item.pk,
+                "sk": item.sk,
+                "entity_type": item.entity_type,
+                **item.attributes,
+            }
+            raw_items.append(raw)
+        
+        # Create a new store and load from the simulated DynamoDB items
+        store2 = InMemoryStore()
+        with patch("app.store.dynamo_mirror") as mock_mirror:
+            mock_mirror.scan_all.return_value = raw_items
+            store2.load_from_dynamodb()
+        
+        # Verify all records were loaded correctly
+        self.assertEqual(len(store2.users), 1)
+        self.assertEqual(len(store2.accounts), 1)
+        self.assertEqual(len(store2.workspaces), 1)
+        self.assertEqual(len(store2.environments), 1)
+        
+        # Verify user record
+        user = store2.users["usr_test"]
+        self.assertEqual(user.external_user_id, "adrian")
+        self.assertEqual(user.email, "adrian@example.com")
+        
+        # Verify account record
+        account = store2.accounts["usr_test"]
+        self.assertEqual(account.balance_usd, settings.bootstrap_credit_usd)
+        
+        # Verify workspace record
+        workspace = list(store2.workspaces.values())[0]
+        self.assertEqual(workspace.owner_id, "usr_test")
+        self.assertTrue(workspace.is_default)
+        
+        # Verify environment record
+        environment = list(store2.environments.values())[0]
+        self.assertEqual(environment.workspace_id, workspace.workspace_id)
+        self.assertTrue(environment.is_default)
+        self.assertEqual(environment.name, "main")
+
+    def test_load_from_dynamodb_skips_unknown_entity_types(self) -> None:
+        """Test that load_from_dynamodb gracefully skips unknown entity types."""
+        store = InMemoryStore()
+        raw_items = [
+            {
+                "pk": "UNKNOWN#123",
+                "sk": "PROFILE",
+                "entity_type": "UnknownEntity",
+                "some_field": "value",
+            }
+        ]
+        with patch("app.store.dynamo_mirror") as mock_mirror:
+            mock_mirror.scan_all.return_value = raw_items
+            store.load_from_dynamodb()
+        
+        # Store should remain empty
+        self.assertEqual(len(store.users), 0)
+        self.assertEqual(len(store.accounts), 0)
+
+    def test_load_from_dynamodb_handles_scan_failure(self) -> None:
+        """Test that load_from_dynamodb handles scan failures gracefully."""
+        store = InMemoryStore()
+        with patch("app.store.dynamo_mirror") as mock_mirror:
+            mock_mirror.scan_all.side_effect = Exception("connection failed")
+            store.load_from_dynamodb()
+        
+        # Store should remain empty after failed scan
+        self.assertEqual(len(store.users), 0)
 
 
 if __name__ == "__main__":

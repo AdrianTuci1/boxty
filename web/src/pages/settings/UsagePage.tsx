@@ -10,7 +10,7 @@ export default function UsagePage() {
       {/* Breadcrumb header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white flex items-center gap-1.5">
-          adrian-tucicovenco <span className="text-gray-500">/</span> Usage &amp; Billing
+          john-smith <span className="text-gray-500">/</span> Usage &amp; Billing
         </h1>
         <div className="flex items-center gap-2">
           <button className="rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-200 hover:text-white transition-colors">

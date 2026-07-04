@@ -11,7 +11,7 @@ export default function AppCard({ app }: { app: App }) {
         </Link>
         <StatusBadge status={app.status} />
       </div>
-      <p className="mt-1 text-xs text-gray-500">{app.url || 'No URL'}</p>
+      <p className="mt-1 text-xs text-gray-500">{app.endpoint_name || 'No URL'}</p>
       <p className="mt-2 text-[11px] text-gray-600">Updated {new Date(app.updated_at).toLocaleDateString()}</p>
     </div>
   )

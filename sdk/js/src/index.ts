@@ -1,31 +1,34 @@
 export { BoxtyClient } from "./client.js";
 export {
   BoxtyApp,
-  Image,
   Mount,
-  Volume,
-  Secret,
-} from "./app.js";
-export type {
-  AppManifest,
+  VolumeManifest,
+  MountManifest,
+  SecretManifest,
+  ImageManifest,
   FunctionManifest,
   WebEndpointManifest,
-  ImageManifest,
-  MountManifest,
-  VolumeManifest,
-  SecretManifest,
   FunctionConfig,
   WebEndpointConfig,
+  AppManifest,
 } from "./app.js";
-export type {
-  CliState,
-  WalletState,
-  ProviderState,
-  AppInfo,
-  SecretInfo,
-  VolumeInfo,
-  VolumeEntry,
-  DatabaseInfo,
-  DatabaseItem,
-  DatabaseQueryParams,
-} from "./types.js";
+export {
+  Workspace,
+  ProxyTokenManager,
+  Environment,
+  ObjectManager,
+  Secret,
+  Image,
+  Sandbox,
+  FileSystemManager,
+  Function,
+  Volume,
+  Period,
+  Cron,
+  Proxy,
+  Probe,
+  NetworkFileSystem,
+  CloudBucketMount,
+} from "./models.js";
+export { BoxtyAPIError, BoxtyConnectionError } from "./errors.js";
+export type { BoxtyError } from "./errors.js";

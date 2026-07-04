@@ -10,6 +10,9 @@ import type { AppFilter, FilterType } from '../core/use-cases/filter-apps.use-ca
 import type { SortType } from '../core/use-cases/sort-apps.use-case'
 import { SearchFilterDropdown } from '../components/SearchFilterDropdown'
 import { SortDropdown } from '../components/SortDropdown'
+import EmptyState from '../components/EmptyState'
+import MiniBarChart from '../components/MiniBarChart'
+import { generateCallCounts } from '../core/utils/call-data'
 
 export default function DashboardPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
@@ -34,7 +37,7 @@ export default function DashboardPage() {
 
   // Unique values for filter submenus
   const deployers = useMemo(
-    () => [...new Set(appsWithSandboxes.map((a) => a.deployer_name).filter(Boolean))] as string[],
+    () => [...new Set(appsWithSandboxes.map((a) => a.name).filter(Boolean))] as string[],
     [appsWithSandboxes]
   )
   const tags = useMemo(
@@ -138,17 +141,18 @@ export default function DashboardPage() {
       {/* Scrollable apps list — scrollbar at viewport edge, content centered */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="max-w-6xl mx-auto w-full px-6 pb-6 pt-4 flex flex-col gap-4">
-          {sortedApps.length === 0 && (
-            <p className="text-sm text-gray-500 py-8 text-center">No apps to display.</p>
+          {sortedApps.length === 0 ? (
+            <EmptyState icon={Box} title="No apps to display" subtitle="Create your first app to see it here." />
+          ) : (
+            sortedApps.map((app) => (
+              <AppCard
+                key={app.id}
+                app={app}
+                workspace={workspace!}
+                environment={environment!}
+              />
+            ))
           )}
-          {sortedApps.map((app) => (
-            <AppCard
-              key={app.id}
-              app={app}
-              workspace={workspace!}
-              environment={environment!}
-            />
-          ))}
         </div>
       </div>
     </div>
@@ -251,7 +255,7 @@ function AppCard({
       ) : (
         <div className="flex flex-col divide-y divide-[#262626]/40 border-t border-[#262626]/40 bg-[#171717]/10">
           {functions.map((fn: string) => (
-            <FunctionRow key={fn} fn={fn} badges={getBadgesForFn(fn)} />
+            <FunctionRow key={fn} fn={fn} appId={app.id} badges={getBadgesForFn(fn)} />
           ))}
         </div>
       )}
@@ -261,13 +265,23 @@ function AppCard({
 
 function FunctionRow({
   fn,
+  appId,
   badges,
 }: {
   fn: string
+  appId: string
   badges: { label: string; variant: 'cpu' | 'gpu' }[]
 }) {
+  const calls = useMemo(() => generateCallCounts(`${appId}:${fn}`), [appId, fn])
+  const totalCalls = useMemo(() => calls.reduce((a, b) => a + b, 0), [calls])
+  const [isHovered, setIsHovered] = useState(false)
+
   return (
-    <div className="flex items-center justify-between hover:bg-[#1c1c1c]/40 transition-colors px-4 py-3">
+    <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      className="flex items-center justify-between hover:bg-[#1c1c1c]/40 transition-colors px-4 py-3"
+    >
       <div className="flex items-center gap-3">
         <div className="flex h-5 w-5 items-center justify-center rounded bg-[#1f1f1f] text-gray-400">
           <Terminal className="h-3 w-3 text-gray-400" />
@@ -295,12 +309,19 @@ function FunctionRow({
         </div>
       </div>
       
-      {/* Responsive decorative dashed line */}
-      <div className="flex-1 mx-4 border-b border-dashed border-[#262626]" />
-      
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-mono text-gray-500">READY</span>
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+      <div className="relative w-[180px] shrink-0">
+        <MiniBarChart
+          data={calls}
+          height={32}
+          className="w-full"
+        />
+        {isHovered && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <span className="bg-[#1f1f1f] border border-[#262626] text-emerald-400 text-[10px] font-mono px-2 py-0.5 rounded shadow-lg">
+              {totalCalls.toLocaleString()} calls
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

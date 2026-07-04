@@ -1,7 +1,10 @@
 import { useParams } from 'react-router-dom'
-import { Activity } from 'lucide-react'
+import { Activity, ScrollText } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useApps } from '../hooks/useApps'
+import { stopApp } from '../api/apps'
 import type { App } from '../api/apps'
+import EmptyState from '../components/EmptyState'
 
 function formatRelativeTime(date: string | undefined): string {
   if (!date) return 'Currently running'
@@ -21,6 +24,7 @@ function deriveStatus(app: App): 'deployed' | 'stopped' {
 export default function LogsPage() {
   const { environment } = useParams<{ workspace: string; environment: string }>()
   const { data, isLoading } = useApps(environment)
+  const qc = useQueryClient()
 
   const entries = (data || []).map((app) => ({
     id: app.id,
@@ -41,6 +45,8 @@ export default function LogsPage() {
 
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading...</p>
+      ) : entries.length === 0 ? (
+        <EmptyState icon={ScrollText} title="No apps found" subtitle="Running and recently stopped apps will appear here." />
       ) : (
         <div className="bg-[#161616]/30 border border-[#262626] rounded-xl overflow-hidden w-full">
           <table className="w-full">
@@ -55,13 +61,6 @@ export default function LogsPage() {
               </tr>
             </thead>
             <tbody>
-              {entries.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-600 text-xs">
-                    No apps found.
-                  </td>
-                </tr>
-              )}
               {entries.map((entry) => {
                 const isTerminated = entry.status === 'stopped'
                 const nameColor = entry.isActive
@@ -92,7 +91,13 @@ export default function LogsPage() {
                     <td className={`p-3 ${timeColor}`}>{entry.stopped}</td>
                     <td className="p-3">
                       {!isTerminated && (
-                        <button className="bg-[#161616] border border-[#2d2d2d] text-white hover:bg-red-950/20 hover:text-red-400 hover:border-red-900/50 text-[11px] font-medium px-2.5 py-1 rounded transition-all">
+                        <button
+                          onClick={async () => {
+                            await stopApp(entry.id)
+                            qc.invalidateQueries({ queryKey: ['apps'] })
+                          }}
+                          className="bg-[#161616] border border-[#2d2d2d] text-white hover:bg-red-950/20 hover:text-red-400 hover:border-red-900/50 text-[11px] font-medium px-2.5 py-1 rounded transition-all"
+                        >
                           Stop now
                         </button>
                       )}

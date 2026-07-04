@@ -2,24 +2,18 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { listApiKeys, createApiKey, deleteApiKey } from '../../api/auth'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { Copy, MoreHorizontal, Plus, FileText } from 'lucide-react'
-
-const exampleTokens = [
-  { name: 'hermes', preview: 'ak-jllom3cesu0lxv4rvjzbkz', created: 'June 1, 2026', lastUsed: 'about 2 hours ago', id: '1' },
-  { name: 'cli', preview: 'ak-DU5X3zqQ...', created: 'June 1, 2026', lastUsed: '1 day ago', id: '2' },
-  { name: 'statsparrot', preview: 'ak-pl29xn8csj3kwr7v6mybdz', created: 'March 9, 2026', lastUsed: 'No recent activity', id: '3' },
-  { name: 'serverless-minio-data-v1', preview: 'ak-xk39djs82n4mvq1w5tybcz', created: 'October 7, 2025', lastUsed: 'Last used about 1 month ago', id: '4' },
-]
+import { Copy, MoreHorizontal, Plus, FileText, Key } from 'lucide-react'
+import EmptyState from '../../components/EmptyState'
 
 export default function APITokensPage() {
-  const { data } = useQuery({ queryKey: ['api-keys'], queryFn: listApiKeys })
+  const { data } = useQuery({ queryKey: ['api-keys'], queryFn: () => listApiKeys('default') })
   const [keyName, setKeyName] = useState('')
   const [showNew, setShowNew] = useState(false)
   const qc = useQueryClient()
 
   const handleCreate = async () => {
     if (!keyName) return
-    await createApiKey(keyName)
+    await createApiKey({ owner_id: 'default', workspace_id: 'default', environment_id: 'default', name: keyName })
     setKeyName('')
     setShowNew(false)
     qc.invalidateQueries({ queryKey: ['api-keys'] })
@@ -30,14 +24,14 @@ export default function APITokensPage() {
     qc.invalidateQueries({ queryKey: ['api-keys'] })
   }
 
-  const tokens = data ?? []
+  const tokens = data || []
 
   return (
     <div>
       {/* Breadcrumb header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white flex items-center gap-1.5">
-          adrian-tucicovenco <span className="text-gray-500">/</span> API Tokens
+          john-smith <span className="text-gray-500">/</span> API Tokens
         </h1>
         <div className="flex items-center gap-2">
           <button className="flex items-center gap-1.5 rounded-md border border-[#262626] bg-[#1f1f1f] px-3 py-1.5 text-xs text-gray-300 hover:text-white transition-colors">
@@ -63,13 +57,16 @@ export default function APITokensPage() {
           <span className="w-10" />
         </div>
 
-        {/* Rows */}
         {tokens.length === 0 ? (
-          exampleTokens.map((tok, i) => (
-            <TokenRow key={i} token={tok} onDelete={() => {}} />
-          ))
+          <div className="px-4 py-8">
+            <EmptyState
+              icon={Key}
+              title="No API tokens yet"
+              subtitle="Create a token to authenticate with the Boxty API."
+            />
+          </div>
         ) : (
-          tokens.map((k, i) => (
+          tokens.map((k: any, i: number) => (
             <TokenRow
               key={k.id}
               token={{
@@ -118,7 +115,7 @@ function TokenRow({ token, onDelete }: { token: { name: string; preview: string;
         <p className="font-bold text-white text-xs">{token.name}</p>
         <div className="flex items-center gap-1 mt-1">
           <span className="font-mono text-gray-400 text-[11px]">{token.preview}</span>
-          <button className="text-gray-600 hover:text-gray-400 transition-colors">
+          <button onClick={() => navigator.clipboard.writeText(token.preview)} className="text-gray-600 hover:text-gray-400 transition-colors">
             <Copy className="h-3 w-3" />
           </button>
         </div>

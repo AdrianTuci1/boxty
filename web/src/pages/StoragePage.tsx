@@ -5,6 +5,7 @@ import { HardDrive, Database, FileText, ArrowUpDown, Search } from 'lucide-react
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { listVolumes, createVolume, deleteVolume, mockVolumes } from '../api/volumes'
 import { useAuth } from '../hooks/useAuth'
+import EmptyState from '../components/EmptyState'
 
 const filterPills = [
   { label: 'Volumes', count: 4, active: true },
@@ -35,7 +36,7 @@ export default function StoragePage() {
   const totalSize = (data || []).reduce((acc, v) => acc + v.size_gb, 0)
 
   const handleCreate = async () => {
-    await createVolume({ name: form.name, size_gb: Number(form.size_gb) })
+    await createVolume({ workspace_id: workspace || '', name: form.name, size_gb: Number(form.size_gb) })
     setForm({ name: '', size_gb: '' })
     setOpen(false)
     qc.invalidateQueries({ queryKey: ['volumes'] })
@@ -43,7 +44,7 @@ export default function StoragePage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete volume?')) return
-    await deleteVolume(id)
+    await deleteVolume(id, workspace || '')
     qc.invalidateQueries({ queryKey: ['volumes'] })
   }
 
@@ -148,6 +149,8 @@ export default function StoragePage() {
       {/* Table */}
       {isLoading ? (
         <p className="text-sm text-gray-500">Loading...</p>
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={HardDrive} title="No volumes yet" subtitle="Create a volume to persist data for your apps." />
       ) : (
         <div className="w-full bg-[#161616]/30 border border-[#262626] rounded-xl overflow-hidden">
           <div className="flex bg-[#161616] text-gray-400 text-xs font-medium p-3 border-b border-[#262626]">
@@ -156,10 +159,6 @@ export default function StoragePage() {
             <span className="w-32">Status</span>
             <span className="w-20" />
           </div>
-
-          {filtered.length === 0 && (
-            <div className="px-4 py-8 text-center text-gray-600 text-xs">No volumes yet.</div>
-          )}
 
           {filtered.map((vol) => (
             <div

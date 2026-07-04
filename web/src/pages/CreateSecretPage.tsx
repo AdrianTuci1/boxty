@@ -70,12 +70,14 @@ export default function CreateSecretPage() {
     if (!isValid || submitting) return
     setSubmitting(true)
     try {
+      const env_vars: Record<string, string> = {}
+      for (const r of envVars.filter((r) => r.key.trim() && r.value.trim())) {
+        env_vars[r.key.trim()] = r.value.trim()
+      }
       const payload = {
+        workspace_id: workspace || '',
         name: name.trim(),
-        value: envVars
-          .filter((r) => r.key.trim() && r.value.trim())
-          .map((r) => `${r.key.trim()}=${r.value.trim()}`)
-          .join('\n'),
+        env_vars,
       }
       await createSecret(payload)
       qc.invalidateQueries({ queryKey: ['secrets'] })

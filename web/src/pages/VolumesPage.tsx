@@ -1,20 +1,19 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { listVolumes, createVolume, deleteVolume, mountVolume, unmountVolume } from '../api/volumes'
+import { listVolumes, createVolume, deleteVolume, type Volume } from '../api/volumes'
 import StatusBadge from '../components/StatusBadge'
 import { X, Plus } from 'lucide-react'
 
 export default function VolumesPage() {
-  const { data, isLoading } = useQuery({ queryKey: ['volumes'], queryFn: listVolumes })
+  const { data: volumesData, isLoading } = useQuery<Volume[]>({ queryKey: ['volumes'], queryFn: () => listVolumes() })
+  const volumes = volumesData || []
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [size, setSize] = useState(10)
-  const [mountOpen, setMountOpen] = useState(false)
-  const [mountForm, setMountForm] = useState({ volumeId: '', sandboxId: '', mountPath: '/data' })
   const qc = useQueryClient()
 
   const handleCreate = async () => {
-    await createVolume({ name, size_gb: size })
+    await createVolume({ workspace_id: 'default', name, size_gb: size })
     setName('')
     setSize(10)
     setOpen(false)
@@ -23,18 +22,7 @@ export default function VolumesPage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete volume?')) return
-    await deleteVolume(id)
-    qc.invalidateQueries({ queryKey: ['volumes'] })
-  }
-
-  const handleMount = async () => {
-    await mountVolume(mountForm.volumeId, mountForm.sandboxId, mountForm.mountPath)
-    setMountOpen(false)
-    qc.invalidateQueries({ queryKey: ['volumes'] })
-  }
-
-  const handleUnmount = async (id: string) => {
-    await unmountVolume(id)
+    await deleteVolume(id, 'default')
     qc.invalidateQueries({ queryKey: ['volumes'] })
   }
 
@@ -60,18 +48,16 @@ export default function VolumesPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#262626]">
-            {data?.length === 0 && (
+            {volumes.length === 0 && (
               <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-600 bg-[#161616]">No volumes yet.</td></tr>
             )}
-            {data?.map((v) => (
+            {volumes.map((v: any) => (
               <tr key={v.id} className="bg-[#161616]">
                 <td className="px-4 py-3 text-white font-medium">{v.name}</td>
                 <td className="px-4 py-3 text-gray-300">{v.size_gb} GB</td>
                 <td className="px-4 py-3"><StatusBadge status={v.status} /></td>
                 <td className="px-4 py-3 text-gray-500">{new Date(v.created_at).toLocaleString()}</td>
                 <td className="px-4 py-3 flex gap-2">
-                  <button onClick={() => { setMountForm({ ...mountForm, volumeId: v.id }); setMountOpen(true); }} className="text-xs text-mint hover:underline">Mount</button>
-                  <button onClick={() => handleUnmount(v.id)} className="text-xs text-mint hover:underline">Unmount</button>
                   <button onClick={() => handleDelete(v.id)} className="text-xs text-red-400 hover:underline">Delete</button>
                 </td>
               </tr>
@@ -97,22 +83,6 @@ export default function VolumesPage() {
         </div>
       )}
 
-      {/* Mount Modal */}
-      {mountOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setMountOpen(false)}>
-          <div className="w-full max-w-md rounded-xl border border-[#262626] bg-[#161616] p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-white">Mount Volume</h3>
-              <button onClick={() => setMountOpen(false)} className="text-gray-500 hover:text-white"><X className="h-4 w-4" /></button>
-            </div>
-            <div className="space-y-3">
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Sandbox ID" value={mountForm.sandboxId} onChange={(e) => setMountForm({ ...mountForm, sandboxId: e.target.value })} />
-              <input className="w-full rounded-md border border-[#262626] bg-[#111111] px-3 py-2 text-xs text-white outline-none" placeholder="Mount Path" value={mountForm.mountPath} onChange={(e) => setMountForm({ ...mountForm, mountPath: e.target.value })} />
-              <button onClick={handleMount} className="w-full rounded-md bg-white py-2 text-xs font-medium text-black hover:bg-gray-200 transition-colors">Mount</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

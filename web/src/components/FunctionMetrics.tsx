@@ -1,5 +1,9 @@
 import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip } from 'recharts'
+import { Activity } from 'lucide-react'
+import { getAppMetrics } from '../api/apps'
+import EmptyState from './EmptyState'
 
 interface MetricData {
   t: string
@@ -62,8 +66,7 @@ function MetricCard({ title, data, line1Color, line2Color, line1Label, line2Labe
   )
 }
 
-// Generate mock data for the last 24 hours
-function generateMockData(): MetricData[] {
+function generateEmptyData(): MetricData[] {
   const data: MetricData[] = []
   const now = new Date()
   for (let i = 0; i < 12; i++) {
@@ -74,54 +77,105 @@ function generateMockData(): MetricData[] {
     const timeStr = i % 3 === 0 ? `${displayHour} ${ampm}` : ''
     data.push({
       t: timeStr,
-      value1: Math.random() * 0.5,
-      value2: Math.random() * 0.3,
+      value1: 0,
+      value2: 0,
     })
   }
   return data
 }
 
-export default function FunctionMetrics() {
-  const containerData = useMemo(() => generateMockData(), [])
-  const cpuData = useMemo(() => generateMockData(), [])
-  const memoryData = useMemo(() => generateMockData(), [])
-  const networkData = useMemo(() => generateMockData(), [])
+export default function FunctionMetrics({ appId }: { appId: string }) {
+  const { data: metrics } = useQuery({
+    queryKey: ['apps', appId, 'metrics'],
+    queryFn: () => getAppMetrics(appId),
+    enabled: !!appId,
+  })
+
+  // Use real metrics if available, otherwise show empty charts
+  // AppMetrics has: cpu_seconds, ram_gb_seconds, gpu_seconds, storage_gb_seconds, egress_gb, accrued_cost_usd
+  const cpuData = useMemo(() => {
+    if (!metrics) return generateEmptyData()
+    return generateEmptyData().map((d) => ({
+      ...d,
+      value1: metrics.cpu_seconds || 0,
+      value2: 0,
+    }))
+  }, [metrics])
+
+  const memoryData = useMemo(() => {
+    if (!metrics) return generateEmptyData()
+    return generateEmptyData().map((d) => ({
+      ...d,
+      value1: metrics.ram_gb_seconds || 0,
+      value2: 0,
+    }))
+  }, [metrics])
+
+  const gpuData = useMemo(() => {
+    if (!metrics) return generateEmptyData()
+    return generateEmptyData().map((d) => ({
+      ...d,
+      value1: metrics.gpu_seconds || 0,
+      value2: 0,
+    }))
+  }, [metrics])
+
+  const storageData = useMemo(() => {
+    if (!metrics) return generateEmptyData()
+    return generateEmptyData().map((d) => ({
+      ...d,
+      value1: metrics.storage_gb_seconds || 0,
+      value2: metrics.egress_gb || 0,
+    }))
+  }, [metrics])
+
+  if (!metrics) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="No metrics yet"
+        subtitle="Container metrics will appear here once the function starts receiving traffic."
+      />
+    )
+  }
 
   return (
     <div className="mt-6 grid grid-cols-2 gap-4">
       <MetricCard
-        title="Containers"
-        data={containerData}
-        line1Color="#fdba74"
-        line2Color="#92400e"
-        line1Label="Live"
-        line2Label="Total"
-      />
-      <MetricCard
-        title="CPU"
+        title="CPU Usage"
         data={cpuData}
-        line1Color="#a3e635"
-        line2Color="#6b7280"
-        line1Label="Used"
-        line2Label="Reserved"
+        line1Color="#34d399"
+        line2Color="#059669"
+        line1Label="CPU Seconds"
+        line2Label="Idle"
+        yAxisFormatter={(v) => `${v}s`}
       />
       <MetricCard
         title="Memory"
         data={memoryData}
-        line1Color="#facc15"
-        line2Color="#6b7280"
-        line1Label="Used"
-        line2Label="Reserved"
-        yAxisFormatter={(v: number) => `${v}G`}
+        line1Color="#60a5fa"
+        line2Color="#1d4ed8"
+        line1Label="RAM GB-Seconds"
+        line2Label="Cached"
+        yAxisFormatter={(v) => `${v}GBs`}
       />
       <MetricCard
-        title="Network"
-        data={networkData}
+        title="GPU"
+        data={gpuData}
+        line1Color="#fdba74"
+        line2Color="#92400e"
+        line1Label="GPU Seconds"
+        line2Label="Idle"
+        yAxisFormatter={(v) => `${v}s`}
+      />
+      <MetricCard
+        title="Storage & Egress"
+        data={storageData}
         line1Color="#a78bfa"
-        line2Color="#60a5fa"
-        line1Label="Egress"
-        line2Label="Ingress"
-        yAxisFormatter={(v: number) => `${v}/s`}
+        line2Color="#7c3aed"
+        line1Label="Storage GB-Seconds"
+        line2Label="Egress GB"
+        yAxisFormatter={(v) => `${v}GB`}
       />
     </div>
   )

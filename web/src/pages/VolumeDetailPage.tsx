@@ -1,57 +1,39 @@
 import { useState, useMemo } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Folder, File, Copy, ArrowUpDown, Search } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-
-interface FileEntry {
-  name: string
-  type: 'directory' | 'file'
-  modified: string
-  size?: string
-}
-
-const exampleFiles: Record<string, FileEntry[]> = {
-  '': [
-    { name: '.locks', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'CACHEDIR.TAG', type: 'file', modified: 'about 1 month ago', size: '191 B' },
-    { name: 'datasets--codeparrot--codeparrot-clean', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'datasets--HuggingFaceTB--cosmopedia-v2', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'datasets--HuggingFaceTB--smollm-corpus', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'datasets--open-web-math--open-web-math', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'models--HuggingFaceTB--SmolLM2-135M', type: 'directory', modified: 'about 1 month ago' },
-  ],
-  '/huggingface': [
-    { name: 'hub', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'README.md', type: 'file', modified: 'about 1 month ago', size: '2.1 KiB' },
-  ],
-  '/huggingface/hub': [
-    { name: '.locks', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'models--HuggingFaceTB--SmolLM2-135M', type: 'directory', modified: 'about 1 month ago' },
-    { name: 'datasets--HuggingFaceTB--smollm-corpus', type: 'directory', modified: 'about 1 month ago' },
-  ],
-}
+import { listVolumeEntries, type VolumeEntry } from '../api/volumes'
+import { useAuth } from '../hooks/useAuth'
 
 const tabs = ['Files', 'References'] as const
 
 export default function VolumeDetailPage() {
   const { volumeName } = useParams<{ volumeName: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { devMode } = useAuth()
 
   const currentPath = searchParams.get('path') || ''
   const [activeTab, setActiveTab] = useState<string>('Files')
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState('Alphabetical')
 
-  const files: FileEntry[] = exampleFiles[currentPath] || []
+  const { data: entries, isLoading } = useQuery({
+    queryKey: ['volume-entries', volumeName, currentPath],
+    queryFn: () => volumeName ? listVolumeEntries(volumeName, currentPath) : Promise.resolve([]),
+    enabled: !!volumeName && !devMode,
+  })
+
+  const files: VolumeEntry[] = entries || []
 
   const filtered = useMemo(() => {
     let result = files.filter((f) =>
-      f.name.toLowerCase().includes(search.toLowerCase()),
+      f.path.toLowerCase().includes(search.toLowerCase()),
     )
     if (sortBy === 'Size') {
       result = [...result].sort((a, b) => {
-        const sizeA = a.size ? parseFloat(a.size) : 0
-        const sizeB = b.size ? parseFloat(b.size) : 0
+        const sizeA = a.size || 0
+        const sizeB = b.size || 0
         return sizeB - sizeA
       })
     }
@@ -110,7 +92,7 @@ export default function VolumeDetailPage() {
             </div>
             <div>
               <span className="text-gray-500 text-[10px] uppercase tracking-wider mb-1 block">Files & Folders</span>
-              <span className="text-white font-mono text-xs">3736</span>
+              <span className="text-white font-mono text-xs">{files.length}</span>
             </div>
           </div>
         </div>
@@ -208,44 +190,52 @@ export default function VolumeDetailPage() {
       </div>
 
       {/* File table */}
-      <div className="w-full bg-[#161616]/30 border border-[#262626] rounded-xl overflow-hidden">
-        <div className="flex bg-[#161616] text-gray-400 text-xs font-medium p-3 border-b border-[#262626]">
-          <span className="flex-1">Name</span>
-          <span className="w-24">Type</span>
-          <span className="w-40">Last modified</span>
-          <span className="w-24">Size</span>
-        </div>
-
-        {filtered.map((entry) => (
-          <div
-            key={entry.name}
-            className="flex items-center px-4 py-2.5 border-b border-[#262626]/40 last:border-b-0 hover:bg-[#1f1f1f]/60 transition-all text-xs"
-          >
-            <div className="flex-1 flex items-center gap-2">
-              {entry.type === 'directory' ? (
-                <Folder className="h-4 w-4 text-[#34d399] shrink-0" />
-              ) : (
-                <File className="h-4 w-4 text-gray-500 shrink-0" />
-              )}
-              {entry.type === 'directory' ? (
-                <button
-                  onClick={() => navigateToDir(entry.name)}
-                  className="font-mono text-white hover:text-[#34d399] transition-colors text-left"
-                >
-                  {entry.name}
-                </button>
-              ) : (
-                <span className="font-mono text-white">{entry.name}</span>
-              )}
-            </div>
-            <span className="w-24 text-gray-400">
-              {entry.type === 'directory' ? 'Directory' : 'File'}
-            </span>
-            <span className="w-40 text-gray-500">{entry.modified}</span>
-            <span className="w-24 text-gray-300 font-mono">{entry.size || ''}</span>
+      {isLoading ? (
+        <p className="text-sm text-gray-500">Loading...</p>
+      ) : (
+        <div className="w-full bg-[#161616]/30 border border-[#262626] rounded-xl overflow-hidden">
+          <div className="flex bg-[#161616] text-gray-400 text-xs font-medium p-3 border-b border-[#262626]">
+            <span className="flex-1">Name</span>
+            <span className="w-24">Type</span>
+            <span className="w-40">Last modified</span>
+            <span className="w-24">Size</span>
           </div>
-        ))}
-      </div>
+
+          {filtered.length === 0 && (
+            <div className="px-4 py-8 text-center text-gray-600 text-xs">No files yet.</div>
+          )}
+
+          {filtered.map((entry) => (
+            <div
+              key={entry.path}
+              className="flex items-center px-4 py-2.5 border-b border-[#262626]/40 last:border-b-0 hover:bg-[#1f1f1f]/60 transition-all text-xs"
+            >
+              <div className="flex-1 flex items-center gap-2">
+                {entry.entry_type === 'directory' ? (
+                  <Folder className="h-4 w-4 text-[#34d399] shrink-0" />
+                ) : (
+                  <File className="h-4 w-4 text-gray-500 shrink-0" />
+                )}
+                {entry.entry_type === 'directory' ? (
+                  <button
+                    onClick={() => navigateToDir(entry.path)}
+                    className="font-mono text-white hover:text-[#34d399] transition-colors text-left"
+                  >
+                    {entry.path}
+                  </button>
+                ) : (
+                  <span className="font-mono text-white">{entry.path}</span>
+                )}
+              </div>
+              <span className="w-24 text-gray-400">
+                {entry.entry_type === 'directory' ? 'Directory' : 'File'}
+              </span>
+              <span className="w-40 text-gray-500">-</span>
+              <span className="w-24 text-gray-300 font-mono">{entry.size ? `${entry.size} B` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
       </div>
     </div>
   )

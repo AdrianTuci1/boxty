@@ -18,7 +18,7 @@ function matchRoute(pathname: string): PageKey | null {
 
 function resolveParams(pathname: string) {
   const m = pathname.match(/^\/(?:apps|logs|secrets|storage)\/([^/]+)\/([^/]+)/)
-  return { workspace: m?.[1] || 'adrian-tucicovenco', environment: m?.[2] || 'main' }
+  return { workspace: m?.[1] || 'john-smith', environment: m?.[2] || 'main' }
 }
 
 export default function SubNavbar() {

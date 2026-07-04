@@ -1,53 +1,38 @@
 import { apiFetch } from './client'
 
+// Backend workloads are mapped to "apps" in the UI
 export interface App {
-  id: string
-  name: string
+  workload_id: string
+  id: string // alias for workload_id, for UI compatibility
+  owner_id: string
+  workspace_id: string
   environment_id: string
+  name: string
+  kind: 'sandbox' | 'function' | 'endpoint' | 'build'
   status: string
-  image_url?: string
-  url?: string
-  instances?: InstanceConfig[]
-  functions?: string[]
-  endpoints?: string[]
-  deployer_name?: string
+  image: string
+  command: string[]
+  env: Record<string, string>
+  region: string
+  pool: string
+  endpoint_name?: string
+  secret_names: string[]
+  volume_mounts: { locator: string; mount_path: string; read_only: boolean }[]
+  resources: { cpu_cores: number; memory_mb: number; disk_gb: number; gpu_count: number; gpu_type: string | null }
+  metadata: Record<string, any>
+  accrued_cost_usd: number
   created_at: string
   updated_at: string
-  type?: 'function' | 'sandbox'
-}
-
-export interface InstanceConfig {
-  id: string
-  app_id: string
-  name: string
-  cpu: number
-  memory: number
-  gpu: string | null
-  min_containers: number
-  max_containers: number
-  scaledown_window: number
-  running_containers: number
-  status: string
-  created_at: string
-}
-
-export interface Deployment {
-  id: string
-  app_id: string
-  instance_id: string
-  version: string
-  image: string
-  status: string
-  created_at: string
 }
 
 export interface AppMetrics {
-  timestamps: string[]
-  cpu: number[]
-  memory: number[]
-  network_rx: number[]
-  network_tx: number[]
-  gpu_util?: number[]
+  workload_id: string
+  cpu_seconds: number
+  ram_gb_seconds: number
+  gpu_seconds: number
+  storage_gb_seconds: number
+  egress_gb: number
+  accrued_cost_usd: number
 }
 
 export interface AppUsage {
@@ -57,53 +42,41 @@ export interface AppUsage {
   period: string
 }
 
-export function listApps(envId?: string) {
-  const qs = envId ? `?environment_id=${envId}` : ''
-  return apiFetch<App[]>(`/apps${qs}`)
+export function listApps(workspaceId?: string, environmentId?: string) {
+  const params = new URLSearchParams()
+  if (workspaceId) params.set('workspace_id', workspaceId)
+  if (environmentId) params.set('environment_id', environmentId)
+  const qs = params.toString() ? `?${params.toString()}` : ''
+  return apiFetch<App[]>(`/workloads${qs}`)
 }
 
-export function getApp(id: string) {
-  return apiFetch<App>(`/apps/${id}`)
+export function getApp(workloadId: string) {
+  return apiFetch<App>(`/workloads/${workloadId}`)
 }
 
-export function createApp(payload: { name: string; environment_id: string; image_url: string }) {
-  return apiFetch<App>('/apps', { method: 'POST', body: JSON.stringify(payload) })
+export function createApp(payload: { owner_id: string; workspace_id: string; environment_id: string; kind: 'sandbox' | 'function' | 'endpoint' | 'build'; image: string; command?: string[]; env?: Record<string, string>; region?: string; pool?: string; endpoint_name?: string; secret_names?: string[]; volume_mounts?: { locator: string; mount_path: string; read_only?: boolean }[]; resources?: { cpu_cores?: number; memory_mb?: number; disk_gb?: number; gpu_count?: number; gpu_type?: string | null }; metadata?: Record<string, any> }) {
+  return apiFetch<App>('/workloads', { method: 'POST', body: JSON.stringify(payload) })
 }
 
-export function stopApp(id: string) {
-  return apiFetch<void>(`/apps/${id}/stop`, { method: 'POST' })
+export function stopApp(workloadId: string) {
+  return apiFetch<void>(`/workloads/${workloadId}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status: 'stopped' }),
+  })
 }
 
-export function deleteApp(id: string) {
-  return apiFetch<void>(`/apps/${id}`, { method: 'DELETE' })
+export function deleteApp(workloadId: string) {
+  return apiFetch<void>(`/workloads/${workloadId}`, { method: 'DELETE' })
 }
 
-// Instance Configs
-export function createInstance(appId: string, payload: { name: string; cpu: number; memory: number; gpu?: string | null; min_containers?: number; max_containers?: number; scaledown_window?: number }) {
-  return apiFetch<InstanceConfig>(`/apps/${appId}/instances`, { method: 'POST', body: JSON.stringify(payload) })
+export function getAppMetrics(workloadId: string) {
+  return apiFetch<AppMetrics>(`/workloads/${workloadId}/metrics`)
 }
 
-export function listInstances(appId: string) {
-  return apiFetch<InstanceConfig[]>(`/apps/${appId}/instances`)
+export function getAppUsage(workloadId: string) {
+  return apiFetch<AppUsage>(`/usage?workload_id=${workloadId}`)
 }
 
-export function deleteInstance(appId: string, instanceId: string) {
-  return apiFetch<void>(`/apps/${appId}/instances/${instanceId}`, { method: 'DELETE' })
-}
-
-// Deploy targets an instance config
-export function deployApp(appId: string, instanceId: string, image?: string) {
-  return apiFetch<Deployment>(`/apps/${appId}/deploy`, { method: 'POST', body: JSON.stringify({ instance_id: instanceId, image }) })
-}
-
-export function getAppMetrics(id: string) {
-  return apiFetch<AppMetrics>(`/apps/${id}/metrics`)
-}
-
-export function getAppUsage(id: string, period: 'day' | 'week' | 'month') {
-  return apiFetch<AppUsage>(`/apps/${id}/usage?period=${period}`)
-}
-
-export function getAppDeployments(id: string) {
-  return apiFetch<Deployment[]>(`/apps/${id}/deployments`)
+export function getAppLogs(workloadId: string) {
+  return apiFetch<{ log_id: string; timestamp: string; level: string; message: string }[]>(`/workloads/${workloadId}/logs`)
 }

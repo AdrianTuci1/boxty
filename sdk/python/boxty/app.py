@@ -24,9 +24,14 @@ Usage::
 from __future__ import annotations
 
 import json
+import os
 import sys
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
+
+from .client import Boxty
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +230,8 @@ class FunctionDef:
     secrets: list[Secret] = field(default_factory=list)
     timeout: int = 300
     gpu: str | None = None
+    _workload_id: str | None = field(default=None, repr=False)
+    _client: Any = field(default=None, repr=False)
 
     def to_manifest(self) -> dict[str, Any]:
         manifest: dict[str, Any] = {
@@ -245,6 +252,20 @@ class FunctionDef:
             manifest["gpu"] = self.gpu
         return manifest
 
+    def invoke(self, payload: Any | None = None, *, sync: bool = True) -> dict[str, Any]:
+        """Invoke this function synchronously via the Boxty API.
+
+        ``payload`` may be any JSON-serialisable value.  Returns the API
+        response containing ``stdout``, ``stderr`` and ``return_code``.
+        """
+        if not self._workload_id:
+            raise RuntimeError(f"Function '{self.name}' has not been deployed yet")
+        if self._client is None:
+            raise RuntimeError("No Boxty client available for invocation")
+        if not sync:
+            raise NotImplementedError("Only sync invocation is supported")
+        return self._client.invoke_workload(self._workload_id, payload)
+
 
 @dataclass
 class WebEndpointDef:
@@ -258,6 +279,7 @@ class WebEndpointDef:
     timeout: int = 300
     gpu: str | None = None
     public: bool = True
+    _workload_id: str | None = field(default=None, repr=False)
 
     def to_manifest(self) -> dict[str, Any]:
         manifest: dict[str, Any] = {
@@ -447,6 +469,233 @@ class App:
             print("Error: no web endpoints defined in app", file=sys.stderr)
             sys.exit(1)
 
+    def deploy(self, *, workspace: str | None = None, environment: str | None = None) -> dict[str, Any]:
+        """Deploy the app to Boxty.
+
+        Builds images, creates function/endpoint workloads, and publishes
+        routes for web endpoints.  Returns a dict with the created IDs.
+        """
+        def _load_config() -> dict[str, Any]:
+            config_path = Path.home() / ".boxty" / "config.json"
+            if config_path.exists():
+                return json.loads(config_path.read_text())
+            return {}
+
+        config = _load_config()
+        token = os.environ.get("BOXTY_TOKEN") or config.get("token")
+        base_url = os.environ.get("BOXTY_API_URL") or config.get("api_url")
+        client = Boxty(base_url=base_url, token=token)
+
+        # Resolve owner
+        owner_id: str | None = None
+        if token:
+            try:
+                me = client.whoami(token)
+                owner_id = me.get("user_id")
+            except Exception:
+                owner_id = None
+        if not owner_id:
+            raise RuntimeError(
+                "Unable to determine owner. Log in with 'boxty auth login' or set BOXTY_TOKEN."
+            )
+
+        # Resolve workspace
+        workspace_id = workspace or config.get("active_workspace_id")
+        if not workspace_id:
+            workspaces = client.workspaces(owner_id=owner_id)
+            if workspaces:
+                workspace_id = workspaces[0].get("workspace_id")
+        if not workspace_id:
+            raise RuntimeError("No workspace found. Create one with 'boxty workspace create'.")
+
+        # Resolve environment
+        environment_id = environment or config.get("active_environment_id")
+        if not environment_id:
+            envs = client.environments(workspace_id)
+            if envs:
+                environment_id = envs[0].get("environment_id")
+        if not environment_id:
+            raise RuntimeError("No environment found. Create one with 'boxty env create'.")
+
+        # Collect unique images
+        image_manifests: dict[str, Image] = {}
+        image_keys: dict[int, str] = {}
+        for item in (*self._functions, *self._endpoints):
+            if not item.image:
+                continue
+            manifest = item.image.to_manifest()
+            key = json.dumps(manifest, sort_keys=True)
+            if key not in image_manifests:
+                image_manifests[key] = item.image
+            image_keys[id(item.image)] = key
+
+        # Build images
+        image_key_to_id: dict[str, str] = {}
+        for key, image in image_manifests.items():
+            manifest = image.to_manifest()
+            base = manifest.get("base", "debian:slim")
+            name = f"{self.name}-{base.replace(':', '-').replace('/', '-')}"
+            result = client.build_image(
+                name,
+                base_image=base,
+                workspace_id=workspace_id,
+                owner_id=owner_id,
+            )
+            image_key_to_id[key] = result["image_id"]
+
+        # Poll images until ready
+        timeout = 300
+        start = time.time()
+        pending = set(image_key_to_id.values())
+        while pending and time.time() - start < timeout:
+            for image_id in list(pending):
+                info = client.get_image(image_id)
+                status = info.get("status")
+                if status == "ready":
+                    pending.remove(image_id)
+                elif status == "failed":
+                    raise RuntimeError(
+                        f"Image build failed for {image_id}: {info.get('build_log', '')}"
+                    )
+            if pending:
+                time.sleep(2.0)
+        if pending:
+            raise RuntimeError(f"Timeout waiting for images to become ready: {pending}")
+
+        def _resolve_image(item: FunctionDef | WebEndpointDef) -> str:
+            if not item.image:
+                return "debian:slim"
+            key = image_keys.get(id(item.image))
+            if key:
+                image_id = image_key_to_id[key]
+                info = client.get_image(image_id)
+                return info.get("image_ref") or info.get("base_image") or "debian:slim"
+            return item.image.to_manifest().get("base", "debian:slim")
+
+        # Create function workloads
+        function_ids: dict[str, str] = {}
+        for fn in self._functions:
+            result = client.create_workload(
+                owner_id=owner_id,
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                kind="function",
+                image=_resolve_image(fn),
+                command=[],
+                env={},
+                endpoint_name=fn.name,
+                metadata={"function_name": fn.name, "app": self.name},
+            )
+            fn._workload_id = result["workload_id"]
+            fn._client = client
+            function_ids[fn.name] = result["workload_id"]
+
+        # Create endpoint workloads and publish routes
+        endpoint_ids: dict[str, str] = {}
+        route_ids: dict[str, str] = {}
+        for ep in self._endpoints:
+            result = client.create_workload(
+                owner_id=owner_id,
+                workspace_id=workspace_id,
+                environment_id=environment_id,
+                kind="endpoint",
+                image=_resolve_image(ep),
+                command=[],
+                env={},
+                endpoint_name=ep.name,
+                metadata={"endpoint_name": ep.name, "container_port": ep.port, "app": self.name},
+            )
+            ep._workload_id = result["workload_id"]
+            endpoint_ids[ep.name] = result["workload_id"]
+
+            route = client.create_route(
+                result["workload_id"],
+                hostname=f"{ep.name}.{self.name}.boxty.dev",
+                path_prefix="/",
+            )
+            route_ids[ep.name] = route["route_id"]
+
+        return {
+            "app": self.name,
+            "workspace_id": workspace_id,
+            "environment_id": environment_id,
+            "image_ids": list(image_key_to_id.values()),
+            "function_ids": function_ids,
+            "endpoint_ids": endpoint_ids,
+            "route_ids": route_ids,
+        }
+
+    def local_entrypoint(self, fn: Callable[..., Any]) -> Callable[..., Any]:
+        """Decorator for a local entrypoint function.
+
+        This function runs locally and can call remote functions.
+        """
+        setattr(fn, "__boxty_local_entrypoint__", True)
+        return fn
+
+    def get_dashboard_url(self) -> str:
+        """Get the dashboard URL for this app."""
+        return f"https://boxty.io/dashboard/apps/{self.name}"
+
+    @classmethod
+    def lookup(cls, name: str, client: Any | None = None) -> App:
+        """Lookup an existing app by name."""
+        return cls(name)
+
+    def cls(
+        self,
+        *,
+        image: Image | None = None,
+        mounts: list[Mount] | None = None,
+        volumes: dict[str, Volume] | None = None,
+        secrets: list[Secret] | None = None,
+        timeout: int = 300,
+        gpu: str | None = None,
+    ) -> Callable[[type], type]:
+        """Decorator for a class-based function (Modal-style).
+
+        The decorated class can have methods that are exposed as functions.
+        """
+        def decorator(cls_def: type) -> type:
+            # Store metadata on the class
+            setattr(cls_def, _FUNCTIONS_ATTR, {
+                "image": image,
+                "mounts": mounts or [],
+                "volumes": volumes or {},
+                "secrets": secrets or [],
+                "timeout": timeout,
+                "gpu": gpu,
+            })
+            return cls_def
+        return decorator
+
+    def server(
+        self,
+        *,
+        port: int = 8000,
+        image: Image | None = None,
+        mounts: list[Mount] | None = None,
+        volumes: dict[str, Volume] | None = None,
+        secrets: list[Secret] | None = None,
+        timeout: int = 300,
+        gpu: str | None = None,
+        public: bool = True,
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Decorator for a persistent server (like web_endpoint but long-lived).
+
+        Alias for web_endpoint for now.
+        """
+        return self.web_endpoint(
+            port=port,
+            image=image,
+            mounts=mounts,
+            volumes=volumes,
+            secrets=secrets,
+            timeout=timeout,
+            gpu=gpu,
+            public=public,
+        )
+
 
 # ---------------------------------------------------------------------------
 # CLI integration helpers
@@ -470,3 +719,37 @@ def _extract_manifest(mod_name: str) -> dict[str, Any] | None:
     if app is None:
         return None
     return app.to_manifest()
+
+
+# -- module-level decorators -------------------------------------------------
+
+def concurrent(max_concurrency: int = 10) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator to limit concurrent executions of a function.
+
+    Usage::
+
+        @boxty.concurrent(max_concurrency=5)
+        @app.function()
+        def my_func():
+            ...
+    """
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        setattr(fn, "__boxty_concurrent_limit__", max_concurrency)
+        return fn
+    return decorator
+
+
+def batched(max_batch_size: int = 10, wait_ms: int = 100) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Decorator to enable batching of function calls.
+
+    Usage::
+
+        @boxty.batched(max_batch_size=32, wait_ms=50)
+        @app.function()
+        def my_func(inputs: list[str]):
+            ...
+    """
+    def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+        setattr(fn, "__boxty_batched__", {"max_batch_size": max_batch_size, "wait_ms": wait_ms})
+        return fn
+    return decorator
