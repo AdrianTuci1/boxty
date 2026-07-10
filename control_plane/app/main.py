@@ -33,6 +33,7 @@ from .models import (
     RunPodDispatchRequest,
     SandboxExecRequest,
     SandboxExecResponse,
+    SandboxFileEntry,
     SandboxSessionRequest,
     SandboxTunnel,
     ScheduleCreateRequest,
@@ -532,6 +533,13 @@ def create_sandbox_session(request: SandboxSessionRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return session.model_dump(mode="json")
+
+
+@app.delete(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}")
+def delete_sandbox_session(sandbox_id: str) -> dict:
+    if not store.delete_sandbox_session(sandbox_id):
+        raise HTTPException(status_code=404, detail="sandbox session not found")
+    return {"deleted": True}
 
 
 @app.get(f"{settings.api_prefix}/sandbox-sessions/verify")
@@ -1313,6 +1321,8 @@ def remove_environment_member(environment_id: str, member_id: str) -> dict:
 @app.post(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/exec")
 def sandbox_exec(sandbox_id: str, request: SandboxExecRequest) -> dict:
     import random
+    if sandbox_id not in store.sessions:
+        raise HTTPException(status_code=404, detail="sandbox session not found")
     response = SandboxExecResponse(
         sandbox_id=sandbox_id,
         command=request.command,
@@ -1321,12 +1331,13 @@ def sandbox_exec(sandbox_id: str, request: SandboxExecRequest) -> dict:
         stderr="",
         duration_ms=random.randint(10, 1000),
     )
+    store.create_sandbox_exec(response)
     return response.model_dump(mode="json")
 
 
 @app.get(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/tunnels")
 def list_sandbox_tunnels(sandbox_id: str) -> list[dict]:
-    return []
+    return [tunnel.model_dump(mode="json") for tunnel in store.list_sandbox_tunnels(sandbox_id)]
 
 
 @app.post(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/tunnels")
@@ -1336,21 +1347,24 @@ def create_sandbox_tunnel(sandbox_id: str, payload: dict[str, Any]) -> dict:
         port=payload.get("port", 8080),
         protocol=payload.get("protocol", "tcp"),
     )
+    store.create_sandbox_tunnel(tunnel)
     return tunnel.model_dump(mode="json")
 
 
 @app.get(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/filesystem")
 def list_sandbox_files(sandbox_id: str, path: str = Query(default="/")) -> list[dict]:
-    return [
-        {"name": "app", "type": "directory", "size": 0},
-        {"name": "data", "type": "directory", "size": 0},
-        {"name": "README.md", "type": "file", "size": 1024},
-    ]
+    if sandbox_id not in store.sessions:
+        raise HTTPException(status_code=404, detail="sandbox session not found")
+    entries = store.list_sandbox_files(sandbox_id, path)
+    return [entry.model_dump(mode="json") for entry in entries]
 
 
 @app.post(f"{settings.api_prefix}/sandbox-sessions/{{sandbox_id}}/filesystem/copy")
 def copy_sandbox_files(sandbox_id: str, payload: dict[str, Any]) -> dict:
-    return {"copied": True, "files": payload.get("files", [])}
+    if sandbox_id not in store.sessions:
+        raise HTTPException(status_code=404, detail="sandbox session not found")
+    result = store.copy_sandbox_files(sandbox_id, payload.get("files", []))
+    return result
 
 
 # -- volume operations --------------------------------------------------------
@@ -1458,7 +1472,8 @@ def get_function_stats(function_id: str) -> dict:
 
 @app.get(f"{settings.api_prefix}/functions/{{function_id}}/invocations")
 def list_function_invocations(function_id: str, limit: int = Query(default=100)) -> list[dict]:
-    return []
+    invocations = store.list_function_invocations_by_workload(function_id, limit)
+    return [inv.model_dump(mode="json") for inv in invocations]
 
 
 # -- database operations (complete) ------------------------------------------

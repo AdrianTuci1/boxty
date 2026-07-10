@@ -57,6 +57,7 @@ from .models import (
     RouteRecord,
     SandboxSessionRecord,
     SandboxSessionRequest,
+    SandboxFileEntry,
     ScheduleCreateRequest,
     ScheduleRecord,
     SecretCreateRequest,
@@ -110,6 +111,9 @@ class InMemoryStore:
     routes: dict[str, RouteRecord] = field(default_factory=dict)
     sessions: dict[str, SandboxSessionRecord] = field(default_factory=dict)
     usages: dict[str, UsageRecord] = field(default_factory=dict)
+    sandbox_tunnels: dict[str, Any] = field(default_factory=dict)
+    sandbox_execs: dict[str, SandboxExecResponse] = field(default_factory=dict)
+    sandbox_files: dict[str, SandboxFileEntry] = field(default_factory=dict)
     proxy_tokens: dict[str, Any] = field(default_factory=dict)
     environment_members: dict[str, Any] = field(default_factory=dict)
     workspace_members: dict[str, Any] = field(default_factory=dict)
@@ -780,6 +784,11 @@ class InMemoryStore:
         workload.runtime_details.update(request.runtime_details)
         workload.updated_at = utc_now()
         self.workloads[workload_id] = workload
+        self.add_workload_log(
+            workload_id,
+            "info",
+            f"Workload status changed to {request.status.value}",
+        )
         self._put_item(workload_item(workload))
         if (
             workload.assigned_provider_id
@@ -1414,10 +1423,20 @@ class InMemoryStore:
         self._put_item(workload_item(workload))
 
         invocation.status = WorkloadStatus.scheduled.value
+        self.add_workload_log(
+            workload_id,
+            "info",
+            f"Invocation {invocation.invocation_id} scheduled for workload {workload_id}",
+        )
         return invocation
 
     def get_invocation(self, invocation_id: str) -> FunctionInvocationResponse:
         return self.invocations[invocation_id]
+
+    def list_function_invocations_by_workload(self, workload_id: str, limit: int = 100) -> list[FunctionInvocationResponse]:
+        items = [inv for inv in self.invocations.values() if inv.workload_id == workload_id]
+        items.sort(key=lambda x: x.started_at, reverse=True)
+        return items[:limit]
 
     # -- proxy tokens ----------------------------------------------------------
 
@@ -1576,6 +1595,12 @@ class InMemoryStore:
 
     def get_volume_snapshot(self, snapshot_id: str) -> VolumeSnapshot:
         return self.volume_snapshots[snapshot_id]
+
+    def delete_volume_snapshot(self, snapshot_id: str) -> bool:
+        if snapshot_id in self.volume_snapshots:
+            del self.volume_snapshots[snapshot_id]
+            return True
+        return False
 
     def delete_volume_snapshot(self, snapshot_id: str) -> bool:
         if snapshot_id in self.volume_snapshots:

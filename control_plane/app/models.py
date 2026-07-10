@@ -817,6 +817,16 @@ class SandboxExecResponse(BaseModel):
     created_at: datetime = Field(default_factory=utc_now)
 
 
+class SandboxFileEntry(BaseModel):
+    entry_id: str = Field(default_factory=lambda: generated_id("sfe"))
+    sandbox_id: str
+    path: str
+    name: str
+    entry_type: str = "file"  # file | directory
+    size: int = 0
+    created_at: datetime = Field(default_factory=utc_now)
+
+
 class SandboxTunnel(BaseModel):
     tunnel_id: str = Field(default_factory=lambda: generated_id("tun"))
     sandbox_id: str

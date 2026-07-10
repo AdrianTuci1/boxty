@@ -25,6 +25,10 @@ export function oauthCallback(provider: OAuthProvider, payload: { code: string; 
   return apiFetch<TokenResponse>(`/auth/oauth/${provider}/callback`, { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export function whoami() {
+  return apiFetch<Record<string, any>>('/auth/me')
+}
+
 export function listApiKeys(workspaceId?: string) {
   const qs = workspaceId ? `?workspace_id=${workspaceId}` : ''
   return apiFetch<ApiKey[]>(`/api-keys${qs}`)

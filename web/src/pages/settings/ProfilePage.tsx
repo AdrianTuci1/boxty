@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
-import { getUser, getAccount } from '../../api/auth'
+import { whoami, getAccount } from '../../api/auth'
 
 export default function ProfilePage() {
   const { data: user, isLoading: userLoading } = useQuery({
-    queryKey: ['user', 'me'],
-    queryFn: () => getUser('me'),
+    queryKey: ['whoami'],
+    queryFn: () => whoami(),
   })
   const { data: account, isLoading: accountLoading } = useQuery({
-    queryKey: ['account', 'me'],
-    queryFn: () => getAccount('me'),
-    enabled: !!user,
+    queryKey: ['account', user?.user_id],
+    queryFn: () => getAccount(user!.user_id),
+    enabled: !!user?.user_id,
   })
 
   const isLoading = userLoading || accountLoading
