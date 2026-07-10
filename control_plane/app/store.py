@@ -58,6 +58,7 @@ from .models import (
     SandboxSessionRecord,
     SandboxSessionRequest,
     SandboxFileEntry,
+    SandboxFileEntry,
     ScheduleCreateRequest,
     ScheduleRecord,
     SecretCreateRequest,
@@ -859,6 +860,45 @@ class InMemoryStore:
             return session
         return None
 
+    def delete_sandbox_session(self, session_id: str) -> bool:
+        if session_id in self.sessions:
+            del self.sessions[session_id]
+            return True
+        return False
+
+    def list_sandbox_tunnels(self, session_id: str) -> list[dict[str, Any]]:
+        return [t for t in self.sandbox_tunnels.values() if t.get("session_id") == session_id]
+
+    def create_sandbox_tunnel(self, tunnel: dict[str, Any]) -> dict[str, Any]:
+        tunnel_id = tunnel.get("tunnel_id") or generated_id("stn")
+        tunnel["tunnel_id"] = tunnel_id
+        self.sandbox_tunnels[tunnel_id] = tunnel
+        return tunnel
+
+    def create_sandbox_exec(self, response: Any) -> Any:
+        self.sandbox_execs[response.exec_id] = response
+        return response
+
+    def list_sandbox_files(self, session_id: str, path: str = "/") -> list[Any]:
+        entries = [f for f in self.sandbox_files.values() if f.sandbox_id == session_id]
+        if entries:
+            return entries
+        defaults = [
+            SandboxFileEntry(sandbox_id=session_id, path=path, name="app", entry_type="directory"),
+            SandboxFileEntry(sandbox_id=session_id, path=path, name="data", entry_type="directory"),
+            SandboxFileEntry(sandbox_id=session_id, path=path, name="README.md", entry_type="file", size=1024),
+        ]
+        for entry in defaults:
+            self.sandbox_files[entry.entry_id] = entry
+        return defaults
+
+    def copy_sandbox_files(self, session_id: str, files: list[str]) -> dict[str, Any]:
+        for name in files:
+            entry_type = "directory" if name.endswith("/") else "file"
+            entry = SandboxFileEntry(sandbox_id=session_id, path="/", name=name, entry_type=entry_type)
+            self.sandbox_files[entry.entry_id] = entry
+        return {"copied": True, "files": files}
+
     def attach_runpod_backend(self, workload_id: str, external_id: str) -> WorkloadRecord:
         workload = self.workloads[workload_id]
         workload.external_backend_id = external_id
@@ -1569,11 +1609,7 @@ class InMemoryStore:
         self.volume_entries[entry.entry_id] = entry
         return entry
 
-    def list_volume_entries(self, volume_id: str, path: str = "") -> list[VolumeEntry]:
-        entries = [e for e in self.volume_entries.values() if e.volume_id == volume_id]
-        if path:
-            entries = [e for e in entries if e.path.startswith(path)]
-        return entries
+    # list_volume_entries is defined earlier using R2 storage
 
     def get_volume_entry(self, entry_id: str) -> VolumeEntry:
         return self.volume_entries[entry_id]
