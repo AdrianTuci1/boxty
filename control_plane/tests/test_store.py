@@ -30,6 +30,28 @@ from app.store import InMemoryStore
 class ControlPlaneStoreTests(unittest.TestCase):
     def setUp(self) -> None:
         object.__setattr__(settings, "secret_encryption_key", "test-secret-key")
+        # Patch R2 storage to an in-memory fake for deterministic tests
+        import app.store as store_module
+        self._r2_data: dict[str, bytes] = {}
+
+        class _FakeR2:
+            def put_bytes(self, key: str, data: bytes, content_type: str = "application/octet-stream") -> None:
+                self._r2_data[key] = data
+
+            def get_bytes(self, key: str) -> bytes:
+                return self._r2_data.get(key, b"")
+
+            def list_keys(self, prefix: str):
+                for key in self._r2_data:
+                    if key.startswith(prefix):
+                        yield {"key": key, "size": len(self._r2_data[key])}
+
+            def delete_key(self, key: str) -> None:
+                self._r2_data.pop(key, None)
+
+        fake = _FakeR2()
+        fake._r2_data = self._r2_data
+        store_module.r2_storage_client = fake
         self.store = InMemoryStore()
         self.user, self.account, self.workspace, self.environment = self.store.register_user(
             user_id="usr_test",
@@ -247,6 +269,7 @@ class ControlPlaneStoreTests(unittest.TestCase):
             )
         )
         self.store.write_volume_blob(volume.volume_id, "models/config.json", b'{"ok":true}')
+        print("after write", self._r2_data)
         workload = self.store.create_workload(
             WorkloadCreateRequest(
                 owner_id="usr_test",
@@ -378,6 +401,93 @@ class ControlPlaneStoreTests(unittest.TestCase):
         self.assertEqual(triggered_workload.status.value, "scheduled")
         self.assertEqual(schedule.workload_id, workload.workload_id)
         self.assertIsNotNone(schedule.last_run_at)
+
+
+    def test_workload_status_change_writes_log(self) -> None:
+        self._register_provider()
+        workload = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="sandbox",
+                image="ubuntu:22.04",
+            )
+        )
+        from app.models import WorkloadStatusUpdateRequest
+        self.store.update_workload_status(
+            workload.workload_id,
+            WorkloadStatusUpdateRequest(status="running", runtime_details={}),
+        )
+        logs = self.store.workload_logs(workload.workload_id)
+        self.assertTrue(any("running" in log.message for log in logs))
+
+    def test_invoke_function_writes_log_and_invocation(self) -> None:
+        self._register_provider()
+        workload = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="function",
+                image="python:3.11",
+            )
+        )
+        from app.models import WorkloadInvokeRequest
+        invocation = self.store.invoke_workload_sync(workload.workload_id, WorkloadInvokeRequest(payload={"x": 1}))
+        invocations = self.store.list_function_invocations_by_workload(workload.workload_id)
+        logs = self.store.workload_logs(workload.workload_id)
+        self.assertEqual(invocation.workload_id, workload.workload_id)
+        self.assertEqual(len(invocations), 1)
+        self.assertTrue(any(invocation.invocation_id in log.message for log in logs))
+
+    def test_sandbox_session_lifecycle(self) -> None:
+        self._register_provider()
+        workload = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="sandbox",
+                image="ubuntu:22.04",
+            )
+        )
+        from app.models import SandboxSessionRequest
+        session = self.store.create_sandbox_session(
+            SandboxSessionRequest(workload_id=workload.workload_id, requester_id="usr_test")
+        )
+        self.assertIn(session.session_id, self.store.sessions)
+        self.assertTrue(self.store.delete_sandbox_session(session.session_id))
+        self.assertNotIn(session.session_id, self.store.sessions)
+
+    def test_sandbox_filesystem_returns_entries(self) -> None:
+        self._register_provider()
+        workload = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="sandbox",
+                image="ubuntu:22.04",
+            )
+        )
+        from app.models import SandboxSessionRequest
+        session = self.store.create_sandbox_session(
+            SandboxSessionRequest(workload_id=workload.workload_id, requester_id="usr_test")
+        )
+        entries = self.store.list_sandbox_files(session.session_id, "/")
+        self.assertTrue(any(e.name == "README.md" and e.entry_type == "file" for e in entries))
+
+    def test_volume_entry_crud(self) -> None:
+        from app.models import VolumeEntry
+        entry = self.store.create_volume_entry(
+            VolumeEntry(volume_id="vol_1", path="/a.txt", size_bytes=5)
+        )
+        self.assertEqual(self.store.get_volume_entry(entry.entry_id).path, "/a.txt")
+        self.assertTrue(self.store.delete_volume_entry(entry.entry_id))
+        with self.assertRaises(KeyError):
+            self.store.get_volume_entry(entry.entry_id)
+
 
 if __name__ == "__main__":
     unittest.main()

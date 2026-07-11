@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { HardDrive, Database, FileText, ArrowUpDown, Search } from 'lucide-react'
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
-import { listVolumes, createVolume, deleteVolume, mockVolumes } from '../api/volumes'
+import { listVolumes, createVolume, deleteVolume } from '../api/volumes'
 import { useAuth } from '../hooks/useAuth'
 import EmptyState from '../components/EmptyState'
 
@@ -20,7 +20,7 @@ export default function StoragePage() {
   const { devMode } = useAuth()
   const { data, isLoading } = useQuery({
     queryKey: ['volumes'],
-    queryFn: () => devMode ? Promise.resolve(mockVolumes) : listVolumes(),
+    queryFn: () => listVolumes(workspace || undefined),
     staleTime: devMode ? Infinity : 30000,
   })
   const [activeFilter, setActiveFilter] = useState('Volumes')
@@ -44,7 +44,7 @@ export default function StoragePage() {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete volume?')) return
-    await deleteVolume(id, workspace || '')
+    await deleteVolume(workspace || '', id)
     qc.invalidateQueries({ queryKey: ['volumes'] })
   }
 

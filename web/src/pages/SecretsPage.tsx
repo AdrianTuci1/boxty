@@ -6,13 +6,13 @@ import EmptyState from '../components/EmptyState'
 
 export default function SecretsPage() {
   const { workspace, environment } = useParams<{ workspace: string; environment: string }>()
-  const { data, isLoading } = useQuery({ queryKey: ['secrets'], queryFn: () => listSecrets() })
+  const { data, isLoading } = useQuery({ queryKey: ['secrets', workspace], queryFn: () => listSecrets(workspace || undefined) })
   const navigate = useNavigate()
   const qc = useQueryClient()
 
   const handleDelete = async (id: string) => {
     if (!confirm('Delete secret?')) return
-    await deleteSecret(id, 'default')
+    await deleteSecret(workspace || 'default', id)
     qc.invalidateQueries({ queryKey: ['secrets'] })
   }
 

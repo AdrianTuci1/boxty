@@ -4,8 +4,6 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { getAppLogs } from '../api/apps'
-import { useAuth } from '../hooks/useAuth'
-import { shouldUseMocks } from '../core/services/mock-decider.service'
 import MiniBarChart from './MiniBarChart'
 
 interface LogEntry {
@@ -22,58 +20,6 @@ const levelStyles: Record<string, { bg: string; text: string }> = {
   ERROR: { bg: 'bg-red-950/30', text: 'text-red-400' },
   FATAL: { bg: 'bg-red-950/50', text: 'text-red-300' },
 }
-
-// Mock data for rich dev/mock experience
-const mockLogs: LogEntry[] = [
-  {
-    id: 'log-1',
-    timestamp: '2026-06-09 17:15:00',
-    level: 'INFO',
-    content: 'Starting fastapi_app instance...',
-  },
-  {
-    id: 'log-2',
-    timestamp: '2026-06-09 17:15:02',
-    level: 'INFO',
-    content: 'Loading ML model checkpoints from disk...',
-  },
-  {
-    id: 'log-3',
-    timestamp: '2026-06-09 17:15:05',
-    level: 'DEBUG',
-    content: 'Model loaded successfully in 3.33s. Memory usage: 1.2 GB.',
-  },
-  {
-    id: 'log-4',
-    timestamp: '2026-06-09 17:15:06',
-    level: 'INFO',
-    content: 'Application startup complete. Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)',
-  },
-  {
-    id: 'log-5',
-    timestamp: '2026-06-09 17:16:12',
-    level: 'INFO',
-    content: 'GET /api/predict - Status 200 OK - processed in 124ms',
-  },
-  {
-    id: 'log-6',
-    timestamp: '2026-06-09 17:18:45',
-    level: 'WARN',
-    content: 'High CPU utilization detected on container instance inst-1.',
-  },
-  {
-    id: 'log-7',
-    timestamp: '2026-06-09 17:19:02',
-    level: 'DEBUG',
-    content: 'Autoscaler invoked: current containers = 2, target containers = 3.',
-  },
-  {
-    id: 'log-8',
-    timestamp: '2026-06-09 17:20:11',
-    level: 'INFO',
-    content: 'GET /healthz - Status 200 OK - processed in 3ms',
-  },
-]
 
 const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`)
 
@@ -96,38 +42,34 @@ export default function AppLogs({ appId, appName }: { appId?: string; appName: s
     '1w': 'past 1 week',
   }
 
-  const { devMode } = useAuth()
-  const useMocks = devMode || shouldUseMocks()
-
   const { data: realLogs, isLoading: logsLoading } = useQuery({
     queryKey: ['workloads', appId, 'logs'],
     queryFn: () => getAppLogs(appId!),
-    enabled: !!appId && !useMocks,
+    enabled: !!appId,
   })
+
+  const logs = useMemo(() => {
+    return (realLogs || []).map((log) => ({
+      id: log.log_id,
+      timestamp: new Date(log.timestamp).toLocaleString(),
+      level: (log.level?.toUpperCase?.() || 'INFO') as LogEntry['level'],
+      content: log.message,
+    }))
+  }, [realLogs])
 
   const callsData = useMemo(() => {
     if (logsLoading) return Array(24).fill(0)
     const counts = Array(24).fill(0)
-    const source = useMocks ? mockLogs : (realLogs || [])
-    for (const log of source) {
+    for (const log of logs) {
       const date = new Date(log.timestamp)
       if (!isNaN(date.getTime())) {
         counts[date.getHours()] += 1
       }
     }
     return counts
-  }, [appName, realLogs, logsLoading, useMocks])
+  }, [logs, logsLoading])
 
-  const logsToRender = useMocks
-    ? mockLogs
-    : (realLogs || []).map((l, idx) => ({
-        id: `real-log-${idx}`,
-        timestamp: new Date(l.timestamp).toLocaleString(),
-        level: 'INFO' as const,
-        content: l.message,
-      }))
-
-  const filteredLogs = logsToRender.filter((log) =>
+  const filteredLogs = logs.filter((log) =>
     log.content.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
