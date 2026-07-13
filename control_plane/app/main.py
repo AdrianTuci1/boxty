@@ -1,7 +1,9 @@
 from email.message import EmailMessage
 import smtplib
+from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .models import (
@@ -72,11 +74,8 @@ from .store import issued_access_token, store
 from .scheduler import start_scheduler, stop_scheduler
 from .auth import CurrentUser, get_current_user, require_user
 
-app = FastAPI(title=settings.app_name)
-
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     if settings.state_store == "dynamodb-single-table":
         try:
             store.load_from_dynamodb()
@@ -86,11 +85,19 @@ async def startup_event():
     else:
         print("[startup] running with in-memory state store")
     start_scheduler()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
     stop_scheduler()
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def provider_public_dict(provider) -> dict:
@@ -280,13 +287,6 @@ def create_volume(request: VolumeCreateRequest) -> dict:
     return volume.model_dump(mode="json")
 
 
-@app.delete(f"{settings.api_prefix}/volumes/{{workspace_id}}/{{locator}}")
-def delete_volume(workspace_id: str, locator: str) -> dict:
-    if not store.delete_volume(workspace_id, locator):
-        raise HTTPException(status_code=404, detail="volume not found")
-    return {"deleted": True}
-
-
 @app.get(f"{settings.api_prefix}/volumes/{{locator}}/entries")
 def list_volume_entries(locator: str, prefix: str = "") -> list[dict]:
     try:
@@ -329,6 +329,13 @@ def delete_volume_blob(locator: str, path: str = Query(...)) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return {"deleted": deleted}
+
+
+@app.delete(f"{settings.api_prefix}/volumes/{{workspace_id}}/{{locator}}")
+def delete_volume(workspace_id: str, locator: str) -> dict:
+    if not store.delete_volume(workspace_id, locator):
+        raise HTTPException(status_code=404, detail="volume not found")
+    return {"deleted": True}
 
 
 @app.get(f"{settings.api_prefix}/invites")

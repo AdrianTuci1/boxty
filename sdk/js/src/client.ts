@@ -118,6 +118,46 @@ export class BoxtyClient {
     });
   }
 
+  async authorizeDevice(_payload?: { client_id?: string }): Promise<{
+    device_code: string;
+    user_code: string;
+    verification_uri: string;
+    verification_uri_complete: string;
+    expires_in: number;
+    interval: number;
+  }> {
+    return request<{
+      device_code: string;
+      user_code: string;
+      verification_uri: string;
+      verification_uri_complete: string;
+      expires_in: number;
+      interval: number;
+    }>(this.url("/v1/auth/device/code"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+  }
+
+  async pollDeviceToken(deviceCode: string, _interval?: number): Promise<{
+    user_id: string;
+    access_token: string;
+    token_type: string;
+    status: string;
+  }> {
+    return request<{
+      user_id: string;
+      access_token: string;
+      token_type: string;
+      status: string;
+    }>(this.url("/v1/auth/device/token"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_code: deviceCode }),
+    });
+  }
+
   async whoami(token?: string): Promise<{ user_id: string; external_user_id: string; email: string | null }> {
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;

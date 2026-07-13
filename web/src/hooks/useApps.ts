@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listApps, stopApp, deleteApp, type App } from '../api/apps'
+import { listApps, getApp, stopApp, deleteApp, type App } from '../api/apps'
 import { useAuth } from './useAuth'
 import { mockApps, mockSandboxApps } from '../core/mocks/apps.mock'
 import { shouldUseMocks } from '../core/services/mock-decider.service'
@@ -76,7 +76,6 @@ export function useAppById(appId?: string) {
         }
         throw new Error(`Mock app not found: ${appId}`)
       }
-      const { getApp } = await import('../api/apps')
       return getApp(appId!)
     },
     staleTime: useMocks ? Infinity : 30000,
