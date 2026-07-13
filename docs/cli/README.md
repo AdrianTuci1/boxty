@@ -28,7 +28,6 @@
 |---------|-------------|
 | `boxty provider` | Share compute as provider |
 | `boxty gateway` | Start local HTTP gateway |
-| `boxty wallet` | Manage wallet |
 
 ### Utility
 
@@ -43,8 +42,6 @@
 
 | Flag | Description |
 |------|-------------|
-| `--signaling` | P2P signaling server address |
-| `--bypass-escrow` | Bypass payment validation |
 
 ## Examples
 

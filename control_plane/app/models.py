@@ -309,9 +309,13 @@ class ProviderRegistrationRequest(BaseModel):
 
 
 class ProviderHeartbeatRequest(BaseModel):
-    available_slots: int = Field(ge=0, default=0)
+    available_cpu_cores: int = Field(ge=0, default=0)
+    available_memory_mb: int = Field(ge=0, default=0)
+    available_disk_gb: int = Field(ge=0, default=0)
+    available_gpu_count: int = Field(ge=0, default=0)
     running_workloads: int = Field(ge=0, default=0)
     status: ProviderStatus = ProviderStatus.online
+    available_images: list[str] = Field(default_factory=list)
 
 
 class ProviderRecord(BaseModel):
@@ -327,7 +331,11 @@ class ProviderRecord(BaseModel):
     auth_token_hash: str = ""
     auth_token_salt: str = ""
     status: ProviderStatus = ProviderStatus.online
-    available_slots: int = 0
+    available_cpu_cores: int = 0
+    available_memory_mb: int = 0
+    available_disk_gb: int = 0
+    available_gpu_count: int = 0
+    available_images: list[str] = Field(default_factory=list)
     running_workloads: int = 0
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
@@ -354,9 +362,9 @@ class VolumeMount(BaseModel):
 
 
 class WorkloadCreateRequest(BaseModel):
-    owner_id: str
-    workspace_id: str
-    environment_id: str
+    owner_id: str = ""
+    workspace_id: str = ""
+    environment_id: str = ""
     kind: WorkloadKind
     image: str
     command: list[str] = Field(default_factory=list)
@@ -370,6 +378,7 @@ class WorkloadCreateRequest(BaseModel):
     volume_mounts: list[VolumeMount] = Field(default_factory=list)
     resources: WorkloadResources = Field(default_factory=WorkloadResources)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    image_ref: str | None = None
 
 
 class WorkloadRecord(BaseModel):
@@ -380,12 +389,14 @@ class WorkloadRecord(BaseModel):
     kind: WorkloadKind
     status: WorkloadStatus = WorkloadStatus.pending
     image: str
+    image_ref: str | None = None
     command: list[str]
     env: dict[str, str]
     region: str
     pool: str
     requested_backend: ExecutionBackend | None = None
     selected_backend: ExecutionBackend | None = None
+    allow_runpod_fallback: bool = True
     secret_names: list[str] = Field(default_factory=list)
     volume_mounts: list[VolumeMount] = Field(default_factory=list)
     assigned_provider_id: str | None = None
@@ -541,6 +552,36 @@ class LoginResponse(BaseModel):
     access_token: str
 
 
+class DeviceCodeRequest(BaseModel):
+    pass
+
+
+class DeviceCodeResponse(BaseModel):
+    device_code: str
+    user_code: str
+    verification_uri: str
+    verification_uri_complete: str
+    expires_in: int
+    interval: int
+
+
+class DeviceTokenRequest(BaseModel):
+    device_code: str
+
+
+class DeviceTokenResponse(BaseModel):
+    user_id: str
+    access_token: str
+    token_type: str = "bearer"
+    status: str  # pending, authorized, expired
+
+
+class DeviceAuthorizeRequest(BaseModel):
+    user_code: str
+    external_user_id: str
+    email: str | None = None
+
+
 class BillingBalanceResponse(BaseModel):
     user_id: str
     balance_usd: float
@@ -649,6 +690,7 @@ class ImageCreateRequest(BaseModel):
     build_args: dict[str, str] = Field(default_factory=dict)
     source_file_content: str | None = None  # base64 encoded source file
     source_filename: str | None = None
+    extra_files: dict[str, str] = Field(default_factory=dict)  # base64 encoded extra files
 
 
 class ImageRecord(BaseModel):
@@ -661,6 +703,7 @@ class ImageRecord(BaseModel):
     build_args: dict[str, str] = Field(default_factory=dict)
     source_file_content: str | None = None  # decoded plain text
     source_filename: str | None = None
+    extra_files: dict[str, str] = Field(default_factory=dict)  # decoded plain text
     status: str = "pending"
     build_log: str = ""
     image_ref: str = ""

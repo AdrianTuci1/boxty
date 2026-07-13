@@ -80,7 +80,11 @@ class TunnelTests(unittest.TestCase):
 
         response = self.client.get("/r/test-api")
         self.assertEqual(response.status_code, 503)
-        self.assertIn("not connected", response.json()["detail"].lower())
+        # Provider may be missing or not connected.
+        self.assertIn(
+            response.json()["detail"].lower(),
+            {"provider not connected", "endpoint not assigned to a provider"},
+        )
 
     def test_tunnel_accepts_valid_token(self) -> None:
         with self.client.websocket_connect(

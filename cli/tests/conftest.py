@@ -34,7 +34,7 @@ def temp_config():
 @pytest.fixture
 def logged_in_config(temp_config):
     """Config with a token set."""
-    cfg = BoxtyConfig(api_url="http://test.boxty", token="tok_123", workspace_id="ws_123", environment_id="env_123")
+    cfg = BoxtyConfig(api_url="http://test.boxty", token="tok_123", user_id="usr_123", workspace_id="ws_123", environment_id="env_123")
     save_config(cfg)
     return cfg
 

@@ -92,9 +92,6 @@
 | Secret injection | ⚠️ Simulat | Doar log-uri, nu injectează secrete reale |
 | Gateway | ✅ Funcțional | HTTP proxy real |
 | WebSocket tunnel | ✅ Funcțional | Real - comunică cu control plane |
-| Wallet (Ed25519) | ✅ Funcțional | Generează keypair real |
-| Solana escrow | ❌ Stub | Doar log-uri, nu interacționează cu Solana |
-| P2P networking | ⚠️ Parțial | Libp2p integrat dar nu testat în rețea reală |
 | Resource management | ✅ Funcțional | Real - limitează CPU/RAM |
 | Task replication | ❌ Stub | Doar log-uri, nu face consensus real |
 | Micro-cluster sync | ❌ Stub | Doar log-uri |
@@ -113,8 +110,6 @@
 
 ### Probleme CLI Worker:
 1. **Execuție workload** - nu rulează Docker/container real, doar simulează
-2. **Solana escrow** - complet stub, nu există integrare reală
-3. **P2P consensus** - nu există consensus real între noduri
 4. **Task replication** - nu există replicare reală
 5. **Image build** - nu face build real de Docker image
 6. **Sandbox SSH** - nu oferă SSH real
@@ -326,7 +321,6 @@
 |-----------|-------------|--------|-----------------|
 | Backend API | ⚠️ Parțial | 70% | InMemoryStore, RunPod stub, image build simulat |
 | Web UI | ⚠️ Parțial | 75% | Hardcoded auth, mock data în docs |
-| CLI Worker | ⚠️ Parțial | 60% | Execuție simulată, Solana stub, P2P netestat |
 | CLI Client | ✅ Majoritar | 85% | owner_id hardcoded, error handling minimal |
 | SDK Python | ✅ Complet | 95% | whoami lipsă, token storage |
 | SDK JS | ✅ Complet | 95% | whoami lipsă, token storage |
@@ -339,12 +333,10 @@
 1. **Persistență date** - Înlocuiește InMemoryStore cu PostgreSQL/SQLite
 2. **Execuție workload reală** - Implementează Docker/container execution în worker
 3. **Auth real** - Elimină hardcoded credentials din web
-4. **Solana escrow** - Implementează integrarea reală sau elimină complet
 
 ### MEDIUM (importante pentru UX)
 5. **Image build real** - Implementează build Docker image
 6. **Schedule trigger real** - Execută workload când se trigger-ează
-7. **P2P networking testat** - Testează în rețea reală
 8. **Error handling** - Adaugă error handling consistent
 9. **Token storage** - Persistă token în SDK-uri
 
@@ -366,6 +358,5 @@ Proiectul are **structura completă** și **toate API-urile definite**, dar **lo
 - ✅ **SDK-uri** (Python + JS)
 - ⚠️ **Worker execution** (simulat, nu real)
 - ❌ **Persistență** (InMemory = date pierdute la restart)
-- ❌ **Blockchain** (Solana = stub complet)
 
 **Pentru production:** Trebuie implementată execuția reală de containere + persistență date.

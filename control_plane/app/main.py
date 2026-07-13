@@ -9,6 +9,11 @@ from .models import (
     ApiKeyCreateRequest,
     BillingCreditsRequest,
     BillingReportRequest,
+    DeviceAuthorizeRequest,
+    DeviceCodeRequest,
+    DeviceCodeResponse,
+    DeviceTokenRequest,
+    DeviceTokenResponse,
     EnvironmentCreateRequest,
     EnvironmentMember,
     EnvironmentMemberUpdateRequest,
@@ -58,11 +63,14 @@ from .oauth import build_authorization_url, exchange_code, fetch_profile, _missi
 import asyncio
 import base64
 import json
+import secrets as secrets_lib
+from datetime import timedelta
 from typing import Any
 import uuid
 
 from .store import issued_access_token, store
 from .scheduler import start_scheduler, stop_scheduler
+from .auth import CurrentUser, get_current_user, require_user
 
 app = FastAPI(title=settings.app_name)
 
@@ -165,7 +173,11 @@ def get_user(user_id: str) -> dict:
 
 
 @app.get(f"{settings.api_prefix}/workspaces")
-def list_workspaces(owner_id: str | None = None) -> list[dict]:
+def list_workspaces(user: CurrentUser = Depends(get_current_user), owner_id: str | None = None) -> list[dict]:
+    if user.workspace_id and owner_id is None:
+        # API key callers are scoped to a single workspace; list that one.
+        workspace = store.workspaces.get(user.workspace_id)
+        return [workspace.model_dump(mode="json")] if workspace else []
     return [workspace.model_dump(mode="json") for workspace in store.list_workspaces(owner_id)]
 
 
@@ -190,7 +202,9 @@ def delete_workspace(workspace_id: str) -> dict:
 
 
 @app.get(f"{settings.api_prefix}/workspaces/{{workspace_id}}/environments")
-def list_environments(workspace_id: str) -> list[dict]:
+def list_environments(workspace_id: str, user: CurrentUser = Depends(get_current_user)) -> list[dict]:
+    if user.workspace_id and user.workspace_id != workspace_id:
+        raise HTTPException(status_code=403, detail="workspace does not match api key scope")
     return [environment.model_dump(mode="json") for environment in store.list_environments(workspace_id)]
 
 
@@ -220,12 +234,14 @@ def list_api_keys(workspace_id: str | None = None) -> list[dict]:
 
 
 @app.post(f"{settings.api_prefix}/api-keys")
-def create_api_key(request: ApiKeyCreateRequest) -> dict:
+def create_api_key(request: ApiKeyCreateRequest, user: CurrentUser = Depends(get_current_user)) -> dict:
     try:
-        api_key = store.create_api_key(request)
+        api_key, secret = store.create_api_key(request)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return api_key.model_dump(mode="json")
+    payload = api_key.model_dump(mode="json")
+    payload["token_value"] = secret
+    return payload
 
 
 @app.get(f"{settings.api_prefix}/secrets")
@@ -380,14 +396,25 @@ def claim_next_assignment(provider_id: str, auth_provider_id: str = Depends(requ
 
 
 @app.get(f"{settings.api_prefix}/workloads")
-def list_workloads(workspace_id: str | None = None, environment_id: str | None = None) -> list[dict]:
-    if workspace_id or environment_id:
-        return [workload.model_dump(mode="json") for workload in store.list_workloads_filtered(workspace_id, environment_id)]
+def list_workloads(
+    workspace_id: str | None = None,
+    environment_id: str | None = None,
+    user: CurrentUser = Depends(get_current_user),
+) -> list[dict]:
+    ws = workspace_id or user.workspace_id
+    env = environment_id or user.environment_id
+    if ws or env:
+        return [workload.model_dump(mode="json") for workload in store.list_workloads_filtered(ws, env)]
     return [workload.model_dump(mode="json") for workload in store.workloads.values()]
 
 
 @app.post(f"{settings.api_prefix}/workloads")
-def create_workload(request: WorkloadCreateRequest) -> dict:
+def create_workload(request: WorkloadCreateRequest, user: CurrentUser = Depends(get_current_user)) -> dict:
+    if user.workspace_id:
+        request.workspace_id = user.workspace_id
+    if user.environment_id:
+        request.environment_id = user.environment_id
+    request.owner_id = user.user_id
     try:
         workload = store.create_workload(request)
     except ValueError as exc:
@@ -477,6 +504,16 @@ async def invoke_workload(
         raise HTTPException(status_code=404, detail="workload not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    # If the invocation already completed (warm container fast path), return immediately.
+    if invocation.status in {"completed", "failed"}:
+        result = invocation.result or {}
+        return WorkloadInvokeResponse(
+            workload_id=workload_id,
+            stdout=result.get("stdout", ""),
+            stderr=result.get("stderr", "") or invocation.error or "",
+            return_code=result.get("return_code", 0 if invocation.status == "completed" else 1),
+        ).model_dump(mode="json")
 
     poll_interval = settings.worker_poll_interval_seconds
     timeout = 300
@@ -580,6 +617,76 @@ def login(request: LoginRequest) -> dict:
     return result.model_dump(mode="json")
 
 
+@app.post(f"{settings.api_prefix}/auth/device", response_model=DeviceCodeResponse)
+def device_code(request: DeviceCodeRequest) -> DeviceCodeResponse:
+    device_code = generated_id("dev")
+    user_code = secrets_lib.token_urlsafe(8)[:8].upper()
+    web_domain = settings.web_domain or f"http://127.0.0.1:5173"
+    verification_uri = f"{web_domain}/auth/device"
+    verification_uri_complete = f"{verification_uri}?user_code={user_code}"
+    store.device_codes[device_code] = {
+        "device_code": device_code,
+        "user_code": user_code,
+        "status": "pending",
+        "user_id": None,
+        "access_token": None,
+        "created_at": utc_now(),
+        "expires_at": utc_now() + timedelta(seconds=settings.device_code_ttl_seconds),
+    }
+    return DeviceCodeResponse(
+        device_code=device_code,
+        user_code=user_code,
+        verification_uri=verification_uri,
+        verification_uri_complete=verification_uri_complete,
+        expires_in=settings.device_code_ttl_seconds,
+        interval=settings.device_code_poll_interval_seconds,
+    )
+
+
+@app.post(f"{settings.api_prefix}/auth/device/authorize")
+def device_authorize(request: DeviceAuthorizeRequest) -> dict:
+    code = next(
+        (c for c in store.device_codes.values() if c["user_code"] == request.user_code.upper()),
+        None,
+    )
+    if not code:
+        raise HTTPException(status_code=404, detail="user code not found")
+    if utc_now() > code["expires_at"]:
+        raise HTTPException(status_code=410, detail="user code expired")
+    try:
+        user, account, workspace, environment = store.register_user(
+            user_id=generated_id("usr"),
+            external_user_id=request.external_user_id,
+            email=request.email or f"{request.external_user_id}@boxty.dev",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    code["status"] = "authorized"
+    code["user_id"] = user.user_id
+    code["access_token"] = issued_access_token(user.external_user_id)
+    return {"status": "authorized", "user_id": user.user_id}
+
+
+@app.post(f"{settings.api_prefix}/auth/device/token", response_model=DeviceTokenResponse)
+def device_token(request: DeviceTokenRequest) -> DeviceTokenResponse:
+    code = store.device_codes.get(request.device_code)
+    if not code:
+        raise HTTPException(status_code=404, detail="device code not found")
+    if utc_now() > code["expires_at"]:
+        code["status"] = "expired"
+    if code["status"] == "authorized":
+        return DeviceTokenResponse(
+            user_id=code["user_id"],
+            access_token=code["access_token"],
+            status="authorized",
+        )
+    return DeviceTokenResponse(
+        user_id="",
+        access_token="",
+        status=code["status"],
+    )
+
+
 @app.get(f"{settings.api_prefix}/auth/oauth/{{provider}}")
 async def oauth_authorize(provider: OAuthProvider) -> dict:
     missing = _missing_config(provider.value)
@@ -618,24 +725,16 @@ async def oauth_callback(provider: OAuthProvider, request: OAuthCallbackRequest)
 
 
 @app.get(f"{settings.api_prefix}/auth/me")
-def whoami(authorization: str | None = Header(default=None)) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="missing bearer token")
-    token = authorization.split(" ", 1)[1].strip()
-    # Find user by token - token format is "boxty_{external_user_id}_{random}"
-    # We can extract external_user_id from token prefix
-    parts = token.split("_")
-    if len(parts) >= 3 and parts[0] == "boxty":
-        external_user_id = parts[1]
-        for user in store.users.values():
-            if user.external_user_id == external_user_id:
-                return {
-                    "user_id": user.user_id,
-                    "external_user_id": user.external_user_id,
-                    "email": user.email,
-                    "created_at": user.created_at,
-                }
-    raise HTTPException(status_code=401, detail="invalid token")
+def whoami(user: CurrentUser = Depends(get_current_user)) -> dict:
+    record = store.users.get(user.user_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="user not found")
+    return {
+        "user_id": record.user_id,
+        "external_user_id": record.external_user_id,
+        "email": record.email,
+        "created_at": record.created_at,
+    }
 
 
 @app.delete(f"{settings.api_prefix}/api-keys/{{api_key_id}}")
