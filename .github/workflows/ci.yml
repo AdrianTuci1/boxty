@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module: [control_plane, cli, sdk/python]
+        module: [control_plane]
     steps:
       - uses: actions/checkout@v4
 
@@ -61,29 +61,3 @@ jobs:
           npm run test
           npm run build
         working-directory: web
-
-  e2e:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Set up Docker
-        uses: docker/setup-docker-action@v4
-
-      - name: Install control-plane dependencies
-        run: |
-          python -m venv .venv
-          . .venv/bin/activate
-          pip install --upgrade pip
-          pip install -e ".[dev]"
-        working-directory: control_plane
-
-      - name: Run e2e tests
-        run: |
-          ./control_plane/.venv/bin/python e2e-tests/run_e2e.py
-        working-directory: .

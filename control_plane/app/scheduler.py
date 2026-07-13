@@ -90,9 +90,11 @@ async def _scheduler_loop() -> None:
     while True:
         try:
             await _run_scheduler_tick()
+            store.expire_stale_providers()
+            store.reclaim_expired_assignments()
         except Exception:
             pass
-        await asyncio.sleep(30)
+        await asyncio.sleep(5)
 
 
 def start_scheduler() -> None:
