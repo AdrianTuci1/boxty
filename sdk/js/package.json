@@ -24,7 +24,7 @@
     "build": "tsc && node scripts/build-cjs.mjs",
     "prepublishOnly": "npm run build"
   },
-  "keywords": ["boxty", "p2p", "serverless", "agents"],
+  "keywords": ["boxty", "serverless", "agents"],
   "repository": {
     "type": "git",
     "url": "https://github.com/adriantucicovenco/boxty"

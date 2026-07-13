@@ -23,6 +23,7 @@ Usage::
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sys
@@ -230,6 +231,9 @@ class FunctionDef:
     secrets: list[Secret] = field(default_factory=list)
     timeout: int = 300
     gpu: str | None = None
+    cpu_cores: int = 1
+    memory_mb: int = 512
+    disk_gb: int = 2
     _workload_id: str | None = field(default=None, repr=False)
     _client: Any = field(default=None, repr=False)
 
@@ -279,6 +283,9 @@ class WebEndpointDef:
     timeout: int = 300
     gpu: str | None = None
     public: bool = True
+    cpu_cores: int = 1
+    memory_mb: int = 512
+    disk_gb: int = 2
     _workload_id: str | None = field(default=None, repr=False)
 
     def to_manifest(self) -> dict[str, Any]:
@@ -337,6 +344,9 @@ class App:
         secrets: list[Secret] | None = None,
         timeout: int = 300,
         gpu: str | None = None,
+        cpu_cores: int = 1,
+        memory_mb: int = 512,
+        disk_gb: int = 2,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Decorator that registers a serverless function.
 
@@ -354,6 +364,9 @@ class App:
                 secrets=secrets or [],
                 timeout=timeout,
                 gpu=gpu,
+                cpu_cores=cpu_cores,
+                memory_mb=memory_mb,
+                disk_gb=disk_gb,
             )
             self._functions.append(fd)
             # Attach metadata to the function for serialization
@@ -373,6 +386,9 @@ class App:
         timeout: int = 300,
         gpu: str | None = None,
         public: bool = True,
+        cpu_cores: int = 1,
+        memory_mb: int = 512,
+        disk_gb: int = 2,
     ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         """Decorator that registers an HTTP endpoint.
 
@@ -395,6 +411,9 @@ class App:
                 timeout=timeout,
                 gpu=gpu,
                 public=public,
+                cpu_cores=cpu_cores,
+                memory_mb=memory_mb,
+                disk_gb=disk_gb,
             )
             self._endpoints.append(ed)
             setattr(fn, _ENDPOINTS_ATTR, ed)
@@ -469,6 +488,151 @@ class App:
             print("Error: no web endpoints defined in app", file=sys.stderr)
             sys.exit(1)
 
+    # ---------------------------------------------------------------------------
+    # Docker / build helpers
+    # ---------------------------------------------------------------------------
+
+    def _build_dockerfile(self, image: Image) -> str:
+        """Generate a Dockerfile that bakes the app code and the Boxty runtime."""
+        import inspect
+        from . import container_runtime
+
+        manifest = image.to_manifest()
+        base = manifest.get("base", "debian:slim")
+        dockerfile = f"FROM {base}\n"
+        dockerfile += "WORKDIR /app\n"
+
+        # Install Python + pip if not a python base image; most of our bases will be python:*.
+        if not base.startswith("python"):
+            dockerfile += "RUN apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/lists/*\n"
+
+        # Install apt packages
+        apt_packages = manifest.get("aptPackages")
+        if apt_packages:
+            dockerfile += f"RUN apt-get update && apt-get install -y {' '.join(apt_packages)} && rm -rf /var/lib/apt/lists/*\n"
+
+        # Install pip packages
+        pip_packages = manifest.get("pipPackages")
+        if pip_packages:
+            dockerfile += f"RUN pip install --no-cache-dir {' '.join(pip_packages)}\n"
+
+        # Runtime dependencies for the shim (fastapi + uvicorn + httpx)
+        dockerfile += "RUN pip install --no-cache-dir fastapi uvicorn httpx\n"
+
+        # Environment variables
+        env_vars = manifest.get("env") or {}
+        for key, value in env_vars.items():
+            dockerfile += f"ENV {key}={value}\n"
+
+        # Copy the Boxty runtime shim into the image
+        dockerfile += "COPY boxty_runtime.py /app/boxty_runtime.py\n"
+        dockerfile += "COPY user_app.py /app/user_app.py\n"
+        dockerfile += "COPY boxty.py /app/boxty.py\n"
+        dockerfile += "EXPOSE 8000\n"
+        dockerfile += "CMD [\"python\", \"/app/boxty_runtime.py\"]\n"
+        return dockerfile
+
+    def _package_app_source(self) -> str:
+        import base64
+
+        source_path = getattr(self, "_source_path", None)
+        if not source_path or not Path(source_path).exists():
+            import inspect
+            for frame in inspect.stack():
+                module = inspect.getmodule(frame[0])
+                if module and module.__file__ and module.__file__.endswith(".py"):
+                    source_path = module.__file__
+                    break
+        if not source_path or not Path(source_path).exists():
+            raise RuntimeError("Could not locate the source file for the App being deployed")
+        return base64.b64encode(Path(source_path).read_bytes()).decode("utf-8")
+
+    def _boxty_stub_source(self) -> str:
+        """Return a minimal boxty module that can be imported inside the container.
+
+        The deployed user_app.py imports ``boxty`` and registers functions with
+        ``App.function`` / ``App.web_endpoint``.  Inside the image we do not need
+        the network client, just a stub that supports the same registration API.
+        """
+        return """\
+from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+@dataclass
+class Volume:
+    name: str
+    persistent: bool = True
+    size_gb: int = 10
+    volume_type: str = "block-storage"
+    create_if_missing: bool = True
+
+@dataclass
+class Mount:
+    local_dir: str = "."
+    remote_path: str = "/workspace"
+    include: list[str] = field(default_factory=list)
+    exclude: list[str] = field(default_factory=list)
+
+@dataclass
+class Secret:
+    name: str
+    create_if_missing: bool = True
+
+@dataclass
+class Database:
+    name: str
+    pk: str = "id"
+    sk: str | None = None
+
+class Image:
+    def __init__(self, base: str) -> None:
+        self._base = base
+        self._pip_packages: list[str] = []
+    @classmethod
+    def debian_slim(cls) -> Image:
+        return cls("debian:slim")
+    def pip_install(self, *packages: str) -> Image:
+        self._pip_packages.extend(packages)
+        return self
+    def to_manifest(self) -> dict[str, Any]:
+        return {"base": self._base, "pipPackages": self._pip_packages}
+
+class App:
+    def __init__(self, name: str = "my-app", image: str | Image | None = None) -> None:
+        self.name = name
+        self._functions: list[Any] = []
+        self._endpoints: list[Any] = []
+
+    def function(self, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+            self._functions.append(_FunctionDef(name=fn.__name__, func=fn))
+            return fn
+        return decorator
+
+    def web_endpoint(self, **kwargs: Any) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        def decorator(fn: Callable[..., Any]) -> Callable[..., Any]:
+            self._endpoints.append(_WebEndpointDef(name=fn.__name__, func=fn, port=kwargs.get("port", 8000)))
+            return fn
+        return decorator
+
+    def local_entrypoint(self, fn: Callable[..., Any]) -> Callable[..., Any]:
+        return fn
+
+
+class _FunctionDef:
+    def __init__(self, name: str, func: Callable[..., Any]) -> None:
+        self.name = name
+        self.func = func
+
+
+class _WebEndpointDef:
+    def __init__(self, name: str, func: Callable[..., Any], port: int = 8000) -> None:
+        self.name = name
+        self.func = func
+        self.port = port
+"""
+
     def deploy(
         self,
         *,
@@ -529,7 +693,7 @@ class App:
 
         name = app_name or self.name
 
-        # Collect unique images
+        # Collect unique images and build them
         image_manifests: dict[str, Image] = {}
         image_keys: dict[int, str] = {}
         for item in (*self._functions, *self._endpoints):
@@ -541,17 +705,36 @@ class App:
                 image_manifests[key] = item.image
             image_keys[id(item.image)] = key
 
-        # Build images
+        # Include a default image if no images were specified
+        if not image_manifests:
+            default_image = Image("python:3.11-slim")
+            key = json.dumps(default_image.to_manifest(), sort_keys=True)
+            image_manifests[key] = default_image
+
         image_key_to_id: dict[str, str] = {}
+        app_source = self._package_app_source()
+        from . import container_runtime
+        import inspect
+        runtime_source = base64.b64encode(inspect.getsource(container_runtime).encode("utf-8")).decode("utf-8")
+        boxty_stub_source = base64.b64encode(self._boxty_stub_source().encode("utf-8")).decode("utf-8")
+
         for key, image in image_manifests.items():
             manifest = image.to_manifest()
             base = manifest.get("base", "debian:slim")
-            name = f"{self.name}-{base.replace(':', '-').replace('/', '-')}"
+            image_name = f"{self.name}-{base.replace(':', '-').replace('/', '-')}"
+            dockerfile = self._build_dockerfile(image)
             result = client.build_image(
-                name,
+                image_name,
+                dockerfile=dockerfile,
                 base_image=base,
                 workspace_id=workspace_id,
                 owner_id=owner_id,
+                source_file_content=app_source,
+                source_filename="user_app.py",
+                extra_files={
+                    "boxty_runtime.py": runtime_source,
+                    "boxty.py": boxty_stub_source,
+                },
             )
             image_key_to_id[key] = result["image_id"]
 
@@ -574,29 +757,84 @@ class App:
         if pending:
             raise RuntimeError(f"Timeout waiting for images to become ready: {pending}")
 
-        def _resolve_image(item: FunctionDef | WebEndpointDef) -> str:
+        def _resolve_image_ref(item: FunctionDef | WebEndpointDef) -> str:
             if not item.image:
-                return "debian:slim"
-            key = image_keys.get(id(item.image))
+                key = json.dumps(Image("python:3.11-slim").to_manifest(), sort_keys=True)
+            else:
+                key = image_keys.get(id(item.image))
             if key:
                 image_id = image_key_to_id[key]
                 info = client.get_image(image_id)
-                return info.get("image_ref") or info.get("base_image") or "debian:slim"
-            return item.image.to_manifest().get("base", "debian:slim")
+                return info.get("image_ref") or info.get("base_image") or "python:3.11-slim"
+            return item.image.to_manifest().get("base", "python:3.11-slim") if item.image else "python:3.11-slim"
+
+        # Helper to collect volume mounts and secret names for an item.
+        created_volumes: dict[str, str] = {}
+        created_secrets: set[str] = set()
+
+        def _collect_volume_mounts(item: FunctionDef | WebEndpointDef) -> list[dict[str, Any]]:
+            mounts: list[dict[str, Any]] = []
+            for mount_path, vol in (item.volumes or {}).items():
+                if vol.name not in created_volumes:
+                    existing = {v.get("name") for v in client.list_volumes(workspace_id=workspace_id)}
+                    if vol.name not in existing and vol.create_if_missing:
+                        v = client.create_volume(
+                            workspace_id=workspace_id,
+                            name=vol.name,
+                            size_gb=vol.size_gb,
+                            volume_type=vol.volume_type,
+                        )
+                        created_volumes[vol.name] = v.get("volume_id", vol.name)
+                    else:
+                        created_volumes[vol.name] = vol.name
+                mounts.append({
+                    "locator": vol.name,
+                    "mount_path": mount_path,
+                    "read_only": False,
+                })
+            return mounts
+
+        def _collect_secrets(item: FunctionDef | WebEndpointDef) -> list[str]:
+            names: list[str] = []
+            for sec in item.secrets or []:
+                if sec.name not in created_secrets:
+                    existing = {s.get("name") for s in client.list_secrets(workspace_id=workspace_id)}
+                    if sec.name not in existing and sec.create_if_missing:
+                        client.create_secret(workspace_id=workspace_id, name=sec.name, env_vars={})
+                    created_secrets.add(sec.name)
+                names.append(sec.name)
+            return names
 
         # Create function workloads
         function_ids: dict[str, str] = {}
         for fn in self._functions:
+            image_ref = _resolve_image_ref(fn)
+            volume_mounts = _collect_volume_mounts(fn)
+            secret_names = _collect_secrets(fn)
             result = client.create_workload(
                 owner_id=owner_id,
                 workspace_id=workspace_id,
                 environment_id=environment_id,
                 kind="function",
-                image=_resolve_image(fn),
-                command=[],
-                env={},
-                endpoint_name=fn.name,
-                metadata={"function_name": fn.name, "app": self.name},
+                image=image_ref,
+                image_ref=image_ref,
+                command=["python", "/app/boxty_runtime.py"],
+                env={
+                    "BOXTY_APP_MODULE": "/app/user_app.py",
+                    "BOXTY_FUNCTION_NAME": fn.name,
+                },
+                secret_names=secret_names,
+                volume_mounts=volume_mounts,
+                metadata={
+                    "function_name": fn.name,
+                    "app": self.name,
+                    "container_port": 8000,
+                },
+                cpu_cores=getattr(fn, "cpu_cores", 1),
+                memory_mb=getattr(fn, "memory_mb", 512),
+                disk_gb=getattr(fn, "disk_gb", 2),
+                gpu_count=1 if fn.gpu else 0,
+                gpu_type=fn.gpu,
             )
             fn._workload_id = result["workload_id"]
             fn._client = client
@@ -606,22 +844,52 @@ class App:
         endpoint_ids: dict[str, str] = {}
         route_ids: dict[str, str] = {}
         for ep in self._endpoints:
+            image_ref = _resolve_image_ref(ep)
+            volume_mounts = _collect_volume_mounts(ep)
+            secret_names = _collect_secrets(ep)
             result = client.create_workload(
                 owner_id=owner_id,
                 workspace_id=workspace_id,
                 environment_id=environment_id,
                 kind="endpoint",
-                image=_resolve_image(ep),
-                command=[],
-                env={},
+                image=image_ref,
+                image_ref=image_ref,
+                command=["python", "/app/boxty_runtime.py"],
+                env={
+                    "BOXTY_APP_MODULE": "/app/user_app.py",
+                    "BOXTY_ENDPOINT_NAME": ep.name,
+                },
+                secret_names=secret_names,
+                volume_mounts=volume_mounts,
                 endpoint_name=ep.name,
-                metadata={"endpoint_name": ep.name, "container_port": ep.port, "app": self.name},
+                metadata={
+                    "endpoint_name": ep.name,
+                    "container_port": ep.port,
+                    "app": self.name,
+                },
+                cpu_cores=getattr(ep, "cpu_cores", 1),
+                memory_mb=getattr(ep, "memory_mb", 512),
+                disk_gb=getattr(ep, "disk_gb", 2),
+                gpu_count=1 if ep.gpu else 0,
+                gpu_type=ep.gpu,
             )
             ep._workload_id = result["workload_id"]
             endpoint_ids[ep.name] = result["workload_id"]
 
+            # Wait for the endpoint workload to be running so we know its origin_url.
+            workload_id = result["workload_id"]
+            deadline = time.time() + 60
+            while time.time() < deadline:
+                wl = client.get_workload(workload_id)
+                if wl.get("status") == "running":
+                    break
+                time.sleep(1.0)
+            else:
+                raise RuntimeError(f"Timeout waiting for endpoint workload {workload_id} to start")
+
             route = client.create_route(
-                result["workload_id"],
+                workload_id,
+                endpoint_name=ep.name,
                 hostname=f"{ep.name}.{self.name}.boxty.dev",
                 path_prefix="/",
             )
@@ -650,9 +918,17 @@ class App:
         return f"https://boxty.io/dashboard/apps/{self.name}"
 
     @classmethod
-    def lookup(cls, name: str, client: Any | None = None) -> App:
-        """Lookup an existing app by name."""
-        return cls(name)
+    def lookup(cls, name: str, client: Any | None = None) -> App | FunctionDef | WebEndpointDef | None:
+        """Lookup an existing app by name, or find a registered function/endpoint on this instance."""
+        if isinstance(cls, App):
+            for fn in cls._functions:
+                if fn.name == name:
+                    return fn
+            for ep in cls._endpoints:
+                if ep.name == name:
+                    return ep
+            return None
+        return None
 
     def cls(
         self,

@@ -1,7 +1,5 @@
 # Boxty
 
-Boxty is a serverless platform with a centralized FastAPI control plane, provider workers, SDKs, and web frontends. It replaces the legacy P2P/Solana architecture with a clean provider model where workers claim workloads from the control plane and execute them locally via Docker or Podman.
-
 ## Active Repository Layout
 
 ```text
@@ -63,8 +61,6 @@ A lightweight **React 19 + Vite** landing page. Built separately from the produc
 
 ### `cli/` — Rust CLI
 
-The legacy Rust CLI (`cli/sdk/`) is a cross-platform binary built with **Cargo**. It still contains P2P-era code (libp2p, Solana, WASM runtime) but is actively built and published as part of releases. The long-term plan is to migrate the Rust CLI to the same control-plane flows or retire it in favor of the Python-based `boxty-user` CLI.
-
 **Supported platforms:** Linux (x64, arm64), macOS (Intel, Apple Silicon), Windows (x64).
 
 ### `sdk/` — Client SDKs
@@ -90,7 +86,6 @@ See `infrastructure/README.md` for full setup instructions.
 ### `docs/` — Platform Documentation
 
 - `central-control-plane.md` — architecture and design decisions for the control plane.
-- `runtime-migration-plan.md` — migration status from P2P to the provider model.
 - `infrastructure-contabo.md` — Contabo + Cloudflare R2 deployment guide.
 - `dynamodb-single-table.md` — single-table schema and access patterns.
 - `workers/` — worker deployment and configuration reference.
@@ -103,7 +98,6 @@ See `infrastructure/README.md` for full setup instructions.
 
 ## Current Direction
 
-- No new work should depend on the old P2P/Solana architecture.
 - The control plane is the source of truth for users, workspaces, environments, API keys, invites, providers, workloads, and billing.
 - Workers claim workloads from the control plane via `assignments/next` and execute them locally via Docker or Podman.
 - RunPod is used as a GPU/image-build backend, not as the primary product interface.

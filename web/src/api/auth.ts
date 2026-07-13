@@ -25,6 +25,18 @@ export function oauthCallback(provider: OAuthProvider, payload: { code: string; 
   return apiFetch<TokenResponse>(`/auth/oauth/${provider}/callback`, { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export interface DeviceCodeRequest { external_user_id: string; email?: string }
+export interface DeviceCodeResponse { device_code: string; user_code: string; verification_uri: string; verification_uri_complete: string; expires_in: number; interval: number }
+export interface DeviceAuthorizeRequest { user_code: string; external_user_id: string; email?: string }
+
+export function createDeviceCode(payload: DeviceCodeRequest) {
+  return apiFetch<DeviceCodeResponse>('/auth/device', { method: 'POST', body: JSON.stringify(payload) })
+}
+
+export function authorizeDeviceCode(payload: DeviceAuthorizeRequest) {
+  return apiFetch<{ status: string; user_id: string }>('/auth/device/authorize', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export function whoami() {
   return apiFetch<Record<string, any>>('/auth/me')
 }

@@ -80,7 +80,10 @@ class ControlPlaneStoreTests(unittest.TestCase):
         self.store.heartbeat_provider(
             provider.provider_id,
             ProviderHeartbeatRequest(
-                available_slots=4,
+                available_cpu_cores=16,
+                available_memory_mb=32768,
+                available_disk_gb=500,
+                available_gpu_count=0,
                 running_workloads=0,
             ),
         )
@@ -106,7 +109,7 @@ class ControlPlaneStoreTests(unittest.TestCase):
             "generate_token",
             return_value="bx_knownapitokenvalue",
         ):
-            api_key = self.store.create_api_key(
+            api_key, secret = self.store.create_api_key(
                 ApiKeyCreateRequest(
                     owner_id="usr_test",
                     workspace_id=self.workspace.workspace_id,
@@ -127,6 +130,7 @@ class ControlPlaneStoreTests(unittest.TestCase):
         self.assertFalse(api_key.secret_token)
         self.assertIsNone(self.store.verify_api_key(api_key.api_key_id, "wrong-token"))
         self.assertIsNotNone(self.store.verify_api_key(api_key.api_key_id, "bx_knownapitokenvalue"))
+        self.assertEqual(secret, "bx_knownapitokenvalue")
         self.assertEqual(invite.email, "teammate@example.com")
 
     def test_secret_is_resolved_only_in_launch_spec(self) -> None:
@@ -240,6 +244,38 @@ class ControlPlaneStoreTests(unittest.TestCase):
         )
         self.assertEqual(workload.assigned_provider_id, provider_id)
         self.assertEqual(route.target_address, "https://provider-1.example.com")
+
+    def test_image_aware_scheduling_prefers_provider_with_image(self) -> None:
+        warm_id, _ = self._register_provider()
+        cold_id, _ = self._register_provider()
+        # Give the warm provider a pre-built image.
+        self.store.providers[warm_id].available_images = ["boxty/ws_test/app:latest"]
+        workload = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="function",
+                image="python:3.11-slim",
+                image_ref="boxty/ws_test/app:latest",
+            )
+        )
+        self.assertEqual(workload.assigned_provider_id, warm_id)
+
+        # When neither provider has the image, the scheduler still picks one of them.
+        self.store.providers[warm_id].available_images = []
+        self.store.providers[cold_id].available_images = []
+        workload2 = self.store.create_workload(
+            WorkloadCreateRequest(
+                owner_id="usr_test",
+                workspace_id=self.workspace.workspace_id,
+                environment_id=self.environment.environment_id,
+                kind="function",
+                image="python:3.11-slim",
+                image_ref="boxty/ws_test/another:latest",
+            )
+        )
+        self.assertIn(workload2.assigned_provider_id, {warm_id, cold_id})
 
     def test_provider_can_claim_scheduled_assignment(self) -> None:
         provider_id, _provider_token = self._register_provider()

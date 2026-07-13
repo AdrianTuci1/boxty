@@ -77,6 +77,16 @@ class Boxty:
             json={"external_user_id": external_user_id, "email": email},
         )
 
+    def device_code(self) -> dict[str, Any]:
+        return self._request("post", "/v1/auth/device", json={})
+
+    def device_token(self, device_code: str) -> dict[str, Any]:
+        return self._request(
+            "post",
+            "/v1/auth/device/token",
+            json={"device_code": device_code},
+        )
+
     def signup(self, external_user_id: str, email: str | None = None, organization_id: str | None = None) -> dict[str, Any]:
         return self._request(
             "post",
@@ -218,6 +228,7 @@ class Boxty:
         disk_gb: int = 2,
         gpu_count: int = 0,
         gpu_type: str | None = None,
+        image_ref: str | None = None,
     ) -> dict[str, Any]:
         return self._request(
             "post",
@@ -245,6 +256,7 @@ class Boxty:
                     "gpu_count": gpu_count,
                     "gpu_type": gpu_type,
                 },
+                "image_ref": image_ref,
             },
         )
 
@@ -390,6 +402,9 @@ class Boxty:
         base_image: str | None = None,
         workspace_id: str | None = None,
         owner_id: str | None = None,
+        source_file_content: str | None = None,
+        source_filename: str | None = None,
+        extra_files: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {"name": name}
         if dockerfile:
@@ -400,6 +415,12 @@ class Boxty:
             payload["workspace_id"] = workspace_id
         if owner_id:
             payload["owner_id"] = owner_id
+        if source_file_content:
+            payload["source_file_content"] = source_file_content
+        if source_filename:
+            payload["source_filename"] = source_filename
+        if extra_files:
+            payload["extra_files"] = extra_files
         return self._request("post", "/v1/images/build", json=payload)
 
     def get_image(self, image_id: str) -> dict[str, Any]:

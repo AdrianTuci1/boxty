@@ -25,10 +25,7 @@ boxty --version
 
 ## First Steps
 
-### 1. Create a Wallet
-
 ```bash
-boxty wallet new
 ```
 
 ### 2. List Compute Tiers

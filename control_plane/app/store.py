@@ -126,6 +126,7 @@ class InMemoryStore:
     invocations: dict[str, FunctionInvocationResponse] = field(default_factory=dict)
     logs: dict[str, WorkloadLogEntry] = field(default_factory=dict)
     payments: dict[str, PaymentRecord] = field(default_factory=dict)
+    device_codes: dict[str, Any] = field(default_factory=dict)
     billing_history: dict[str, BillingHistoryRecord] = field(default_factory=dict)
 
     def _put_item(self, item: SingleTableItem) -> None:
@@ -200,7 +201,10 @@ class InMemoryStore:
         for provider_id, provider in list(self.providers.items()):
             if provider.status != ProviderStatus.offline and self._provider_is_stale(provider):
                 provider.status = ProviderStatus.offline
-                provider.available_slots = 0
+                provider.available_cpu_cores = 0
+                provider.available_memory_mb = 0
+                provider.available_disk_gb = 0
+                provider.available_gpu_count = 0
                 provider.updated_at = utc_now()
                 self.providers[provider_id] = provider
                 self._put_item(provider_item(provider))
@@ -221,11 +225,54 @@ class InMemoryStore:
 
             if workload.assigned_provider_id and workload.assigned_provider_id in self.providers:
                 provider = self.providers[workload.assigned_provider_id]
-                provider.available_slots += 1
+                # Return the resources this workload reserved to the provider's available pool.
+                provider.available_cpu_cores = min(
+                    provider.capabilities.cpu_cores,
+                    provider.available_cpu_cores + workload.resources.cpu_cores,
+                )
+                provider.available_memory_mb = min(
+                    provider.capabilities.memory_mb,
+                    provider.available_memory_mb + workload.resources.memory_mb,
+                )
+                provider.available_disk_gb = min(
+                    provider.capabilities.disk_gb,
+                    provider.available_disk_gb + workload.resources.disk_gb,
+                )
+                provider.available_gpu_count = min(
+                    provider.capabilities.gpu_count,
+                    provider.available_gpu_count + workload.resources.gpu_count,
+                )
                 provider.running_workloads = max(0, provider.running_workloads - 1)
                 provider.updated_at = now
                 self.providers[provider.provider_id] = provider
                 self._put_item(provider_item(provider))
+
+
+    def _return_workload_resources(self, workload: WorkloadRecord) -> None:
+        """Return the resources reserved by a workload to its assigned provider."""
+        if not workload.assigned_provider_id or workload.assigned_provider_id not in self.providers:
+            return
+        provider = self.providers[workload.assigned_provider_id]
+        provider.available_cpu_cores = min(
+            provider.capabilities.cpu_cores,
+            provider.available_cpu_cores + workload.resources.cpu_cores,
+        )
+        provider.available_memory_mb = min(
+            provider.capabilities.memory_mb,
+            provider.available_memory_mb + workload.resources.memory_mb,
+        )
+        provider.available_disk_gb = min(
+            provider.capabilities.disk_gb,
+            provider.available_disk_gb + workload.resources.disk_gb,
+        )
+        provider.available_gpu_count = min(
+            provider.capabilities.gpu_count,
+            provider.available_gpu_count + workload.resources.gpu_count,
+        )
+        provider.running_workloads = max(0, provider.running_workloads - 1)
+        provider.updated_at = utc_now()
+        self.providers[provider.provider_id] = provider
+        self._put_item(provider_item(provider))
 
     def pricing(self) -> PricingRate:
         return PricingRate(
@@ -368,7 +415,11 @@ class InMemoryStore:
         self._delete_item(f"WORKSPACE#{environment.workspace_id}", f"ENVIRONMENT#{environment.environment_id}")
         return True
 
-    def create_api_key(self, request: ApiKeyCreateRequest) -> ApiKeyRecord:
+    def create_api_key(self, request: ApiKeyCreateRequest) -> tuple[ApiKeyRecord, str]:
+        """Create an API key and return the record along with the plaintext secret.
+
+        The secret is shown exactly once to the caller; only its hash is stored.
+        """
         if request.owner_id not in self.users:
             raise ValueError("owner not found")
         workspace = self.workspaces.get(request.workspace_id)
@@ -391,7 +442,7 @@ class InMemoryStore:
         )
         self.api_keys[api_key.api_key_id] = api_key
         self._put_item(api_key_item(api_key))
-        return api_key
+        return api_key, token
 
     def verify_api_key(self, api_key_id: str, token: str) -> ApiKeyRecord | None:
         """Verify an API key token against its stored hash."""
@@ -614,6 +665,10 @@ class InMemoryStore:
             capabilities=request.capabilities,
             auth_token_hash=hash_token(provider_token, salt),
             auth_token_salt=salt,
+            available_cpu_cores=request.capabilities.cpu_cores,
+            available_memory_mb=request.capabilities.memory_mb,
+            available_disk_gb=request.capabilities.disk_gb,
+            available_gpu_count=request.capabilities.gpu_count,
         )
         self.providers[provider.provider_id] = provider
         self._put_item(provider_item(provider))
@@ -636,11 +691,28 @@ class InMemoryStore:
         # migrated to salted HMAC hashes.
         return provider.auth_token_hash == self._hash_provider_token(token)
 
-    def heartbeat_provider(self, provider_id: str, request: ProviderHeartbeatRequest) -> ProviderRecord:
-        provider = self.providers[provider_id]
-        provider.available_slots = request.available_slots
-        provider.running_workloads = request.running_workloads
-        provider.status = request.status
+    def heartbeat_provider(
+        self,
+        provider_id: str,
+        request: ProviderHeartbeatRequest,
+    ) -> ProviderRecord:
+        provider = self.providers.get(provider_id)
+        if not provider:
+            raise KeyError("provider not found")
+        if request.status:
+            provider.status = request.status
+        if request.available_cpu_cores is not None:
+            provider.available_cpu_cores = min(request.available_cpu_cores, provider.capabilities.cpu_cores)
+        if request.available_memory_mb is not None:
+            provider.available_memory_mb = min(request.available_memory_mb, provider.capabilities.memory_mb)
+        if request.available_disk_gb is not None:
+            provider.available_disk_gb = min(request.available_disk_gb, provider.capabilities.disk_gb)
+        if request.available_gpu_count is not None:
+            provider.available_gpu_count = min(request.available_gpu_count, provider.capabilities.gpu_count)
+        if request.running_workloads is not None:
+            provider.running_workloads = request.running_workloads
+        if request.available_images is not None:
+            provider.available_images = request.available_images
         provider.updated_at = utc_now()
         self.providers[provider_id] = provider
         self._put_item(provider_item(provider))
@@ -675,25 +747,43 @@ class InMemoryStore:
             if request.requested_backend == ExecutionBackend.runpod_serverless:
                 return ExecutionBackend.runpod_serverless, None
 
-        eligible = [
-            provider
-            for provider in self.providers.values()
-            if provider.status == ProviderStatus.online
-            and provider.pool == (request.pool or settings.default_provider_pool)
-            and provider.region == (request.region or provider.region)
-            and provider.available_slots > 0
-            and provider.capabilities.cpu_cores >= request.resources.cpu_cores
-            and provider.capabilities.memory_mb >= request.resources.memory_mb
-            and provider.capabilities.disk_gb >= request.resources.disk_gb
-            and provider.capabilities.gpu_count >= request.resources.gpu_count
-            and (not gpu_needed or provider.capabilities.gpu_type == request.resources.gpu_type or request.resources.gpu_type is None)
-            and (
-                request.kind != WorkloadKind.endpoint
-                or provider.capabilities.supports_endpoint_serving
-            )
-        ]
+        def _fits(provider: ProviderRecord) -> bool:
+            if provider.status != ProviderStatus.online:
+                return False
+            if provider.pool != (request.pool or settings.default_provider_pool):
+                return False
+            if provider.region != (request.region or provider.region):
+                return False
+            if provider.available_cpu_cores < request.resources.cpu_cores:
+                return False
+            if provider.available_memory_mb < request.resources.memory_mb:
+                return False
+            if provider.available_disk_gb < request.resources.disk_gb:
+                return False
+            if provider.available_gpu_count < request.resources.gpu_count:
+                return False
+            if gpu_needed and provider.capabilities.gpu_count <= 0:
+                return False
+            if request.kind == WorkloadKind.endpoint and not provider.capabilities.supports_endpoint_serving:
+                return False
+            return True
+
+        image_ref = request.image_ref or request.image
+
+        def _image_score(provider: ProviderRecord) -> int:
+            images = provider.available_images or []
+            if request.image_ref and request.image_ref in images:
+                return 2
+            if request.image in images:
+                return 1
+            return 0
+
+        eligible = [provider for provider in self.providers.values() if _fits(provider)]
         if eligible:
-            selected = sorted(eligible, key=lambda provider: (-provider.available_slots, provider.updated_at))[0]
+            # Prefer providers that already have the requested image locally.
+            # image_ref matches score 2, base image matches score 1.
+            scored = sorted(eligible, key=lambda p: (-_image_score(p), -p.available_memory_mb, -p.available_cpu_cores, p.updated_at))
+            selected = scored[0]
             return ExecutionBackend.provider, selected.provider_id
 
         if request.allow_runpod_fallback and settings.runpod_enabled:
@@ -723,12 +813,14 @@ class InMemoryStore:
             environment_id=request.environment_id,
             kind=request.kind,
             image=request.image,
+            image_ref=request.image_ref,
             command=request.command,
             env=request.env,
             region=request.region or settings.default_region,
             pool=request.pool or settings.default_provider_pool,
             requested_backend=request.requested_backend,
             selected_backend=backend,
+            allow_runpod_fallback=request.allow_runpod_fallback,
             secret_names=request.secret_names,
             volume_mounts=volume_mounts,
             assigned_provider_id=provider_id,
@@ -739,7 +831,10 @@ class InMemoryStore:
         )
         if provider_id:
             provider = self.providers[provider_id]
-            provider.available_slots = max(0, provider.available_slots - 1)
+            provider.available_cpu_cores = max(0, provider.available_cpu_cores - request.resources.cpu_cores)
+            provider.available_memory_mb = max(0, provider.available_memory_mb - request.resources.memory_mb)
+            provider.available_disk_gb = max(0, provider.available_disk_gb - request.resources.disk_gb)
+            provider.available_gpu_count = max(0, provider.available_gpu_count - request.resources.gpu_count)
             provider.running_workloads += 1
             provider.updated_at = utc_now()
             self.providers[provider_id] = provider
@@ -796,12 +891,7 @@ class InMemoryStore:
             and workload.assigned_provider_id in self.providers
             and request.status in {WorkloadStatus.completed, WorkloadStatus.failed, WorkloadStatus.stopped}
         ):
-            provider = self.providers[workload.assigned_provider_id]
-            provider.available_slots += 1
-            provider.running_workloads = max(0, provider.running_workloads - 1)
-            provider.updated_at = utc_now()
-            self.providers[provider.provider_id] = provider
-            self._put_item(provider_item(provider))
+            self._return_workload_resources(workload)
         return workload
 
     def publish_route(self, request: RoutePublishRequest) -> RouteRecord:
@@ -811,9 +901,13 @@ class InMemoryStore:
 
         if workload.selected_backend == ExecutionBackend.provider:
             provider = self.providers.get(workload.assigned_provider_id or "")
-            if not provider or not provider.public_base_url:
+            if provider and provider.public_base_url:
+                target = provider.public_base_url
+            elif workload.runtime_details.get("origin_url"):
+                # Local / on-prem provider without a public base URL: route directly to the container port.
+                target = workload.runtime_details["origin_url"]
+            else:
                 raise ValueError("provider route target is not publicly reachable")
-            target = provider.public_base_url
         else:
             target = workload.external_backend_id or f"runpod://{workload.workload_id}"
 
@@ -974,12 +1068,7 @@ class InMemoryStore:
             return False
         workload = self.workloads[workload_id]
         if workload.assigned_provider_id and workload.assigned_provider_id in self.providers:
-            provider = self.providers[workload.assigned_provider_id]
-            provider.available_slots += 1
-            provider.running_workloads = max(0, provider.running_workloads - 1)
-            provider.updated_at = utc_now()
-            self.providers[provider.provider_id] = provider
-            self._put_item(provider_item(provider))
+            self._return_workload_resources(workload)
         del self.workloads[workload_id]
         self._delete_item(f"WORKLOAD#{workload_id}", "PROFILE")
         return True
@@ -1280,6 +1369,14 @@ class InMemoryStore:
             except Exception:
                 # If decoding fails, treat as plain text for backwards compatibility
                 pass
+        extra_files: dict[str, str] = {}
+        if request.extra_files:
+            import base64
+            for filename, encoded in request.extra_files.items():
+                try:
+                    extra_files[filename] = base64.b64decode(encoded, validate=True).decode("utf-8")
+                except Exception:
+                    extra_files[filename] = encoded
         image = ImageRecord(
             name=request.name,
             workspace_id=request.workspace_id,
@@ -1289,6 +1386,7 @@ class InMemoryStore:
             build_args=request.build_args,
             source_file_content=source_content,
             source_filename=request.source_filename,
+            extra_files=extra_files,
         )
         self.images[image.image_id] = image
         return image
@@ -1344,11 +1442,19 @@ class InMemoryStore:
                     os.makedirs(os.path.dirname(source_path) or tmpdir, exist_ok=True)
                 except OSError:
                     pass
-                # Normalize Python source to be copied as main.py when generating Dockerfile
-                if image.source_filename.endswith(".py") and not image.dockerfile:
-                    source_path = os.path.join(tmpdir, "main.py")
                 with open(source_path, "w") as f:
                     f.write(image.source_file_content)
+
+            # Save extra files into build context
+            if image.extra_files:
+                for filename, content in image.extra_files.items():
+                    extra_path = os.path.join(tmpdir, filename)
+                    try:
+                        os.makedirs(os.path.dirname(extra_path) or tmpdir, exist_ok=True)
+                    except OSError:
+                        pass
+                    with open(extra_path, "w") as f:
+                        f.write(content)
 
             build_args = image.build_args or {}
             args_list = []
@@ -1393,28 +1499,40 @@ class InMemoryStore:
             if workload.requested_backend == ExecutionBackend.runpod_serverless:
                 return ExecutionBackend.runpod_serverless, None
 
-        eligible = [
-            provider
-            for provider in self.providers.values()
-            if provider.status == ProviderStatus.online
-            and provider.pool == (workload.pool or settings.default_provider_pool)
-            and provider.region == (workload.region or provider.region)
-            and provider.available_slots > 0
-            and provider.capabilities.cpu_cores >= workload.resources.cpu_cores
-            and provider.capabilities.memory_mb >= workload.resources.memory_mb
-            and provider.capabilities.disk_gb >= workload.resources.disk_gb
-            and provider.capabilities.gpu_count >= workload.resources.gpu_count
-            and (not gpu_needed or provider.capabilities.gpu_type == workload.resources.gpu_type or workload.resources.gpu_type is None)
-            and (
-                workload.kind != WorkloadKind.endpoint
-                or provider.capabilities.supports_endpoint_serving
-            )
-        ]
+        def _fits(provider: ProviderRecord) -> bool:
+            if provider.status != ProviderStatus.online:
+                return False
+            if provider.pool != (workload.pool or settings.default_provider_pool):
+                return False
+            if provider.region != (workload.region or provider.region):
+                return False
+            if provider.available_cpu_cores < workload.resources.cpu_cores:
+                return False
+            if provider.available_memory_mb < workload.resources.memory_mb:
+                return False
+            if provider.available_disk_gb < workload.resources.disk_gb:
+                return False
+            if provider.available_gpu_count < workload.resources.gpu_count:
+                return False
+            if gpu_needed and provider.capabilities.gpu_count <= 0:
+                return False
+            if workload.kind == WorkloadKind.endpoint and not provider.capabilities.supports_endpoint_serving:
+                return False
+            return True
+
+        eligible = [provider for provider in self.providers.values() if _fits(provider)]
+        # Prefer providers that already have the requested image locally. This avoids
+        # slow pulls on cold workers and keeps latency low for endpoints/sandboxes.
+        image_ref = workload.image_ref or workload.image
+        if image_ref and eligible:
+            has_image = [p for p in eligible if image_ref in (p.available_images or [])]
+            if has_image:
+                eligible = has_image
         if eligible:
-            selected = sorted(eligible, key=lambda provider: (-provider.available_slots, provider.updated_at))[0]
+            selected = sorted(eligible, key=lambda p: (-p.available_memory_mb, -p.available_cpu_cores, p.updated_at))[0]
             return ExecutionBackend.provider, selected.provider_id
 
-        if settings.runpod_enabled:
+        if workload.allow_runpod_fallback and settings.runpod_enabled:
             return ExecutionBackend.runpod_serverless, None
 
         raise ValueError("no eligible backend available")
@@ -1437,6 +1555,10 @@ class InMemoryStore:
         )
         self.invocations[invocation.invocation_id] = invocation
 
+        # If the workload is already running and has an origin_url, we can invoke directly.
+        if workload.status == WorkloadStatus.running and workload.runtime_details.get("origin_url"):
+            return self._invoke_container(workload, request, invocation, timeout_seconds)
+
         # Encode payload into the workload env so the worker can pass it to the container
         if request.payload:
             import json as _json
@@ -1451,7 +1573,10 @@ class InMemoryStore:
             workload.assigned_provider_id = provider_id
             if provider_id and provider_id in self.providers:
                 provider = self.providers[provider_id]
-                provider.available_slots = max(0, provider.available_slots - 1)
+                provider.available_cpu_cores = max(0, provider.available_cpu_cores - workload.resources.cpu_cores)
+                provider.available_memory_mb = max(0, provider.available_memory_mb - workload.resources.memory_mb)
+                provider.available_disk_gb = max(0, provider.available_disk_gb - workload.resources.disk_gb)
+                provider.available_gpu_count = max(0, provider.available_gpu_count - workload.resources.gpu_count)
                 provider.running_workloads += 1
                 provider.updated_at = utc_now()
                 self.providers[provider_id] = provider
@@ -1468,6 +1593,42 @@ class InMemoryStore:
             "info",
             f"Invocation {invocation.invocation_id} scheduled for workload {workload_id}",
         )
+        return invocation
+
+    def _invoke_container(
+        self,
+        workload: WorkloadRecord,
+        request: WorkloadInvokeRequest,
+        invocation: FunctionInvocationResponse,
+        timeout_seconds: int = 300,
+    ) -> FunctionInvocationResponse:
+        """Directly invoke a running function container via its HTTP runtime."""
+        import json as _json
+        import httpx
+
+        origin_url = workload.runtime_details.get("origin_url")
+        function_name = workload.endpoint_name or workload.metadata.get("function_name")
+        if not function_name:
+            invocation.status = "failed"
+            invocation.error = "function name not set on workload"
+            invocation.completed_at = utc_now()
+            return invocation
+
+        try:
+            response = httpx.post(
+                f"{origin_url}/invoke/{function_name}",
+                json={"payload": request.payload},
+                timeout=float(timeout_seconds),
+            )
+            response.raise_for_status()
+            data = response.json()
+            invocation.status = "completed" if data.get("return_code", 0) == 0 else "failed"
+            invocation.result = data
+            invocation.completed_at = utc_now()
+        except Exception as exc:
+            invocation.status = "failed"
+            invocation.error = str(exc)
+            invocation.completed_at = utc_now()
         return invocation
 
     def get_invocation(self, invocation_id: str) -> FunctionInvocationResponse:

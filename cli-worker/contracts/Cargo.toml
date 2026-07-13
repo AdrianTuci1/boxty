@@ -1,9 +1,0 @@
-[package]
-name = "contracts"
-version = "1.0.0"
-edition = "2021"
-
-[dependencies]
-anchor-lang = "0.29.0"
-anchor-spl = "0.29.0"
-solana-program = "1.16"

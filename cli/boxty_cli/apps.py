@@ -62,6 +62,7 @@ def load_app(module_path: str) -> App:
     for name in dir(module):
         obj = getattr(module, name)
         if isinstance(obj, App):
+            obj._source_path = str(path.resolve())
             return obj
     err_console.print(f"[red]No App instance found in {module_path}[/red]")
     raise typer.Exit(1)

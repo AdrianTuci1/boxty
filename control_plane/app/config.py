@@ -77,6 +77,10 @@ class Settings:
     github_client_id: str = os.environ.get("BOXTY_GITHUB_CLIENT_ID", "")
     github_client_secret: str = os.environ.get("BOXTY_GITHUB_CLIENT_SECRET", "")
     github_redirect_uri: str = os.environ.get("BOXTY_GITHUB_REDIRECT_URI", "http://localhost:5173/oauth/callback")
+    web_domain: str = os.environ.get("BOXTY_WEB_DOMAIN", "")
+    device_code_ttl_seconds: int = _get_int("BOXTY_DEVICE_CODE_TTL_SECONDS", 600)
+    device_code_poll_interval_seconds: int = _get_int("BOXTY_DEVICE_CODE_POLL_INTERVAL_SECONDS", 5)
+
 
 
 settings = Settings()

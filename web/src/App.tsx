@@ -34,6 +34,7 @@ import MetricsIntegrationsPage from './pages/settings/MetricsIntegrationsPage'
 import SlackIntegrationPage from './pages/settings/SlackIntegrationPage'
 import DocsLayout from './components/DocsLayout'
 import DocsPage from './pages/DocsPage'
+import DeviceAuthPage from './pages/DeviceAuthPage'
 import LandingPageWrapper from './landing/LandingPageWrapper'
 import PricingPage from './pages/PricingPage'
 import { CommandPaletteProvider } from './control-panel/features/command-palette/ui/CommandPalette'
@@ -59,6 +60,7 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/password-reset" element={<PasswordResetPage />} />
+        <Route path="/auth/device" element={<DeviceAuthPage />} />
         <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route path="/accept-invite" element={<AcceptInvitePage />} />
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>

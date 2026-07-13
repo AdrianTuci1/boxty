@@ -10,7 +10,7 @@ from rich.table import Table
 from boxty import Boxty
 
 from .config import load_config, BoxtyConfig
-from .utils import err_console, handle_sdk_error, maybe_json, require_workspace, require_environment
+from .utils import err_console, handle_sdk_error, maybe_json, require_workspace, require_environment, print_json
 
 token_app = typer.Typer(name="token", help="API token management")
 console = Console()
@@ -41,12 +41,16 @@ def token_new(
     owner_id: str | None = typer.Option(None, "--owner-id", help="Owner user ID"),
     workspace_id: str | None = typer.Option(None, "--workspace", help="Workspace ID"),
     environment_id: str | None = typer.Option(None, "--environment", help="Environment ID"),
+    as_json: bool = typer.Option(False, "--json", help="Output JSON including the secret"),
 ) -> None:
     """Create a new API token."""
     cfg = load_config()
     ws = workspace_id or require_workspace(cfg)
     env = environment_id or require_environment(cfg)
-    owner = owner_id or cfg.token
+    owner = owner_id or cfg.user_id
+    if not owner:
+        err_console.print("[red]Cannot determine owner.[/red] Log in first or pass --owner-id.")
+        raise typer.Exit(1)
     client = get_client(cfg)
     try:
         key = client.create_api_key(owner, ws, env, name)
@@ -55,3 +59,5 @@ def token_new(
     console.print(f"[green]Created API key[/green] {key.get('name')} ({key.get('api_key_id')})")
     if key.get('token_value'):
         console.print(f"[bold]Token value:[/bold] {key.get('token_value')}")
+    if as_json:
+        print_json(key)
