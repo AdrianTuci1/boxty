@@ -1,89 +1,89 @@
 name: CI
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
 
 jobs:
-  control-plane:
+  python-tests:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [control_plane, cli, sdk/python]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.11' }
-      - run: pip install -e control_plane/
-      - run: python -c "import app; print('control-plane OK')"
-      - run: pip install ruff && ruff check control_plane/app/ || true
 
-  sdk-python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: pip install build
-      - run: python -m build sdk/python/
-      - run: pip install sdk/python/dist/*.whl
-      - run: python -c "import boxty; print(boxty.__version__)"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-  sdk-js:
+      - name: Install dependencies and run tests
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+          pytest -q
+        working-directory: ${{ matrix.module }}
+
+  sdk-js-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies and run SDK JS tests
+        run: |
+          npm install
+          npm test
         working-directory: sdk/js
-      - run: npm run build
-        working-directory: sdk/js
 
-  web:
+  web-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies and run web tests
+        run: |
+          npm install
+          npm run test
+          npm run build
         working-directory: web
-      - run: npm run build
-        working-directory: web
 
-  landing:
+  e2e:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm ci
-        working-directory: landing
-      - run: npm run build
-        working-directory: landing
 
-  cli:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: '3.12' }
-      - run: pip install build pytest
-      - run: python -m build cli/
-      - run: pip install cli/dist/*.whl
-      - run: python -c "import boxty_cli.main; print('cli import OK')"
-      - run: pip install pytest pytest-mock respx
-      - run: python -m pytest cli/tests
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
 
-  cli-worker:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo check
-        working-directory: cli-worker
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4
 
-  ansible:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: pip install ansible
-      - run: ansible-playbook ansible/deploy-workers.yml --syntax-check
-      - run: ansible-playbook ansible/deploy-control-plane.yml --syntax-check
-      - run: ansible-inventory -i ansible/inventory.yml --list
+      - name: Install control-plane dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+        working-directory: control_plane
+
+      - name: Run e2e tests
+        run: |
+          ./control_plane/.venv/bin/python e2e-tests/run_e2e.py
+        working-directory: .

@@ -122,24 +122,34 @@ class DynamoDBStartupTests(unittest.TestCase):
     """Validate startup behaviour without reloading global config modules."""
 
     def test_startup_loads_from_dynamodb_when_enabled(self) -> None:
-        from app.main import startup_event
+        from app.main import lifespan, app
         from app.store import store
+        from contextlib import AsyncExitStack
 
         with _override_setting("state_store", "dynamodb-single-table"):
             with _override_setting("dynamodb_table_name", "boxty"):
                 with patch.object(store, "load_from_dynamodb") as mock_load:
                     import asyncio
 
-                    asyncio.run(startup_event())
-                    mock_load.assert_called_once()
+                    async def _run():
+                        async with AsyncExitStack() as stack:
+                            await stack.enter_async_context(lifespan(app))
+                            mock_load.assert_called_once()
+
+                    asyncio.run(_run())
 
     def test_startup_skips_dynamodb_load_for_memory_store(self) -> None:
-        from app.main import startup_event
+        from app.main import lifespan, app
         from app.store import store
+        from contextlib import AsyncExitStack
 
         with _override_setting("state_store", "memory"):
             with patch.object(store, "load_from_dynamodb") as mock_load:
                 import asyncio
 
-                asyncio.run(startup_event())
-                mock_load.assert_not_called()
+                async def _run():
+                    async with AsyncExitStack() as stack:
+                        await stack.enter_async_context(lifespan(app))
+                        mock_load.assert_not_called()
+
+                asyncio.run(_run())

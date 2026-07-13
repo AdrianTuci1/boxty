@@ -1,5 +1,6 @@
 from email.message import EmailMessage
 import smtplib
+from contextlib import asynccontextmanager
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 
@@ -72,11 +73,8 @@ from .store import issued_access_token, store
 from .scheduler import start_scheduler, stop_scheduler
 from .auth import CurrentUser, get_current_user, require_user
 
-app = FastAPI(title=settings.app_name)
-
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     if settings.state_store == "dynamodb-single-table":
         try:
             store.load_from_dynamodb()
@@ -86,11 +84,11 @@ async def startup_event():
     else:
         print("[startup] running with in-memory state store")
     start_scheduler()
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
     stop_scheduler()
+
+
+app = FastAPI(title=settings.app_name, lifespan=lifespan)
 
 
 def provider_public_dict(provider) -> dict:

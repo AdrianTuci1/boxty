@@ -11,10 +11,23 @@ dependencies = [
   "uvicorn[standard]>=0.30.0,<1.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-mock>=3.14",
+  "httpx>=0.27",
+]
+
 [project.scripts]
 boxty-user = "app.user_cli:main"
 boxty-supervisor = "app.supervisor_cli:main"
 boxty-worker = "app.worker_cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore:Using `httpx` with `starlette.testclient` is deprecated:DeprecationWarning",
+]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
